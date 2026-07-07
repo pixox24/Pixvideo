@@ -40,13 +40,18 @@ MINIMAX_EMOTIONS = [
 ]
 
 
-def render_minimax_tts_controls(tts_config: dict, key_prefix: str) -> dict:
+def render_minimax_tts_controls(
+    tts_config: dict,
+    key_prefix: str,
+    defaults: dict | None = None,
+) -> dict:
     """Render MiniMax TTS controls and return selected params."""
+    defaults = defaults or {}
     minimax_config = tts_config.get("minimax", {})
-    saved_model = minimax_config.get("model", "speech-2.8-turbo")
-    saved_voice = minimax_config.get("voice_id", "male-qn-qingse")
-    saved_speed = minimax_config.get("speed", 1.0)
-    saved_emotion = minimax_config.get("emotion") or ""
+    saved_model = defaults.get("model") or minimax_config.get("model", "speech-2.8-turbo")
+    saved_voice = defaults.get("voice") or minimax_config.get("voice_id", "male-qn-qingse")
+    saved_speed = defaults.get("speed") or minimax_config.get("speed", 1.0)
+    saved_emotion = defaults.get("emotion") or minimax_config.get("emotion") or ""
 
     model_index = MINIMAX_MODELS.index(saved_model) if saved_model in MINIMAX_MODELS else 0
     voice_ids = [voice_id for voice_id, _ in MINIMAX_VOICES]

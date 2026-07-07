@@ -133,6 +133,7 @@
     "bgm.how": "将音频文件（MP3/WAV/FLAC 等）放入 bgm/ 文件夹即可自动识别",
     "btn.generate": "🎬 生成视频",
     "btn.save_config": "💾 保存配置",
+    "btn.save_current_config": "💾 保存当前配置",
     "btn.reset_config": "🔄 重置默认",
     "btn.save_and_start": "保存并开始",
     "btn.test_connection": "测试连接",

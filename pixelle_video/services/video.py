@@ -294,11 +294,17 @@ class VideoService:
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "C:/Windows/Fonts/NotoSansSC-VF.ttf",
+            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/simhei.ttf",
+            "C:/Windows/Fonts/simsun.ttc",
+            "C:/Windows/Fonts/Deng.ttf",
+            "C:/Windows/Fonts/msjh.ttc",
         ]
 
         for candidate in candidates:
             if os.path.exists(candidate):
-                return candidate
+                return Path(candidate).as_posix()
 
         raise RuntimeError(
             "No usable subtitle font found. Install a Chinese-capable font or disable subtitles."

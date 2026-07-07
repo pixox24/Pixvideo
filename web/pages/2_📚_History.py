@@ -29,6 +29,7 @@ import streamlit as st  # noqa: E402
 
 from pixelle_video.models.progress import ProgressEvent  # noqa: E402
 from web.components.header import render_header  # noqa: E402
+from web.components.theme import render_command_studio_theme  # noqa: E402
 from web.i18n import tr  # noqa: E402
 from web.state.session import get_pixelle_video, init_i18n, init_session_state  # noqa: E402
 from web.utils.async_helpers import run_async  # noqa: E402
@@ -437,6 +438,7 @@ def main():
     # Initialize
     init_session_state()
     init_i18n()
+    render_command_studio_theme()
     
     # Render header
     render_header()

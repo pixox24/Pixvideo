@@ -1,0 +1,6 @@
+{
+  "name": "Pixelle-Video",
+  "description": "全新的 AI 视频生成工作台首页，提供快速配置、脚本生成、视频历史任务管理及常用预设设置。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

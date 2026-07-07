@@ -16,7 +16,13 @@ Content input components for web UI (left column)
 
 import streamlit as st
 
+from pixelle_video.config import config_manager
 from web.i18n import tr
+from web.state.quick_create_draft import (
+    draft_value,
+    sync_widget_to_draft,
+    update_quick_create_draft,
+)
 from web.utils.async_helpers import get_project_version
 
 
@@ -30,8 +36,11 @@ def render_content_input():
         # ====================================================================
         batch_mode = st.checkbox(
             tr("batch.mode_label"),
-            value=False,
-            help=tr("batch.mode_help")
+            value=draft_value("batch_mode", False),
+            help=tr("batch.mode_help"),
+            key="quick_create_batch_mode",
+            on_change=sync_widget_to_draft,
+            args=("batch_mode", "quick_create_batch_mode"),
         )
         
         if not batch_mode:
@@ -44,7 +53,11 @@ def render_content_input():
                 ["generate", "fixed"],
                 horizontal=True,
                 format_func=lambda x: tr(f"mode.{x}"),
-                label_visibility="collapsed"
+                index=0 if draft_value("mode", "generate") == "generate" else 1,
+                label_visibility="collapsed",
+                key="quick_create_mode",
+                on_change=sync_widget_to_draft,
+                args=("mode", "quick_create_mode"),
             )
             
             # Text input (unified for both modes)
@@ -54,9 +67,13 @@ def render_content_input():
             
             text = st.text_area(
                 tr("input.text"),
+                value=draft_value("text", ""),
                 placeholder=text_placeholder,
                 height=text_height,
-                help=text_help
+                help=text_help,
+                key="quick_create_text",
+                on_change=sync_widget_to_draft,
+                args=("text", "quick_create_text"),
             )
             
             # Split mode selector (only show in fixed mode)
@@ -70,8 +87,13 @@ def render_content_input():
                     tr("split.mode_label"),
                     options=list(split_mode_options.keys()),
                     format_func=lambda x: split_mode_options[x],
-                    index=0,  # Default to paragraph mode
-                    help=tr("split.mode_help")
+                    index=list(split_mode_options.keys()).index(
+                        draft_value("split_mode", "paragraph")
+                    ),
+                    help=tr("split.mode_help"),
+                    key="quick_create_split_mode",
+                    on_change=sync_widget_to_draft,
+                    args=("split_mode", "quick_create_split_mode"),
                 )
             else:
                 split_mode = "paragraph"  # Default for generate mode (not used)
@@ -79,8 +101,12 @@ def render_content_input():
             # Title input (optional for both modes)
             title = st.text_input(
                 tr("input.title"),
+                value=draft_value("title", ""),
                 placeholder=tr("input.title_placeholder"),
-                help=tr("input.title_help")
+                help=tr("input.title_help"),
+                key="quick_create_title",
+                on_change=sync_widget_to_draft,
+                args=("title", "quick_create_title"),
             )
             
             # Number of scenes (only show in generate mode)
@@ -89,9 +115,12 @@ def render_content_input():
                     tr("video.frames"),
                     min_value=3,
                     max_value=30,
-                    value=5,
+                    value=draft_value("n_scenes", 5),
                     help=tr("video.frames_help"),
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    key="quick_create_n_scenes",
+                    on_change=sync_widget_to_draft,
+                    args=("n_scenes", "quick_create_n_scenes"),
                 )
                 st.caption(tr("video.frames_label", n=n_scenes))
             else:
@@ -99,7 +128,7 @@ def render_content_input():
                 n_scenes = 5
                 st.info(tr("video.frames_fixed_mode_hint"))
             
-            return {
+            params = {
                 "batch_mode": False,
                 "mode": mode,
                 "text": text,
@@ -107,6 +136,8 @@ def render_content_input():
                 "n_scenes": n_scenes,
                 "split_mode": split_mode
             }
+            update_quick_create_draft(params)
+            return params
         
         else:
             # ================================================================
@@ -125,9 +156,13 @@ def render_content_input():
             # Batch topics input
             text_input = st.text_area(
                 tr("batch.topics_label"),
+                value=draft_value("batch_topics_text", ""),
                 height=300,
                 placeholder=tr("batch.topics_placeholder"),
-                help=tr("batch.topics_help")
+                help=tr("batch.topics_help"),
+                key="quick_create_batch_topics_text",
+                on_change=sync_widget_to_draft,
+                args=("batch_topics_text", "quick_create_batch_topics_text"),
             )
             
             # Split topics by newline
@@ -161,8 +196,12 @@ def render_content_input():
             # Title prefix (optional)
             title_prefix = st.text_input(
                 tr("batch.title_prefix_label"),
+                value=draft_value("title_prefix", ""),
                 placeholder=tr("batch.title_prefix_placeholder"),
-                help=tr("batch.title_prefix_help")
+                help=tr("batch.title_prefix_help"),
+                key="quick_create_title_prefix",
+                on_change=sync_widget_to_draft,
+                args=("title_prefix", "quick_create_title_prefix"),
             )
             
             # Number of scenes (unified for all videos)
@@ -170,21 +209,27 @@ def render_content_input():
                 tr("batch.n_scenes_label"),
                 min_value=3,
                 max_value=30,
-                value=5,
-                help=tr("batch.n_scenes_help")
+                value=draft_value("n_scenes", 5),
+                help=tr("batch.n_scenes_help"),
+                key="quick_create_batch_n_scenes",
+                on_change=sync_widget_to_draft,
+                args=("n_scenes", "quick_create_batch_n_scenes"),
             )
             st.caption(tr("batch.n_scenes_caption", n=n_scenes))
             
             # Config info
             st.info(f"📌 {tr('batch.config_info')}")
             
-            return {
+            params = {
                 "batch_mode": True,
                 "topics": topics,
+                "batch_topics_text": text_input,
                 "mode": "generate",  # Fixed to AI generate content
                 "title_prefix": title_prefix,
                 "n_scenes": n_scenes,
             }
+            update_quick_create_draft(params)
+            return params
 
 
 def render_bgm_section(key_prefix=""):
@@ -212,10 +257,19 @@ def render_bgm_section(key_prefix=""):
         
         # Add special "None" option
         bgm_options = [tr("bgm.none")] + bgm_files
+        quick_create_config = config_manager.get("quick_create", {})
+        saved_bgm_path = quick_create_config.get("bgm_path")
         
-        # Default to "default.mp3" if exists, otherwise first option
+        # Default to saved BGM if available, then "default.mp3", otherwise None.
         default_index = 0
-        if "default.mp3" in bgm_files:
+        draft_bgm_path = draft_value("bgm_path", saved_bgm_path)
+        if draft_bgm_path is None:
+            default_index = 0
+        elif draft_bgm_path in bgm_files:
+            default_index = bgm_options.index(draft_bgm_path)
+        elif saved_bgm_path and saved_bgm_path in bgm_files:
+            default_index = bgm_options.index(saved_bgm_path)
+        elif "default.mp3" in bgm_files:
             default_index = bgm_options.index("default.mp3")
         
         bgm_choice = st.selectbox(
@@ -223,20 +277,25 @@ def render_bgm_section(key_prefix=""):
             bgm_options,
             index=default_index,
             label_visibility="collapsed",
-            key=f"{key_prefix}bgm_selector"
+            key=f"{key_prefix}bgm_selector",
+            on_change=sync_widget_to_draft,
+            args=("bgm_selector", f"{key_prefix}bgm_selector"),
         )
         
         # BGM volume slider (only show when BGM is selected)
         if bgm_choice != tr("bgm.none"):
+            saved_bgm_volume = quick_create_config.get("bgm_volume", 0.2)
             bgm_volume = st.slider(
                 tr("bgm.volume"),
                 min_value=0.0,
                 max_value=0.5,
-                value=0.2,
+                value=float(draft_value("bgm_volume", saved_bgm_volume)),
                 step=0.01,
                 format="%.2f",
                 key=f"{key_prefix}bgm_volume_slider",
-                help=tr("bgm.volume_help")
+                help=tr("bgm.volume_help"),
+                on_change=sync_widget_to_draft,
+                args=("bgm_volume", f"{key_prefix}bgm_volume_slider"),
             )
         else:
             bgm_volume = 0.2  # Default value when no BGM selected
@@ -257,10 +316,12 @@ def render_bgm_section(key_prefix=""):
         # Use full filename for bgm_path (including extension)
         bgm_path = None if bgm_choice == tr("bgm.none") else bgm_choice
     
-    return {
+    params = {
         "bgm_path": bgm_path,
         "bgm_volume": bgm_volume
     }
+    update_quick_create_draft(params)
+    return params
 
 
 def render_version_info():

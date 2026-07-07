@@ -195,3 +195,103 @@ class ConfigManager:
         
         if updates:
             self.update({"comfyui": updates})
+
+    def save_quick_create_config(self, video_params: dict):
+        """
+        Persist reusable Quick Create settings from the current UI state.
+
+        One-off content such as prompts, titles, uploaded files, and preview values
+        is intentionally ignored.
+        """
+        tts_mode = video_params.get("tts_inference_mode") or self.config.comfyui.tts.inference_mode
+        composition_mode = video_params.get("composition_mode") or self.config.template.composition_mode
+        frame_template = video_params.get("frame_template") or self.config.template.default_template
+        template_type = video_params.get("template_type") or self.config.template.template_type
+        media_type = video_params.get("template_media_type") or template_type
+        if composition_mode == "plain_image":
+            media_config_key = "image"
+        elif media_type in {"image", "video"}:
+            media_config_key = media_type
+        else:
+            media_config_key = None
+
+        comfyui_updates: dict[str, Any] = {
+            "tts": {
+                "inference_mode": tts_mode,
+            }
+        }
+
+        if tts_mode == "local":
+            local_updates = {}
+            if video_params.get("tts_voice"):
+                local_updates["voice"] = video_params["tts_voice"]
+            if video_params.get("tts_speed") is not None:
+                local_updates["speed"] = video_params["tts_speed"]
+            if local_updates:
+                comfyui_updates["tts"]["local"] = local_updates
+        elif tts_mode == "comfyui":
+            if video_params.get("tts_workflow"):
+                comfyui_updates["tts"]["comfyui"] = {
+                    "default_workflow": video_params["tts_workflow"],
+                }
+        elif tts_mode == "minimax":
+            minimax_updates = {}
+            if video_params.get("minimax_model"):
+                minimax_updates["model"] = video_params["minimax_model"]
+            if video_params.get("tts_voice"):
+                minimax_updates["voice_id"] = video_params["tts_voice"]
+            if video_params.get("tts_speed") is not None:
+                minimax_updates["speed"] = video_params["tts_speed"]
+            if "minimax_emotion" in video_params:
+                minimax_updates["emotion"] = video_params.get("minimax_emotion")
+            if minimax_updates:
+                comfyui_updates["tts"]["minimax"] = minimax_updates
+
+        if media_config_key:
+            media_updates = {}
+            if video_params.get("media_workflow"):
+                media_updates["default_workflow"] = video_params["media_workflow"]
+            if "prompt_prefix" in video_params:
+                media_updates["prompt_prefix"] = video_params.get("prompt_prefix") or ""
+            if media_updates:
+                comfyui_updates[media_config_key] = media_updates
+
+        bgm_volume = video_params.get("bgm_volume")
+        if bgm_volume is None:
+            bgm_volume = self.config.quick_create.bgm_volume
+
+        updates = {
+            "comfyui": comfyui_updates,
+            "template": {
+                "default_template": frame_template,
+                "template_type": template_type,
+                "composition_mode": composition_mode,
+                "image_motion_enabled": video_params.get(
+                    "image_motion_enabled",
+                    self.config.template.image_motion_enabled,
+                ),
+                "subtitle_enabled": video_params.get(
+                    "subtitle_enabled",
+                    self.config.template.subtitle_enabled,
+                ),
+                "image_motion_mode": video_params.get(
+                    "image_motion_mode",
+                    self.config.template.image_motion_mode,
+                ),
+                "image_motion_strength": video_params.get(
+                    "image_motion_strength",
+                    self.config.template.image_motion_strength,
+                ),
+                "image_fit_mode": video_params.get(
+                    "image_fit_mode",
+                    self.config.template.image_fit_mode,
+                ),
+            },
+            "quick_create": {
+                "bgm_path": video_params.get("bgm_path"),
+                "bgm_volume": bgm_volume,
+            },
+        }
+
+        self.update(updates)
+        self.save()

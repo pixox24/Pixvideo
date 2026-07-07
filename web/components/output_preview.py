@@ -65,10 +65,18 @@ def render_single_output(pixelle_video, video_params):
     
     with st.container(border=True):
         st.markdown(f"**{tr('section.video_generation')}**")
+        render_run_readiness(video_params)
         
         # Check if system is configured
         if not config_manager.validate():
             st.warning(tr("settings.not_configured"))
+
+        if st.button(tr("btn.save_current_config"), use_container_width=True, key="save_quick_create_config"):
+            try:
+                config_manager.save_quick_create_config(video_params)
+                st.success(tr("status.config_saved"))
+            except Exception as e:
+                st.error(f"{tr('status.save_failed')}: {str(e)}")
         
         # Generate Button
         if st.button(tr("btn.generate"), type="primary", use_container_width=True):
@@ -232,6 +240,8 @@ def render_single_output(pixelle_video, video_params):
                 logger.exception(e)
                 st.stop()
 
+        render_recent_tasks(pixelle_video)
+
 
 def render_batch_output(pixelle_video, video_params):
     """Render batch generation output (minimal, redirect to History)"""
@@ -239,6 +249,14 @@ def render_batch_output(pixelle_video, video_params):
     
     with st.container(border=True):
         st.markdown(f"**{tr('batch.section_generation')}**")
+        render_run_readiness(video_params)
+
+        if st.button(tr("btn.save_current_config"), use_container_width=True, key="save_quick_create_config_batch"):
+            try:
+                config_manager.save_quick_create_config(video_params)
+                st.success(tr("status.config_saved"))
+            except Exception as e:
+                st.error(f"{tr('status.save_failed')}: {str(e)}")
         
         # Check if topics are provided
         if not topics:
@@ -450,4 +468,173 @@ def render_batch_output(pixelle_video, video_params):
                         # Detailed error (collapsed)
                         with st.expander(tr("batch.error_detail")):
                             st.code(item['traceback'], language="python")
+
+        render_recent_tasks(pixelle_video)
+
+
+def render_run_readiness(video_params):
+    """Show compact run readiness details before generation starts."""
+    text = video_params.get("text") or video_params.get("topics") or ""
+    has_content = bool(text)
+    scene_count = video_params.get("n_scenes") or len(video_params.get("topics", [])) or "-"
+    tts_mode = video_params.get("tts_inference_mode", "local")
+    workflow = video_params.get("media_workflow") or "not selected"
+
+    status_label = "Ready" if has_content and config_manager.validate() else "Review setup"
+    status_class = "ready" if has_content and config_manager.validate() else "pending"
+
+    st.markdown(
+        f"""
+        <div class="studio-run-card">
+          <div class="studio-run-status {status_class}">{status_label}</div>
+          <div class="studio-run-grid">
+            <div><span>Scenes</span><strong>{scene_count}</strong></div>
+            <div><span>TTS</span><strong>{tts_mode}</strong></div>
+            <div><span>Workflow</span><strong>{workflow}</strong></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_recent_tasks(pixelle_video):
+    """Render a compact recent-task list in the run panel."""
+    history = getattr(pixelle_video, "history", None)
+    if history is None:
+        return
+
+    try:
+        result = run_async(
+            history.get_task_list(
+                page=1,
+                page_size=4,
+                sort_by="created_at",
+                sort_order="desc",
+            )
+        )
+    except Exception as exc:
+        logger.debug(f"Failed to load recent tasks: {exc}")
+        return
+
+    tasks = result.get("tasks", [])
+    if not tasks:
+        return
+
+    rows = []
+    for task in tasks:
+        title = task.get("title") or "Untitled"
+        status = task.get("status") or "unknown"
+        frames = task.get("n_frames") or "-"
+        rows.append(
+            f"""
+            <div class="studio-task-row">
+              <div>
+                <strong>{title}</strong>
+                <span>{frames} scenes</span>
+              </div>
+              <em>{status}</em>
+            </div>
+            """
+        )
+
+    st.markdown(
+        f"""
+        <div class="studio-recent-tasks">
+          <div class="studio-recent-heading">
+            <strong>Recent Tasks</strong>
+            <a href="/History" target="_self">View all</a>
+          </div>
+          {''.join(rows)}
+        </div>
+        <style>
+          .studio-run-card {{
+            margin: 0.55rem 0 0.85rem;
+            padding: 0.78rem;
+            border: 1px solid var(--studio-border);
+            border-radius: var(--studio-radius);
+            background: rgba(255, 255, 255, 0.025);
+          }}
+          .studio-run-status {{
+            display: inline-flex;
+            align-items: center;
+            margin-bottom: 0.65rem;
+            color: var(--studio-muted);
+            font-size: 0.8rem;
+            font-weight: 750;
+          }}
+          .studio-run-status.ready {{
+            color: var(--studio-green);
+          }}
+          .studio-run-status.pending {{
+            color: var(--studio-orange-2);
+          }}
+          .studio-run-grid {{
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.55rem;
+          }}
+          .studio-run-grid span {{
+            display: block;
+            color: var(--studio-dim);
+            font-size: 0.72rem;
+          }}
+          .studio-run-grid strong {{
+            display: block;
+            margin-top: 0.12rem;
+            color: var(--studio-text);
+            font-size: 0.82rem;
+            font-weight: 650;
+            word-break: break-word;
+          }}
+          .studio-recent-tasks {{
+            margin-top: 0.95rem;
+            padding-top: 0.85rem;
+            border-top: 1px solid var(--studio-border);
+          }}
+          .studio-recent-heading {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.55rem;
+          }}
+          .studio-recent-heading strong {{
+            color: var(--studio-text);
+            font-size: 0.88rem;
+          }}
+          .studio-recent-heading a {{
+            color: var(--studio-orange-2);
+            font-size: 0.78rem;
+            text-decoration: none;
+          }}
+          .studio-task-row {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.65rem;
+            padding: 0.58rem 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+          }}
+          .studio-task-row strong {{
+            display: block;
+            max-width: 12rem;
+            overflow: hidden;
+            color: var(--studio-text);
+            font-size: 0.8rem;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }}
+          .studio-task-row span {{
+            color: var(--studio-dim);
+            font-size: 0.72rem;
+          }}
+          .studio-task-row em {{
+            color: var(--studio-orange-2);
+            font-size: 0.72rem;
+            font-style: normal;
+          }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     

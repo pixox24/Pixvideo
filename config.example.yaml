@@ -80,3 +80,17 @@ template:
   #   - 1920x1080 (horizontal/landscape): image_film.html, image_full.html, etc.
   # See templates/ directory for all available templates
   default_template: "1080x1920/image_default.html"
+  template_type: image  # Options: static, image, video
+  composition_mode: template  # Options: template, plain_image
+  image_motion_enabled: true
+  subtitle_enabled: true
+  image_motion_mode: auto
+  image_motion_strength: subtle
+  image_fit_mode: cover
+
+# ==================== Quick Create UI Defaults ====================
+# Saved by the "Save Current Configuration" button in Quick Create.
+# Reusable settings only; prompts, titles, uploaded files, and generated output are not saved.
+quick_create:
+  bgm_path: default.mp3
+  bgm_volume: 0.2

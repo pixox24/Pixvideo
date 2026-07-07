@@ -20,6 +20,9 @@ from pydantic import BaseModel, Field
 
 class VideoGenerateRequest(BaseModel):
     """Video generation request"""
+
+    # === Pipeline ===
+    pipeline: str = Field("standard", description="Backend pipeline key")
     
     # === Input ===
     text: str = Field(..., description="Source text for video generation")
@@ -29,14 +32,24 @@ class VideoGenerateRequest(BaseModel):
         "generate",
         description="Processing mode: 'generate' (AI generates narrations) or 'fixed' (use text as-is)"
     )
+    split_mode: Literal["paragraph", "line", "sentence"] = Field(
+        "paragraph",
+        description="Fixed-script split mode"
+    )
     
     # === Optional Title ===
     title: Optional[str] = Field(None, description="Video title (auto-generated if not provided)")
     
     # === Basic Config ===
-    n_scenes: Optional[int] = Field(5, ge=1, le=20, description="Number of scenes (only used in 'generate' mode, ignored in 'fixed' mode)")
+    n_scenes: Optional[int] = Field(5, ge=1, le=30, description="Number of scenes (only used in 'generate' mode, ignored in 'fixed' mode)")
     
     # === TTS Parameters ===
+    tts_inference_mode: Literal["local", "comfyui", "minimax"] = Field(
+        "local",
+        description="TTS inference mode"
+    )
+    tts_voice: Optional[str] = Field(None, description="Local or MiniMax voice ID")
+    tts_speed: Optional[float] = Field(None, ge=0.5, le=2.0, description="TTS speed")
     tts_workflow: Optional[str] = Field(
         None, 
         description="TTS workflow key (e.g., 'runninghub/tts_edge.json'). If not specified, uses default workflow from config."
@@ -49,6 +62,8 @@ class VideoGenerateRequest(BaseModel):
         None, 
         description="(Deprecated) TTS voice ID for legacy compatibility"
     )
+    minimax_model: Optional[str] = Field(None, description="MiniMax TTS model")
+    minimax_emotion: Optional[str] = Field(None, description="MiniMax TTS emotion")
     
     # === LLM Parameters ===
     min_narration_words: int = Field(5, ge=1, le=100, description="Min narration words")
@@ -59,6 +74,8 @@ class VideoGenerateRequest(BaseModel):
     # === Media Parameters ===
     # Note: media_width and media_height are auto-determined from template meta tags
     media_workflow: Optional[str] = Field(None, description="Custom media workflow (image or video)")
+    media_width: Optional[int] = Field(None, ge=1, description="Media width override")
+    media_height: Optional[int] = Field(None, ge=1, description="Media height override")
     
     # === Video Parameters ===
     video_fps: int = Field(30, ge=15, le=60, description="Video FPS")
@@ -68,6 +85,8 @@ class VideoGenerateRequest(BaseModel):
         None, 
         description="HTML template path with size (e.g., '1080x1920/default.html'). Video size is auto-determined from template."
     )
+    template_type: Optional[str] = Field(None, description="Template type: static, image, or video")
+    template_media_type: Optional[str] = Field(None, description="Template media type")
     
     # === Template Custom Parameters ===
     template_params: Optional[Dict[str, Any]] = Field(
@@ -78,6 +97,14 @@ class VideoGenerateRequest(BaseModel):
     
     # === Image Style ===
     prompt_prefix: Optional[str] = Field(None, description="Image style prefix")
+
+    # === Composition ===
+    composition_mode: Literal["template", "plain_image"] = Field("template", description="Composition mode")
+    image_motion_enabled: bool = Field(False, description="Enable image motion in plain image mode")
+    subtitle_enabled: bool = Field(True, description="Enable subtitles")
+    image_motion_mode: str = Field("auto", description="Image motion mode")
+    image_motion_strength: str = Field("subtle", description="Image motion strength")
+    image_fit_mode: str = Field("cover", description="Image fit mode")
     
     # === BGM ===
     bgm_path: Optional[str] = Field(None, description="Background music path")

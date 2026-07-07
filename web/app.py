@@ -4,56 +4,44 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
-"""
-Pixelle-Video Web UI - Main Entry Point
+"""Pixelle-Video Streamlit entry point."""
 
-This is the entry point for the Streamlit multi-page application.
-Uses st.navigation to define pages and set the default page to Home.
-"""
+from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# Add project root to sys.path for module imports
+import streamlit as st
+
 _script_dir = Path(__file__).resolve().parent
 _project_root = _script_dir.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-import streamlit as st
-
-# Setup page config (must be first Streamlit command)
 st.set_page_config(
     page_title="Pixelle-Video - AI Video Generator",
-    page_icon="🎬",
+    page_icon="PV",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 
-def main():
-    """Main entry point with navigation"""
-    # Define pages using st.Page
+def main() -> None:
+    """Run the Streamlit multipage app."""
     home_page = st.Page(
         "pages/1_🎬_Home.py",
         title="Home",
-        icon="🎬",
-        default=True
+        icon=":material/movie:",
+        default=True,
     )
-    
+
     history_page = st.Page(
         "pages/2_📚_History.py",
         title="History",
-        icon="📚"
+        icon=":material/history:",
     )
-    
-    # Set up navigation and run
+
     pg = st.navigation([home_page, history_page])
     pg.run()
 

@@ -100,6 +100,19 @@ class TemplateConfig(BaseModel):
         default="1080x1920/default.html",
         description="Default frame template path"
     )
+    template_type: str = Field(default="image", description="Default template type")
+    composition_mode: str = Field(default="template", description="Default composition mode")
+    image_motion_enabled: bool = Field(default=True, description="Enable image motion in plain image mode")
+    subtitle_enabled: bool = Field(default=True, description="Enable subtitles in plain image mode")
+    image_motion_mode: str = Field(default="auto", description="Image motion mode")
+    image_motion_strength: str = Field(default="subtle", description="Image motion strength")
+    image_fit_mode: str = Field(default="cover", description="Image fit mode")
+
+
+class QuickCreateConfig(BaseModel):
+    """Quick Create reusable UI defaults"""
+    bgm_path: Optional[str] = Field(default="default.mp3", description="Default BGM filename")
+    bgm_volume: float = Field(default=0.2, ge=0.0, le=0.5, description="Default BGM volume")
 
 
 class PixelleVideoConfig(BaseModel):
@@ -108,6 +121,7 @@ class PixelleVideoConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     comfyui: ComfyUIConfig = Field(default_factory=ComfyUIConfig)
     template: TemplateConfig = Field(default_factory=TemplateConfig)
+    quick_create: QuickCreateConfig = Field(default_factory=QuickCreateConfig)
     
     def is_llm_configured(self) -> bool:
         """Check if LLM is properly configured"""

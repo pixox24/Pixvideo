@@ -25,6 +25,7 @@ venv/
 ENV/
 env/
 .venv/
+node_modules/
 
 # IDEs
 .vscode/
@@ -55,6 +56,7 @@ test_outputs/
 *.wav
 *.bak
 test_*.py
+!tests/**/test_*.py
 
 !bgm/default.mp3
 
@@ -62,6 +64,9 @@ test_*.py
 temp/
 tmp/
 .cache/
+.tools/
+.playwright-mcp/
+.streamlit.pid
 
 # MkDocs build output
 site/

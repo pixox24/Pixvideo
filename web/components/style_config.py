@@ -24,6 +24,11 @@ from loguru import logger
 from pixelle_video.config import config_manager
 from web.components.minimax_tts_config import render_minimax_tts_controls
 from web.i18n import get_language, tr
+from web.state.quick_create_draft import (
+    draft_value,
+    sync_widget_to_draft,
+    update_quick_create_draft,
+)
 from web.utils.async_helpers import run_async
 from web.utils.streamlit_helpers import check_and_warn_selfhost_workflow
 
@@ -47,7 +52,7 @@ def render_style_config(pixelle_video):
 
         # Inference mode selection
         tts_modes = ["local", "comfyui", "minimax"]
-        current_tts_mode = tts_config.get("inference_mode", "local")
+        current_tts_mode = draft_value("tts_inference_mode", tts_config.get("inference_mode", "local"))
         tts_mode_index = tts_modes.index(current_tts_mode) if current_tts_mode in tts_modes else 0
         tts_mode = st.radio(
             tr("tts.inference_mode"),
@@ -55,7 +60,9 @@ def render_style_config(pixelle_video):
             horizontal=True,
             format_func=lambda x: tr(f"tts.mode.{x}"),
             index=tts_mode_index,
-            key="tts_inference_mode"
+            key="tts_inference_mode",
+            on_change=sync_widget_to_draft,
+            args=("tts_inference_mode", "tts_inference_mode"),
         )
 
         # Show hint based on mode
@@ -70,8 +77,12 @@ def render_style_config(pixelle_video):
 
             # Get saved voice from config
             local_config = tts_config.get("local", {})
-            saved_voice = local_config.get("voice", "zh-CN-YunjianNeural")
-            saved_speed = local_config.get("speed", 1.2)
+            if draft_value("tts_inference_mode") == "local":
+                saved_voice = draft_value("tts_voice", local_config.get("voice", "zh-CN-YunjianNeural"))
+                saved_speed = draft_value("tts_speed", local_config.get("speed", 1.2))
+            else:
+                saved_voice = local_config.get("voice", "zh-CN-YunjianNeural")
+                saved_speed = local_config.get("speed", 1.2)
 
             # Build voice options with i18n
             voice_options = []
@@ -113,7 +124,9 @@ def render_style_config(pixelle_video):
                     value=saved_speed,
                     step=0.1,
                     format="%.1fx",
-                    key="tts_local_speed"
+                    key="tts_local_speed",
+                    on_change=sync_widget_to_draft,
+                    args=("tts_speed", "tts_local_speed"),
                 )
                 st.caption(tr("tts.speed_label", speed=f"{tts_speed:.1f}"))
 
@@ -135,7 +148,11 @@ def render_style_config(pixelle_video):
 
             # Default to saved workflow if exists
             default_tts_index = 0
-            saved_tts_workflow = tts_config.get("comfyui", {}).get("default_workflow")
+            saved_tts_workflow = (
+                draft_value("tts_workflow")
+                if draft_value("tts_inference_mode") == "comfyui"
+                else None
+            ) or tts_config.get("comfyui", {}).get("default_workflow")
             if saved_tts_workflow and saved_tts_workflow in tts_workflow_keys:
                 default_tts_index = tts_workflow_keys.index(saved_tts_workflow)
 
@@ -187,7 +204,19 @@ def render_style_config(pixelle_video):
         # MiniMax Mode UI
         # ================================================================
         else:
-            minimax_params = render_minimax_tts_controls(tts_config, key_prefix="tts")
+            minimax_draft = {}
+            if draft_value("tts_inference_mode") == "minimax":
+                minimax_draft = {
+                    "model": draft_value("minimax_model"),
+                    "voice": draft_value("tts_voice"),
+                    "speed": draft_value("tts_speed"),
+                    "emotion": draft_value("minimax_emotion"),
+                }
+            minimax_params = render_minimax_tts_controls(
+                tts_config,
+                key_prefix="tts",
+                defaults=minimax_draft,
+            )
             selected_voice = minimax_params["voice"]
             tts_speed = minimax_params["speed"]
             tts_workflow_key = None
@@ -252,19 +281,32 @@ def render_style_config(pixelle_video):
     # ====================================================================
     # Storyboard Template Section
     # ====================================================================
+    template_config = config_manager.get("template", {})
+    selected_template_type = None
 
     with st.container(border=True):
         st.markdown(f"**{tr('style.composition_mode')}**")
         composition_mode_options = ["template", "plain_image"]
+        saved_composition_mode = draft_value(
+            "composition_mode",
+            template_config.get("composition_mode", "template"),
+        )
+        composition_mode_index = (
+            composition_mode_options.index(saved_composition_mode)
+            if saved_composition_mode in composition_mode_options
+            else 0
+        )
         composition_mode = st.radio(
             tr("style.composition_mode"),
             composition_mode_options,
             horizontal=True,
             format_func=lambda value: tr(f"style.composition_mode.{value}"),
-            index=0,
+            index=composition_mode_index,
             key="composition_mode",
             label_visibility="collapsed",
             help=tr("style.composition_mode_help"),
+            on_change=sync_widget_to_draft,
+            args=("composition_mode", "composition_mode"),
         )
 
         if composition_mode == "plain_image":
@@ -273,20 +315,36 @@ def render_style_config(pixelle_video):
             with control_col1:
                 image_motion_enabled = st.checkbox(
                     tr("style.image_motion_enabled"),
-                    value=True,
+                    value=draft_value(
+                        "image_motion_enabled",
+                        template_config.get("image_motion_enabled", True),
+                    ),
                     key="plain_image_motion_enabled",
                     help=tr("style.image_motion_help"),
+                    on_change=sync_widget_to_draft,
+                    args=("image_motion_enabled", "plain_image_motion_enabled"),
                 )
             with control_col2:
                 subtitle_enabled = st.checkbox(
                     tr("style.subtitle_enabled"),
-                    value=True,
+                    value=draft_value(
+                        "subtitle_enabled",
+                        template_config.get("subtitle_enabled", True),
+                    ),
                     key="plain_image_subtitle_enabled",
                     help=tr("style.subtitle_help"),
+                    on_change=sync_widget_to_draft,
+                    args=("subtitle_enabled", "plain_image_subtitle_enabled"),
                 )
         else:
-            image_motion_enabled = False
-            subtitle_enabled = True
+            image_motion_enabled = draft_value(
+                "image_motion_enabled",
+                template_config.get("image_motion_enabled", True),
+            )
+            subtitle_enabled = draft_value(
+                "subtitle_enabled",
+                template_config.get("subtitle_enabled", True),
+            )
 
     def get_template_preview_path(template_path: str, language: str = "zh_CN") -> str:
         """
@@ -354,16 +412,25 @@ def render_style_config(pixelle_video):
                 'image': tr('template.type.image'),
                 'video': tr('template.type.video')
             }
+            saved_template_type = draft_value("template_type", template_config.get("template_type", "image"))
+            template_type_keys = list(template_type_options.keys())
+            template_type_index = (
+                template_type_keys.index(saved_template_type)
+                if saved_template_type in template_type_keys
+                else 1
+            )
 
             # Radio buttons in horizontal layout
             selected_template_type = st.radio(
                 tr('template.type_selector'),
-                options=list(template_type_options.keys()),
+                options=template_type_keys,
                 format_func=lambda x: template_type_options[x],
-                index=1,  # Default to 'image'
+                index=template_type_index,
                 key="template_type_selector",
                 label_visibility="collapsed",
-                horizontal=True
+                horizontal=True,
+                on_change=sync_widget_to_draft,
+                args=("template_type", "template_type_selector"),
             )
 
             # Display hint based on selected type (below radio buttons)
@@ -389,7 +456,6 @@ def render_style_config(pixelle_video):
             }
 
             # Get default template from config
-            template_config = pixelle_video.config.get("template", {})
             config_default_template = template_config.get("default_template", "1080x1920/image_default.html")
 
             # Backward compatibility
@@ -402,9 +468,19 @@ def render_style_config(pixelle_video):
                 'image': '1080x1920/image_default.html',
                 'video': '1080x1920/video_default.html'
             }
-            type_specific_default = type_default_templates.get(selected_template_type, config_default_template)
+            config_default_type = get_template_type(Path(config_default_template).name)
+            if config_default_type == selected_template_type:
+                type_specific_default = config_default_template
+            else:
+                type_specific_default = type_default_templates.get(
+                    selected_template_type,
+                    "1080x1920/image_default.html",
+                )
 
             # Initialize selected template in session state if not exists
+            draft_template = draft_value("frame_template")
+            if draft_template and get_template_type(Path(draft_template).name) == selected_template_type:
+                type_specific_default = draft_template
             if 'selected_template' not in st.session_state:
                 st.session_state['selected_template'] = type_specific_default
 
@@ -802,7 +878,7 @@ def render_style_config(pixelle_video):
             comfyui_config = config_manager.get_comfyui_config()
             # Select config based on template type (image or video)
             media_config_key = "video" if template_media_type == "video" else "image"
-            saved_workflow = comfyui_config.get(media_config_key, {}).get("default_workflow", "")
+            saved_workflow = draft_value("media_workflow") or comfyui_config.get(media_config_key, {}).get("default_workflow", "")
             if saved_workflow and saved_workflow in workflow_keys:
                 default_workflow_index = workflow_keys.index(saved_workflow)
 
@@ -839,7 +915,10 @@ def render_style_config(pixelle_video):
 
             # Prompt prefix input
             # Get current prompt_prefix from config (based on media type)
-            current_prefix = comfyui_config.get(media_config_key, {}).get("prompt_prefix", "")
+            current_prefix = draft_value(
+                "prompt_prefix",
+                comfyui_config.get(media_config_key, {}).get("prompt_prefix", ""),
+            )
 
             # Prompt prefix input (temporary, not saved to config)
             prompt_prefix = st.text_area(
@@ -848,7 +927,10 @@ def render_style_config(pixelle_video):
                 placeholder=tr("style.prompt_prefix_placeholder"),
                 height=80,
                 label_visibility="visible",
-                help=tr("style.prompt_prefix_help")
+                help=tr("style.prompt_prefix_help"),
+                key=f"{media_config_key}_prompt_prefix",
+                on_change=sync_widget_to_draft,
+                args=("prompt_prefix", f"{media_config_key}_prompt_prefix"),
             )
 
             # Media preview expander
@@ -939,7 +1021,7 @@ def render_style_config(pixelle_video):
             prompt_prefix = ""
 
     # Return all style configuration parameters
-    return {
+    style_params = {
         "tts_inference_mode": tts_mode,
         "tts_voice": selected_voice if tts_mode in {"local", "minimax"} else None,
         "tts_speed": tts_speed if tts_mode in {"local", "minimax"} else None,
@@ -948,6 +1030,8 @@ def render_style_config(pixelle_video):
         "minimax_model": minimax_params.get("model") if tts_mode == "minimax" else None,
         "minimax_emotion": minimax_params.get("emotion") if tts_mode == "minimax" else None,
         "frame_template": frame_template,
+        "template_type": selected_template_type,
+        "template_media_type": template_media_type,
         "template_params": custom_values_for_video if custom_values_for_video else None,
         "media_workflow": workflow_key,
         "prompt_prefix": prompt_prefix if prompt_prefix else "",
@@ -960,3 +1044,5 @@ def render_style_config(pixelle_video):
         "image_motion_strength": "subtle",
         "image_fit_mode": "cover",
     }
+    update_quick_create_draft(style_params)
+    return style_params

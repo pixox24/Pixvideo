@@ -54,6 +54,9 @@ from api.routers import (
     files_router,
     resources_router,
     frame_router,
+    configuration_router,
+    history_router,
+    workbench_router,
 )
 
 
@@ -133,6 +136,9 @@ app.include_router(tasks_router, prefix=api_config.api_prefix)
 app.include_router(files_router, prefix=api_config.api_prefix)
 app.include_router(resources_router, prefix=api_config.api_prefix)
 app.include_router(frame_router, prefix=api_config.api_prefix)
+app.include_router(configuration_router, prefix=api_config.api_prefix)
+app.include_router(history_router, prefix=api_config.api_prefix)
+app.include_router(workbench_router, prefix=api_config.api_prefix)
 
 
 @app.get("/")
@@ -153,6 +159,9 @@ async def root():
             "files": f"{api_config.api_prefix}/files",
             "resources": f"{api_config.api_prefix}/resources",
             "frame": f"{api_config.api_prefix}/frame",
+            "config": f"{api_config.api_prefix}/config",
+            "history": f"{api_config.api_prefix}/history",
+            "workbench": api_config.api_prefix,
         }
     }
 

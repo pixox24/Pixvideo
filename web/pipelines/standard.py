@@ -10,11 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Standard Pipeline UI
-
-Implements the classic 3-column layout for the Standard Pipeline.
-"""
+"""Standard Pipeline UI for the Command Studio quick-create workflow."""
 
 import streamlit as st
 from typing import Any
@@ -31,7 +27,7 @@ from web.components.output_preview import render_output_preview
 class StandardPipelineUI(PipelineUI):
     """
     UI for the Standard Video Generation Pipeline.
-    Implements the classic 3-column layout.
+    Implements a Command Studio workbench layout.
     """
     name = "quick_create"
     icon = "⚡"
@@ -45,43 +41,29 @@ class StandardPipelineUI(PipelineUI):
         return tr("pipeline.quick_create.description")
     
     def render(self, pixelle_video: Any):
-        # Three-column layout
-        left_col, middle_col, right_col = st.columns([1, 1, 1])
-        
-        # ====================================================================
-        # Left Column: Content Input & BGM
-        # ====================================================================
+        st.markdown('<div class="studio-workbench">', unsafe_allow_html=True)
+        left_col, middle_col, right_col = st.columns([1.28, 1.02, 0.86], gap="medium")
+
         with left_col:
-            # Content input (mode, text, title, n_scenes)
+            st.markdown('<div class="studio-zone-label">Create</div>', unsafe_allow_html=True)
             content_params = render_content_input()
-            
-            # BGM selection (bgm_path, bgm_volume)
             bgm_params = render_bgm_section()
-            
-            # Version info & GitHub link
             render_version_info()
-        
-        # ====================================================================
-        # Middle Column: Style Configuration
-        # ====================================================================
+
         with middle_col:
-            # Style configuration (TTS, template, workflow, etc.)
+            st.markdown('<div class="studio-zone-label">Configure</div>', unsafe_allow_html=True)
             style_params = render_style_config(pixelle_video)
-        
-        # ====================================================================
-        # Right Column: Output Preview
-        # ====================================================================
+
         with right_col:
-            # Combine all parameters
+            st.markdown('<div class="studio-zone-label">Preview & Run</div>', unsafe_allow_html=True)
             video_params = {
                 "pipeline": self.name,
                 **content_params,
                 **bgm_params,
                 **style_params
             }
-            
-            # Render output preview (generate button, progress, video preview)
             render_output_preview(pixelle_video, video_params)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # Register self

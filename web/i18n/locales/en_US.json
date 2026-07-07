@@ -133,6 +133,7 @@
     "bgm.how": "Place audio files (MP3/WAV/FLAC, etc.) in the bgm/ folder for automatic detection",
     "btn.generate": "🎬 Generate Video",
     "btn.save_config": "💾 Save Configuration",
+    "btn.save_current_config": "💾 Save Current Configuration",
     "btn.reset_config": "🔄 Reset to Default",
     "btn.save_and_start": "Save and Start",
     "btn.test_connection": "Test Connection",

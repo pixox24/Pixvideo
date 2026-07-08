@@ -21,6 +21,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from loguru import logger
 
+from pixelle_video.config import config_manager
+
 router = APIRouter(prefix="/files", tags=["Files"])
 
 
@@ -50,51 +52,64 @@ async def get_file(file_path: str):
     Returns file for download or preview.
     """
     try:
-        # Define allowed directories (in priority order)
-        allowed_prefixes = [
-            "output/",
-            "workflows/",
-            "templates/",
-            "bgm/",
-            "data/bgm/",
-            "data/templates/",
-            "resources/",
-        ]
-        
-        # Check if path starts with allowed prefix, otherwise try output/
-        full_path = None
-        for prefix in allowed_prefixes:
-            if file_path.startswith(prefix):
-                full_path = file_path
-                break
-        
-        # If no prefix matched, assume it's in output/ (backward compatibility)
-        if full_path is None:
-            full_path = f"output/{file_path}"
-        
-        abs_path = Path.cwd() / full_path
-        
+        if file_path.startswith("custom-bgm/"):
+            custom_bgm_folder = str(config_manager.get("quick_create", {}).get("custom_bgm_folder") or "").strip()
+            if not custom_bgm_folder:
+                raise HTTPException(status_code=404, detail="Custom BGM folder is not configured")
+
+            custom_base = Path(custom_bgm_folder).expanduser().resolve()
+            rel_custom_path = file_path.removeprefix("custom-bgm/")
+            abs_path = (custom_base / rel_custom_path).resolve()
+            try:
+                abs_path.relative_to(custom_base)
+            except ValueError:
+                raise HTTPException(status_code=403, detail="Access denied")
+        else:
+            # Define allowed directories (in priority order)
+            allowed_prefixes = [
+                "output/",
+                "workflows/",
+                "templates/",
+                "bgm/",
+                "data/bgm/",
+                "data/templates/",
+                "resources/",
+            ]
+
+            # Check if path starts with allowed prefix, otherwise try output/
+            full_path = None
+            for prefix in allowed_prefixes:
+                if file_path.startswith(prefix):
+                    full_path = file_path
+                    break
+
+            # If no prefix matched, assume it's in output/ (backward compatibility)
+            if full_path is None:
+                full_path = f"output/{file_path}"
+
+            abs_path = Path.cwd() / full_path
+
+            # Security: only allow access to specified directories
+            try:
+                rel_path = abs_path.relative_to(Path.cwd())
+                rel_path_str = str(rel_path)
+
+                # Check if path starts with any allowed prefix
+                is_allowed = any(rel_path_str.startswith(prefix.rstrip('/')) for prefix in allowed_prefixes)
+
+                if not is_allowed:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"Access denied: only {', '.join(p.rstrip('/') for p in allowed_prefixes)} directories are accessible"
+                    )
+            except ValueError:
+                raise HTTPException(status_code=403, detail="Access denied")
+
         if not abs_path.exists():
             raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
-        
+
         if not abs_path.is_file():
             raise HTTPException(status_code=400, detail=f"Path is not a file: {file_path}")
-        
-        # Security: only allow access to specified directories
-        try:
-            rel_path = abs_path.relative_to(Path.cwd())
-            rel_path_str = str(rel_path)
-            
-            # Check if path starts with any allowed prefix
-            is_allowed = any(rel_path_str.startswith(prefix.rstrip('/')) for prefix in allowed_prefixes)
-            
-            if not is_allowed:
-                raise HTTPException(
-                    status_code=403, 
-                    detail=f"Access denied: only {', '.join(p.rstrip('/') for p in allowed_prefixes)} directories are accessible"
-                )
-        except ValueError:
-            raise HTTPException(status_code=403, detail="Access denied")
         
         # Determine media type
         suffix = abs_path.suffix.lower()
@@ -115,9 +130,8 @@ async def get_file(file_path: str):
         return FileResponse(
             path=str(abs_path),
             media_type=media_type,
-            headers={
-                "Content-Disposition": f'inline; filename="{abs_path.name}"'
-            }
+            filename=abs_path.name,
+            content_disposition_type="inline",
         )
         
     except HTTPException:
@@ -125,4 +139,3 @@ async def get_file(file_path: str):
     except Exception as e:
         logger.error(f"File access error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

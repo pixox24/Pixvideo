@@ -18,6 +18,9 @@ import {
   Trash2,
   SquareEqual,
   Save,
+  ChevronDown,
+  ChevronUp,
+  FolderOpen,
 } from "lucide-react";
 import { Preset, WorkbenchResources } from "../types";
 import { VOICE_OPTIONS } from "../data";
@@ -27,6 +30,7 @@ interface QuickCreateProps {
   activePreset: Preset | null;
   onSavePreset: (presetInput: any) => void;
   onSavePromptPrefix: (promptPrefix: string) => Promise<string | void>;
+  onRefreshResources: () => Promise<void>;
   resources: WorkbenchResources;
   addToast: (text: string, type: "success" | "error" | "info") => void;
 }
@@ -49,6 +53,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   activePreset,
   onSavePreset,
   onSavePromptPrefix,
+  onRefreshResources,
   resources,
   addToast,
 }) => {
@@ -76,7 +81,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [bgm, setBgm] = useState("bgm-none");
   const [volume, setVolume] = useState(30);
   const [playingBgm, setPlayingBgm] = useState<string | null>(null);
-  const [audioObj, setAudioObj] = useState<HTMLAudioElement | null>(null);
+  const bgmPreviewRef = React.useRef<HTMLAudioElement | null>(null);
 
   // TTS States
   const [ttsMode, setTtsMode] = useState<"edge" | "comfyui" | "minimax">("minimax");
@@ -90,7 +95,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [previewTtsAudioUrl, setPreviewTtsAudioUrl] = useState<string | null>(null);
 
   // Layout Template states
-  const [viewMode, setViewMode] = useState<"template" | "pure-image">("template");
+  const [viewMode, setViewMode] = useState<"template" | "pure-image">("pure-image");
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [enableMotion, setEnableMotion] = useState(true);
   const [enableSubtitles, setEnableSubtitles] = useState(true);
@@ -100,6 +105,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
   // Render Workflow states
   const [workflowId, setWorkflowId] = useState("");
+  const [workflowsCollapsed, setWorkflowsCollapsed] = useState(true);
   const [promptPrefix, setPromptPrefix] = useState("masterpiece, best quality, ultra-detailed, photorealistic, cinematic volumetric lighting, warm color palette, amber glow");
   const [testImagePrompt, setTestImagePrompt] = useState("a futuristic robot walking through a warm cinematic city street");
   const [testImageUrl, setTestImageUrl] = useState<string | null>(null);
@@ -110,6 +116,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const bgmOptions = resources.bgm;
   const templateOptions = resources.templates;
   const workflowOptions = resources.workflows;
+  const selectedBgm = bgmOptions.find((item) => item.id === bgm);
+  const lastAppliedPresetId = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (workflowOptions.length === 0) return;
@@ -135,13 +143,23 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     }
   }, [bgmOptions, bgm]);
 
+  React.useEffect(() => {
+    if (bgmPreviewRef.current) {
+      bgmPreviewRef.current.volume = volume / 100;
+    }
+  }, [volume]);
+
   // BGM listen toggle
-  const toggleBgmListen = (selectedBgmId: string) => {
+  const toggleBgmListen = async (selectedBgmId: string) => {
+    const audio = bgmPreviewRef.current;
+    if (!audio) {
+      addToast("音频播放器尚未就绪。", "error");
+      return;
+    }
+
     if (playingBgm === selectedBgmId) {
-      if (audioObj) {
-        audioObj.pause();
-        audioObj.currentTime = 0;
-      }
+      audio.pause();
+      audio.currentTime = 0;
       setPlayingBgm(null);
       addToast("伴奏试听已暂停", "info");
       return;
@@ -153,17 +171,43 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       return;
     }
 
-    if (audioObj) {
-      audioObj.pause();
-    }
+    audio.pause();
+    audio.src = matchedBgm.src;
+    audio.volume = volume / 100;
+    audio.loop = true;
+    audio.currentTime = 0;
 
-    const newAudio = new Audio(matchedBgm.src);
-    newAudio.volume = volume / 100;
-    newAudio.loop = true;
-    newAudio.play();
-    setAudioObj(newAudio);
-    setPlayingBgm(selectedBgmId);
-    addToast(`开始试听: ${matchedBgm.name}`, "success");
+    try {
+      await audio.play();
+      setPlayingBgm(selectedBgmId);
+      addToast(`开始试听: ${matchedBgm.name}`, "success");
+    } catch (err: any) {
+      setPlayingBgm(null);
+      addToast(err.message || "浏览器阻止了音频播放，请点击播放器播放。", "error");
+    }
+  };
+
+  const handleBgmChange = (value: string) => {
+    if (bgmPreviewRef.current) {
+      bgmPreviewRef.current.pause();
+      bgmPreviewRef.current.currentTime = 0;
+    }
+    setPlayingBgm(null);
+    setBgm(value);
+  };
+
+  const openCustomBgmFolder = async () => {
+    try {
+      const response = await fetch("/api/resources/bgm/select-folder", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || "无法选择自定义音乐文件夹。");
+      }
+      await onRefreshResources();
+      addToast("已保存自定义音乐文件夹，音乐列表已刷新。", "success");
+    } catch (err: any) {
+      addToast(err.message || "无法选择自定义音乐文件夹。", "error");
+    }
   };
 
   const audioPathToUrl = (audioPath: string) => {
@@ -289,6 +333,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   // Apply Preset
   React.useEffect(() => {
     if (activePreset) {
+      if (lastAppliedPresetId.current === activePreset.id) {
+        setPromptPrefix(activePreset.promptPrefix);
+        return;
+      }
+
+      lastAppliedPresetId.current = activePreset.id;
       setTtsMode(activePreset.ttsMode);
       setVoice(activePreset.voice);
       setSpeed(activePreset.speed);
@@ -425,6 +475,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   };
 
   const currentWorkflow = workflowOptions.find((w) => w.id === workflowId);
+  const selectedTemplateOption = templateOptions.find((template) => template.id === selectedTemplate);
 
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl pb-10">
@@ -586,24 +637,24 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                         分镜配音旁白 (TTS Text)
                       </label>
-                      <input
-                        type="text"
+                      <textarea
                         placeholder="请输入本帧念出来的配音旁白文案..."
                         value={scene.ttsText}
                         onChange={(e) => updateScene(scene.id, "ttsText", e.target.value)}
-                        className="w-full bg-[#101114] border border-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                        rows={3}
+                        className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 leading-relaxed resize-y max-h-48 overflow-y-auto focus:outline-none focus:border-amber-500"
                       />
                     </div>
                     <div>
                       <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                         画面视觉绘图 Prompt (英文最佳)
                       </label>
-                      <input
-                        type="text"
+                      <textarea
                         placeholder="请输入本帧的画面提示词，留空将沿用主题..."
                         value={scene.visualPrompt}
                         onChange={(e) => updateScene(scene.id, "visualPrompt", e.target.value)}
-                        className="w-full bg-[#101114] border border-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                        rows={3}
+                        className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 leading-relaxed resize-y max-h-48 overflow-y-auto focus:outline-none focus:border-amber-500"
                       />
                     </div>
                   </div>
@@ -815,46 +866,52 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                 选择背景配乐 / Background Audio
               </label>
-              <div className="space-y-1.5">
-                {bgmOptions.map((b) => (
-                  <div
-                    key={b.id}
-                    className={`flex items-center justify-between p-2 rounded border text-xs transition-colors ${
-                      bgm === b.id
-                        ? "bg-[#17181c] border-amber-500/30 text-amber-400"
-                        : "bg-[#121316] border-zinc-900 text-zinc-400 hover:text-zinc-200"
-                    }`}
-                  >
-                    <label className="flex items-center gap-2 cursor-pointer flex-1">
-                      <input
-                        type="radio"
-                        name="bgmRadio"
-                        checked={bgm === b.id}
-                        onChange={() => setBgm(b.id)}
-                        className="accent-amber-500"
-                      />
-                      <div className="truncate">
-                        <span className="font-medium text-zinc-300 block text-[11px] truncate">{b.name}</span>
-                        {b.author && <span className="text-[9px] text-zinc-500">{b.author} • {b.duration}</span>}
-                      </div>
-                    </label>
-
-                    {b.src && (
-                      <button
-                        onClick={() => toggleBgmListen(b.id)}
-                        className={`p-1 rounded text-[10px] border flex items-center gap-0.5 ${
-                          playingBgm === b.id
-                            ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                            : "bg-[#17181c] border-zinc-800 text-zinc-400 hover:text-zinc-200"
-                        }`}
-                      >
-                        <Volume2 className="w-3 h-3" />
-                        {playingBgm === b.id ? "暂停" : "试听"}
-                      </button>
-                    )}
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
+                <select
+                  value={bgm}
+                  onChange={(e) => handleBgmChange(e.target.value)}
+                  className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                >
+                  {bgmOptions.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}{b.author ? ` · ${b.author}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => selectedBgm?.src && toggleBgmListen(selectedBgm.id)}
+                  disabled={!selectedBgm?.src}
+                  className={`px-2.5 py-1.5 rounded border text-xs font-medium flex items-center justify-center gap-1 transition-colors disabled:opacity-50 ${
+                    playingBgm === selectedBgm?.id
+                      ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                      : "bg-[#17181c] border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  {playingBgm === selectedBgm?.id ? "暂停" : "试听"}
+                </button>
+                <button
+                  type="button"
+                  onClick={openCustomBgmFolder}
+                  className="px-2.5 py-1.5 rounded border border-zinc-800 bg-[#17181c] text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:border-amber-500/40 flex items-center justify-center gap-1 transition-colors"
+                  title="打开自定义音乐文件夹"
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-amber-500" />
+                  自定义音乐文件夹
+                </button>
               </div>
+              {selectedBgm?.src && (
+                <audio
+                  ref={bgmPreviewRef}
+                  src={selectedBgm.src}
+                  controls
+                  preload="metadata"
+                  className="w-full h-8 mt-2"
+                  onPause={() => setPlayingBgm(null)}
+                  onPlay={() => setPlayingBgm(selectedBgm.id)}
+                />
+              )}
             </div>
 
             <div className="pt-2">
@@ -886,20 +943,20 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
           <div className="flex gap-1.5 bg-[#17181c] border border-zinc-850 p-0.5 rounded">
             <button
-              onClick={() => setViewMode("template")}
-              className={`px-2 py-0.5 text-[10px] rounded transition-all ${
-                viewMode === "template" ? "bg-amber-500/10 text-amber-400 font-medium" : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              分镜模板渲染
-            </button>
-            <button
               onClick={() => setViewMode("pure-image")}
               className={`px-2 py-0.5 text-[10px] rounded transition-all ${
                 viewMode === "pure-image" ? "bg-amber-500/10 text-amber-400 font-medium" : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
               图片运动生成
+            </button>
+            <button
+              onClick={() => setViewMode("template")}
+              className={`px-2 py-0.5 text-[10px] rounded transition-all ${
+                viewMode === "template" ? "bg-amber-500/10 text-amber-400 font-medium" : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              分镜模板渲染
             </button>
           </div>
         </div>
@@ -937,7 +994,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   测试出图提示词 / Test Prompt
                 </label>
                 <span className="text-[9px] text-zinc-600 font-mono truncate">
-                  {currentWorkflow?.name || "Default workflow"} · {imageWidth}x{imageHeight}
+                  使用图片运动生成比例 · {currentWorkflow?.name || "Default workflow"} · {imageWidth}x{imageHeight}
                 </span>
               </div>
               <textarea
@@ -988,6 +1045,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
         {viewMode === "template" ? (
           <div className="space-y-4">
+            <div className="bg-amber-500/5 border border-amber-500/15 rounded-md px-3 py-2 text-[10px] text-amber-200/90 leading-relaxed">
+              <div className="font-semibold text-amber-300">模板模式下最终视频比例由模板决定</div>
+              <div className="text-amber-100/75">
+                当前模板画布: {selectedTemplateOption?.dimensions || "未选择模板"}。如果需要 9:16 竖屏成片，请选择竖屏模板或切回图片运动生成。
+              </div>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto pr-1">
               {templateOptions.length === 0 && (
                 <div className="sm:col-span-3 border border-dashed border-zinc-800 rounded p-6 text-center text-xs text-zinc-500">
@@ -1033,7 +1096,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
-                  图片比例 / Size
+                  图片/视频画布比例 / Output Size
                 </label>
                 <select
                   value={imageAspectRatio}
@@ -1046,6 +1109,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-[10px] text-zinc-600 leading-relaxed">
+                  此尺寸会同时用于生成图片素材和最终视频画布
+                </p>
               </div>
               <div>
                 <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
@@ -1117,41 +1183,53 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
       {/* 5. ComfyUI Media Workflows selections */}
       <div className="bg-[#101114] border border-zinc-900 rounded-lg p-4 space-y-4">
-        <h3 className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-          <Workflow className="w-4 h-4 text-amber-500" />
-          后台渲染 Workflows 源工作流配置
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-h-[360px] overflow-y-auto pr-1">
-          {workflowOptions.length === 0 && (
-            <div className="sm:col-span-3 border border-dashed border-zinc-800 rounded p-6 text-center text-xs text-zinc-500">
-              正在等待后端工作流资源...
-            </div>
-          )}
-          {workflowOptions.map((wf) => (
-            <div
-              key={wf.id}
-              onClick={() => setWorkflowId(wf.id)}
-              className={`p-3 rounded border text-left cursor-pointer transition-colors ${
-                workflowId === wf.id
-                  ? "bg-[#17181c] border-amber-500/30 text-amber-400"
-                  : "bg-[#121316] border-zinc-900 text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              <div className="flex justify-between items-start mb-1">
-                <span className="text-[11px] font-semibold text-zinc-200 block truncate">{wf.name}</span>
-                <span className="text-[8px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded font-mono">
-                  {wf.source}
-                </span>
-              </div>
-              <span className="text-[9px] font-mono text-zinc-500 block">类型: {wf.type} | {wf.resolution}</span>
-              <p className="text-[10px] text-zinc-400 leading-relaxed mt-2 line-clamp-2">
-                {wf.desc}
-              </p>
-            </div>
-          ))}
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
+            <Workflow className="w-4 h-4 text-amber-500" />
+            后台渲染 Workflows 源工作流配置
+          </h3>
+          <button
+            type="button"
+            onClick={() => setWorkflowsCollapsed((current) => !current)}
+            className="w-7 h-7 inline-flex items-center justify-center rounded border border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-100 hover:border-amber-500/40 transition-colors"
+            title={workflowsCollapsed ? "展开 Workflows" : "折叠 Workflows"}
+            aria-label={workflowsCollapsed ? "展开 Workflows" : "折叠 Workflows"}
+          >
+            {workflowsCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+          </button>
         </div>
 
+        {!workflowsCollapsed && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-h-[360px] overflow-y-auto pr-1">
+            {workflowOptions.length === 0 && (
+              <div className="sm:col-span-3 border border-dashed border-zinc-800 rounded p-6 text-center text-xs text-zinc-500">
+                正在等待后端工作流资源...
+              </div>
+            )}
+            {workflowOptions.map((wf) => (
+              <div
+                key={wf.id}
+                onClick={() => setWorkflowId(wf.id)}
+                className={`p-3 rounded border text-left cursor-pointer transition-colors ${
+                  workflowId === wf.id
+                    ? "bg-[#17181c] border-amber-500/30 text-amber-400"
+                    : "bg-[#121316] border-zinc-900 text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <span className="text-[11px] font-semibold text-zinc-200 block truncate">{wf.name}</span>
+                  <span className="text-[8px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded font-mono">
+                    {wf.source}
+                  </span>
+                </div>
+                <span className="text-[9px] font-mono text-zinc-500 block">类型: {wf.type} | {wf.resolution}</span>
+                <p className="text-[10px] text-zinc-400 leading-relaxed mt-2 line-clamp-2">
+                  {wf.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Primary Action Button */}

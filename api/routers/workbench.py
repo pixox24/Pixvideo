@@ -126,9 +126,7 @@ def _preset_from_config(name: str = "当前保存配置") -> dict[str, Any]:
         ),
         "splitType": "line",
         "template": config_manager.get("template", {}).get("default_template"),
-        "viewMode": "pure-image"
-        if config_manager.get("template", {}).get("composition_mode") == "plain_image"
-        else "template",
+        "viewMode": quick_create.get("view_mode") or "pure-image",
         "enableMotion": config_manager.get("template", {}).get("image_motion_enabled", True),
         "enableSubtitles": config_manager.get("template", {}).get("subtitle_enabled", True),
         "minimaxModel": tts.get("minimax", {}).get("model"),
@@ -157,6 +155,7 @@ def _quick_create_config_from_preset(preset: dict[str, Any]) -> dict[str, Any]:
         "prompt_prefix": preset.get("promptPrefix", ""),
         "bgm_path": bgm_path,
         "bgm_volume": volume,
+        "view_mode": preset.get("viewMode", "pure-image"),
         "frame_template": preset.get("template"),
         "template_type": _template_type_from_path(preset.get("template")),
         "template_media_type": _template_type_from_path(preset.get("template")),

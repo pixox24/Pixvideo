@@ -33,6 +33,12 @@ export interface Task {
   status: "ready" | "generating" | "completed" | "failed";
   progress: number;
   currentStep: string;
+  progressEventType?: string;
+  progressFrameCurrent?: number;
+  progressFrameTotal?: number;
+  progressStep?: number;
+  progressAction?: string;
+  progressExtraInfo?: string;
   sceneCount: number;
   createdTime: string;
   duration?: number; // estimated or real seconds

@@ -322,6 +322,7 @@ class ConfigManager:
                 ),
             },
             "quick_create": {
+                "view_mode": video_params.get("view_mode") or self.config.quick_create.view_mode,
                 "bgm_path": video_params.get("bgm_path"),
                 "bgm_volume": bgm_volume,
             },

@@ -40,6 +40,12 @@ class TaskProgress(BaseModel):
     total: int = 0
     percentage: float = 0.0
     message: str = ""
+    event_type: Optional[str] = None
+    frame_current: Optional[int] = None
+    frame_total: Optional[int] = None
+    step: Optional[int] = None
+    action: Optional[str] = None
+    extra_info: Optional[str] = None
 
 
 class Task(BaseModel):
@@ -67,4 +73,3 @@ class Task(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
-

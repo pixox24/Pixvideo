@@ -37,6 +37,7 @@ quick_create:
                 "minimax_model": "speech-2.8-hd",
                 "minimax_emotion": "happy",
                 "frame_template": "1080x1920/video_default.html",
+                "view_mode": "template",
                 "template_type": "video",
                 "template_media_type": "video",
                 "composition_mode": "template",
@@ -64,6 +65,7 @@ quick_create:
         assert data["template"]["composition_mode"] == "template"
         assert data["template"]["image_motion_enabled"] is True
         assert data["template"]["subtitle_enabled"] is False
+        assert data["quick_create"]["view_mode"] == "template"
         assert data["quick_create"]["bgm_path"] == "custom.mp3"
         assert data["quick_create"]["bgm_volume"] == 0.31
         assert "one-off topic" not in str(data)
@@ -77,6 +79,7 @@ quick_create:
         assert reloaded.config.comfyui.tts.minimax.voice_id == "female-shaonv"
         assert reloaded.config.comfyui.video.default_workflow == "runninghub/video_wan2.1_fusionx.json"
         assert reloaded.config.template.default_template == "1080x1920/video_default.html"
+        assert reloaded.config.quick_create.view_mode == "template"
         assert reloaded.config.quick_create.bgm_path == "custom.mp3"
     finally:
         ConfigManager._instance = old_instance

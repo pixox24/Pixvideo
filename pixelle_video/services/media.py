@@ -342,7 +342,7 @@ class MediaService(ComfyBaseService):
             final_height = int(height or 1024)
             size = f"{final_width}x{final_height}"
 
-        base_url = config["base_url"].rstrip("/")
+        base_url = self._normalize_openai_image_base_url(config["base_url"])
         payload: dict[str, Any] = {
             "model": config["model"],
             "prompt": prompt,
@@ -374,6 +374,15 @@ class MediaService(ComfyBaseService):
 
         logger.info(f"✅ Generated image via configured image API: {image_ref}")
         return MediaResult(media_type="image", url=image_ref)
+
+    def _normalize_openai_image_base_url(self, base_url: str) -> str:
+        candidate = str(base_url or "").strip().rstrip("/")
+        parsed = urlparse(candidate)
+        if parsed.scheme in {"http", "https"}:
+            return candidate
+        if candidate.startswith("//"):
+            return f"https:{candidate}"
+        return f"https://{candidate.lstrip('/')}"
 
     async def _extract_openai_image_result(
         self,

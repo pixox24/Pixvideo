@@ -16,6 +16,8 @@ Resource discovery endpoints
 Provides endpoints to discover available workflows, templates, and BGM.
 """
 
+import platform
+import subprocess
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -29,6 +31,7 @@ from api.schemas.resources import (
     BGMInfo,
     BGMListResponse,
 )
+from pixelle_video.config import config_manager
 from pixelle_video.utils.os_util import list_resource_files, get_root_path, get_data_path
 from pixelle_video.utils.template_util import get_all_templates_with_info
 
@@ -250,6 +253,16 @@ async def list_bgm():
                         "path": f"data/bgm/{item.name}",
                         "source": "custom"
                     }
+
+        selected_bgm_folder = str(config_manager.get("quick_create", {}).get("custom_bgm_folder") or "").strip()
+        selected_bgm_dir = Path(selected_bgm_folder) if selected_bgm_folder else None
+        if selected_bgm_dir and selected_bgm_dir.exists() and selected_bgm_dir.is_dir():
+            for item in selected_bgm_dir.iterdir():
+                if item.is_file() and item.suffix.lower() in audio_extensions:
+                    bgm_files_dict[item.name] = {
+                        "path": f"custom-bgm/{item.name}",
+                        "source": "custom-folder",
+                    }
         
         # Convert to response format
         bgm_files = [
@@ -267,3 +280,60 @@ async def list_bgm():
         logger.error(f"List BGM error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/bgm/open-folder")
+async def open_custom_bgm_folder():
+    """Open the custom BGM folder used by resource discovery."""
+    try:
+        custom_bgm_dir = Path(get_data_path("bgm"))
+        custom_bgm_dir.mkdir(parents=True, exist_ok=True)
+
+        system_name = platform.system()
+        if system_name == "Darwin":
+            command = ["open", str(custom_bgm_dir)]
+        elif system_name == "Windows":
+            command = ["explorer", str(custom_bgm_dir)]
+        else:
+            command = ["xdg-open", str(custom_bgm_dir)]
+
+        subprocess.Popen(command)
+        return {"success": True, "path": str(custom_bgm_dir)}
+    except Exception as e:
+        logger.error(f"Open custom BGM folder error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/bgm/select-folder")
+async def select_custom_bgm_folder():
+    """Select and persist a custom BGM folder."""
+    try:
+        system_name = platform.system()
+        if system_name != "Darwin":
+            raise HTTPException(status_code=501, detail="当前仅支持 macOS 文件夹选择。")
+
+        script = 'POSIX path of (choose folder with prompt "选择自定义音乐文件夹")'
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        selected_path = result.stdout.strip()
+        if not selected_path:
+            raise HTTPException(status_code=400, detail="未选择文件夹。")
+
+        selected_folder = Path(selected_path).expanduser().resolve()
+        if not selected_folder.exists() or not selected_folder.is_dir():
+            raise HTTPException(status_code=400, detail="选择的路径不是有效文件夹。")
+
+        config_manager.update({"quick_create": {"custom_bgm_folder": str(selected_folder)}})
+        config_manager.save()
+        return {"success": True, "path": str(selected_folder)}
+    except HTTPException:
+        raise
+    except subprocess.CalledProcessError as exc:
+        logger.info(f"Custom BGM folder selection cancelled or failed: {exc}")
+        raise HTTPException(status_code=400, detail="已取消选择自定义音乐文件夹。") from exc
+    except Exception as e:
+        logger.error(f"Select custom BGM folder error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

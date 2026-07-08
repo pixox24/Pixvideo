@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { Task } from "../types";
+import { VideoPreview } from "./VideoPreview";
 
 interface HistoryListProps {
   tasks: Task[];
@@ -261,10 +262,8 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                       {task.status === "completed" && task.videoUrl && (
                         <div>
                           <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block mb-1">高清成片预览:</span>
-                          <video
+                          <VideoPreview
                             src={task.videoUrl}
-                            controls
-                            className="w-full max-h-[160px] object-cover rounded border border-zinc-800"
                             poster={task.scenes?.[0]?.imageUrl}
                           />
                         </div>

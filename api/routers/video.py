@@ -249,7 +249,18 @@ async def generate_video_async(
                     message = event.event_type
                 if event.extra_info:
                     message = f"{message} - {event.extra_info}"
-                task_manager.update_progress(task.task_id, current, total, message)
+                task_manager.update_progress(
+                    task.task_id,
+                    current,
+                    total,
+                    message,
+                    event_type=event.event_type,
+                    frame_current=event.frame_current,
+                    frame_total=event.frame_total,
+                    step=event.step,
+                    action=event.action,
+                    extra_info=event.extra_info,
+                )
 
             video_params = _build_video_params(
                 request_body,
@@ -282,4 +293,3 @@ async def generate_video_async(
     except Exception as e:
         logger.error(f"Async video generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

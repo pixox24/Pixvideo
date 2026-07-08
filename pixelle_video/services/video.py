@@ -36,6 +36,7 @@ from typing import List, Literal, Optional
 import ffmpeg
 from loguru import logger
 
+from pixelle_video.config import config_manager
 from pixelle_video.utils.os_util import get_resource_path, list_resource_files, resource_exists
 
 
@@ -1151,6 +1152,18 @@ class VideoService:
         # Try direct path first (absolute or relative)
         if os.path.exists(bgm_path):
             return os.path.abspath(bgm_path)
+
+        if bgm_path.startswith("custom-bgm/"):
+            custom_bgm_folder = str(config_manager.get("quick_create", {}).get("custom_bgm_folder") or "").strip()
+            if custom_bgm_folder:
+                custom_base = Path(custom_bgm_folder).expanduser().resolve()
+                candidate = (custom_base / bgm_path.removeprefix("custom-bgm/")).resolve()
+                try:
+                    candidate.relative_to(custom_base)
+                except ValueError:
+                    candidate = None
+                if candidate and candidate.is_file():
+                    return str(candidate)
 
         # Try as filename in resource directories (custom > default)
         if resource_exists("bgm", bgm_path):

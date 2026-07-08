@@ -101,5 +101,7 @@ template:
 # Saved by the "Save Current Configuration" button in Quick Create.
 # Reusable settings only; prompts, titles, uploaded files, and generated output are not saved.
 quick_create:
+  view_mode: pure-image  # Options: pure-image, template
+  custom_bgm_folder: null
   bgm_path: default.mp3
   bgm_volume: 0.2

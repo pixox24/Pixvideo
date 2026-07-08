@@ -183,16 +183,28 @@ class TaskManager:
         task_id: str,
         current: int,
         total: int,
-        message: str = ""
+        message: str = "",
+        event_type: Optional[str] = None,
+        frame_current: Optional[int] = None,
+        frame_total: Optional[int] = None,
+        step: Optional[int] = None,
+        action: Optional[str] = None,
+        extra_info: Optional[str] = None,
     ):
         """
         Update task progress
-        
+
         Args:
             task_id: Task ID
             current: Current progress
             total: Total steps
             message: Progress message
+            event_type: Structured backend progress event type
+            frame_current: Current frame number, when processing frames
+            frame_total: Total frame count, when processing frames
+            step: Current frame step number
+            action: Current frame action
+            extra_info: Additional progress detail
         """
         task = self._tasks.get(task_id)
         if not task:
@@ -203,7 +215,13 @@ class TaskManager:
             current=current,
             total=total,
             percentage=percentage,
-            message=message
+            message=message,
+            event_type=event_type,
+            frame_current=frame_current,
+            frame_total=frame_total,
+            step=step,
+            action=action,
+            extra_info=extra_info,
         )
     
     def cancel_task(self, task_id: str) -> bool:
@@ -267,4 +285,3 @@ class TaskManager:
 
 # Global task manager instance
 task_manager = TaskManager()
-

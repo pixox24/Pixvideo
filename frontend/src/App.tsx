@@ -113,6 +113,10 @@ export default function App() {
     });
   };
 
+  const refreshResources = async () => {
+    setResources(await fetchQuickCreateResources());
+  };
+
   // Load persisted backend state
   useEffect(() => {
     const loadBackendState = async () => {
@@ -143,7 +147,7 @@ export default function App() {
       }
 
       try {
-        setResources(await fetchQuickCreateResources());
+        await refreshResources();
       } catch (err) {
         console.warn("Could not load backend resources.", err);
       }
@@ -192,6 +196,7 @@ export default function App() {
     const savedPreset = data.preset;
     if (savedPreset) {
       setPresets([savedPreset]);
+      setActivePreset(savedPreset);
     }
     addToast("提示词前缀已保存，下次打开会自动使用。", "success");
     return data.promptPrefix;
@@ -607,6 +612,7 @@ export default function App() {
               activePreset={activePreset}
               onSavePreset={handleSavePreset}
               onSavePromptPrefix={handleSavePromptPrefix}
+              onRefreshResources={refreshResources}
               resources={resources}
               addToast={addToast}
             />

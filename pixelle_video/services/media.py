@@ -18,12 +18,16 @@ Automatically detects output type based on ExecuteResult.
 """
 
 import asyncio
+import base64
 import os
+import uuid
+from pathlib import Path
 from typing import Any, Optional
 
 import httpx
 from loguru import logger
 
+from pixelle_video.config import config_manager
 from pixelle_video.models.media import MediaResult
 from pixelle_video.services.comfy_base_service import ComfyBaseService
 
@@ -204,6 +208,14 @@ class MediaService(ComfyBaseService):
                 comfyui_url="http://192.168.1.100:8188"
             )
         """
+        if media_type == "image" and self._has_openai_image_generation_config():
+            return await self._call_openai_image_generation(
+                prompt=prompt,
+                width=width,
+                height=height,
+                **params,
+            )
+
         # 1. Resolve workflow (returns structured info)
         workflow_info = self._resolve_workflow(workflow=workflow)
         
@@ -299,6 +311,147 @@ class MediaService(ComfyBaseService):
         except Exception as e:
             logger.error(f"Media generation error: {e}")
             raise
+
+    def _get_openai_image_generation_config(self) -> dict[str, str]:
+        config = config_manager.get_image_generation_config()
+        return {
+            "api_key": str(config.get("api_key") or os.getenv("IMAGE_GENERATION_API_KEY") or "").strip(),
+            "base_url": str(config.get("base_url") or os.getenv("IMAGE_GENERATION_BASE_URL") or "").strip(),
+            "model": str(config.get("model") or os.getenv("IMAGE_GENERATION_MODEL") or "").strip(),
+        }
+
+    def _has_openai_image_generation_config(self) -> bool:
+        config = self._get_openai_image_generation_config()
+        return bool(config["api_key"] and config["base_url"] and config["model"])
+
+    async def _call_openai_image_generation(
+        self,
+        prompt: str,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        **params,
+    ) -> MediaResult:
+        config = self._get_openai_image_generation_config()
+        if not (config["api_key"] and config["base_url"] and config["model"]):
+            raise ValueError("Image generation API requires api_key, base_url, and model")
+
+        size = params.get("size")
+        if not size:
+            final_width = int(width or 1024)
+            final_height = int(height or 1024)
+            size = f"{final_width}x{final_height}"
+
+        base_url = config["base_url"].rstrip("/")
+        payload: dict[str, Any] = {
+            "model": config["model"],
+            "prompt": prompt,
+            "n": int(params.get("n") or 1),
+            "size": size,
+        }
+        if "65535.space" in base_url:
+            payload["official_fallback"] = False
+
+        headers = {
+            "Authorization": f"Bearer {config['api_key']}",
+            "Content-Type": "application/json",
+        }
+
+        submit_url = f"{base_url}/images/generations"
+        logger.info(f"Submitting OpenAI-compatible image generation: model={config['model']}, size={size}")
+
+        async with httpx.AsyncClient(timeout=params.get("image_generation_timeout", 120.0)) as client:
+            response = await client.post(submit_url, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+
+            image_ref = await self._extract_openai_image_result(
+                client=client,
+                base_url=base_url,
+                response_data=result,
+                headers=headers,
+            )
+
+        logger.info(f"✅ Generated image via configured image API: {image_ref}")
+        return MediaResult(media_type="image", url=image_ref)
+
+    async def _extract_openai_image_result(
+        self,
+        client: httpx.AsyncClient,
+        base_url: str,
+        response_data: dict[str, Any],
+        headers: dict[str, str],
+    ) -> str:
+        direct = self._extract_direct_image_result(response_data)
+        if direct:
+            return direct
+
+        job_id = response_data.get("job_id") or response_data.get("task_id")
+        nested_data = response_data.get("data")
+        if isinstance(nested_data, dict):
+            job_id = job_id or nested_data.get("job_id") or nested_data.get("task_id")
+            status_url = nested_data.get("status_url")
+        else:
+            status_url = response_data.get("status_url")
+
+        if not job_id:
+            raise RuntimeError(f"Image generation response did not include image data or job_id: {response_data}")
+
+        poll_url = status_url or f"{base_url}/images/async-generations/{job_id}"
+        return await self._poll_openai_image_job(client, poll_url, headers)
+
+    def _extract_direct_image_result(self, response_data: dict[str, Any]) -> Optional[str]:
+        data = response_data.get("data")
+        if isinstance(data, dict):
+            nested = self._extract_direct_image_result(data)
+            if nested:
+                return nested
+        if not isinstance(data, list) or not data:
+            return None
+
+        first = data[0]
+        if not isinstance(first, dict):
+            return None
+        if first.get("url"):
+            return str(first["url"])
+        if first.get("b64_json"):
+            return self._save_base64_image(str(first["b64_json"]))
+        return None
+
+    async def _poll_openai_image_job(
+        self,
+        client: httpx.AsyncClient,
+        poll_url: str,
+        headers: dict[str, str],
+    ) -> str:
+        deadline = asyncio.get_running_loop().time() + 600
+        auth_headers = {"Authorization": headers["Authorization"]}
+        while asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(2)
+            response = await client.get(poll_url, headers=auth_headers)
+            response.raise_for_status()
+            data = response.json()
+            job = data.get("data") if isinstance(data.get("data"), dict) else data
+            status = job.get("status")
+
+            if status == "done":
+                urls = job.get("result_urls") or []
+                if urls:
+                    return str(urls[0])
+                b64_values = job.get("result_b64") or []
+                if b64_values:
+                    return self._save_base64_image(str(b64_values[0]))
+                raise RuntimeError("Image generation job completed without result_urls or result_b64")
+            if status == "failed":
+                raise RuntimeError(job.get("error_message") or job.get("error_code") or "Image generation job failed")
+
+        raise TimeoutError("Image generation job timed out after 600 seconds")
+
+    def _save_base64_image(self, b64_json: str) -> str:
+        output_dir = Path("output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"{uuid.uuid4().hex}.png"
+        output_path.write_bytes(base64.b64decode(b64_json))
+        return str(output_path)
     
     async def _call_bizyair_api(self, workflow_info: dict, workflow_params: dict) -> MediaResult:
         bizyair_api_key = self._get_bizyair_api_key()

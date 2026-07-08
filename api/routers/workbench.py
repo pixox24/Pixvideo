@@ -167,6 +167,7 @@ def _service_test_request(request: TestConnectionRequest) -> ServiceTestRequest:
         "comfy": "comfyui",
         "comfyui": "comfyui",
         "llm": "llm",
+        "image_generation": "image_generation",
         "runninghub": "runninghub",
         "bizyair": "bizyair",
         "minimax": "minimax",
@@ -221,6 +222,17 @@ async def test_connection(request: TestConnectionRequest):
 async def generate_script(request: GenerateScriptRequest, pixelle_video: PixelleVideoDep):
     """Generate editable scene narration and visual prompts through the real LLM."""
     try:
+        llm_config = config_manager.get_llm_config()
+        if not (
+            llm_config.get("api_key")
+            and llm_config.get("base_url")
+            and llm_config.get("model")
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="LLM 配置未保存。请在系统设置中测试 LLM 连接，成功后配置会自动保存。",
+            )
+
         narrations = await generate_narrations_from_topic(
             llm_service=pixelle_video.llm,
             topic=request.topic,
@@ -243,6 +255,8 @@ async def generate_script(request: GenerateScriptRequest, pixelle_video: Pixelle
             for index, narration in enumerate(narrations)
         ]
         return {"success": True, "data": data}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc

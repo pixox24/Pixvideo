@@ -27,6 +27,13 @@ class LLMConfig(BaseModel):
     model: str = Field(default="", description="LLM Model Name")
 
 
+class ImageGenerationConfig(BaseModel):
+    """OpenAI-compatible image generation API configuration."""
+    api_key: str = Field(default="", description="Image generation API key")
+    base_url: str = Field(default="https://img-cn.65535.space/v1", description="Image generation API base URL")
+    model: str = Field(default="gpt-image-2", description="Image generation model name")
+
+
 class TTSLocalConfig(BaseModel):
     """Local TTS configuration (Edge TTS)"""
     voice: str = Field(default="zh-CN-YunjianNeural", description="Edge TTS voice ID")
@@ -119,6 +126,7 @@ class PixelleVideoConfig(BaseModel):
     """Pixelle-Video main configuration"""
     project_name: str = Field(default="Pixelle-Video", description="Project name")
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    image_generation: ImageGenerationConfig = Field(default_factory=ImageGenerationConfig)
     comfyui: ComfyUIConfig = Field(default_factory=ComfyUIConfig)
     template: TemplateConfig = Field(default_factory=TemplateConfig)
     quick_create: QuickCreateConfig = Field(default_factory=QuickCreateConfig)

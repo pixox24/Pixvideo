@@ -56,6 +56,12 @@ export interface LLMConfig {
   model: string;
 }
 
+export interface ImageGenerationConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
 export interface ComfyConfig {
   url: string;
   apiKey: string;
@@ -69,6 +75,7 @@ export interface RunningHubConfig {
 
 export interface SystemSettings {
   llm: LLMConfig;
+  imageGeneration: ImageGenerationConfig;
   comfy: ComfyConfig;
   runninghub: RunningHubConfig;
   bizyairKey: string;

@@ -29,6 +29,19 @@ interface QuickCreateProps {
   addToast: (text: string, type: "success" | "error" | "info") => void;
 }
 
+const IMAGE_SIZE_PRESETS = [
+  { id: "1024x1024", label: "1:1 正方形", width: 1024, height: 1024 },
+  { id: "1024x1536", label: "2:3 竖版", width: 1024, height: 1536 },
+  { id: "1536x1024", label: "3:2 横版", width: 1536, height: 1024 },
+  { id: "2048x2048", label: "1:1 2K", width: 2048, height: 2048 },
+  { id: "2560x1440", label: "16:9 QHD", width: 2560, height: 1440 },
+  { id: "1440x2560", label: "9:16 QHD", width: 1440, height: 2560 },
+  { id: "2880x2880", label: "1:1 4K", width: 2880, height: 2880 },
+  { id: "3840x2160", label: "16:9 4K", width: 3840, height: 2160 },
+  { id: "2160x3840", label: "9:16 4K", width: 2160, height: 3840 },
+  { id: "custom", label: "自定义", width: 1024, height: 1536 },
+];
+
 export const QuickCreate: React.FC<QuickCreateProps> = ({
   onGenerateTask,
   activePreset,
@@ -64,18 +77,23 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
   // TTS States
   const [ttsMode, setTtsMode] = useState<"edge" | "comfyui" | "minimax">("minimax");
-  const [voice, setVoice] = useState("minimax-emotion-db1");
-  const [speed, setSpeed] = useState(1.1);
-  const [emotion, setEmotion] = useState("excited");
-  const [minimaxModel, setMinimaxModel] = useState("speech-mimic-v1");
+  const [voice, setVoice] = useState("male-qn-qingse");
+  const [speed, setSpeed] = useState(1.0);
+  const [emotion, setEmotion] = useState("");
+  const [minimaxModel, setMinimaxModel] = useState("speech-2.8-turbo");
   const [customAudioFile, setCustomAudioFile] = useState<string | null>(null);
   const [previewingTts, setPreviewingTts] = useState(false);
+  const [previewTtsText, setPreviewTtsText] = useState("这是一段 TTS 试听文案，用来检查音色、语速和发音效果。");
+  const [previewTtsAudioUrl, setPreviewTtsAudioUrl] = useState<string | null>(null);
 
   // Layout Template states
   const [viewMode, setViewMode] = useState<"template" | "pure-image">("template");
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [enableMotion, setEnableMotion] = useState(true);
   const [enableSubtitles, setEnableSubtitles] = useState(true);
+  const [imageAspectRatio, setImageAspectRatio] = useState("1024x1536");
+  const [imageWidth, setImageWidth] = useState(1024);
+  const [imageHeight, setImageHeight] = useState(1536);
 
   // Render Workflow states
   const [workflowId, setWorkflowId] = useState("");
@@ -140,15 +158,63 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     addToast(`开始试听: ${matchedBgm.name}`, "success");
   };
 
+  const audioPathToUrl = (audioPath: string) => {
+    if (/^https?:\/\//.test(audioPath)) return audioPath;
+    return `/api/files/${audioPath}`;
+  };
+
+  const applyImageSizePreset = (presetId: string) => {
+    setImageAspectRatio(presetId);
+    const preset = IMAGE_SIZE_PRESETS.find((item) => item.id === presetId);
+    if (preset && preset.id !== "custom") {
+      setImageWidth(preset.width);
+      setImageHeight(preset.height);
+    }
+  };
+
   // TTS Speak Preview
-  const handlePreviewTts = () => {
+  const handlePreviewTts = async () => {
+    if (!previewTtsText.trim()) {
+      addToast("请先填写试听文案。", "error");
+      return;
+    }
+
     setPreviewingTts(true);
-    addToast("TTS 语音引擎分析中...", "info");
-    
-    setTimeout(() => {
+    setPreviewTtsAudioUrl(null);
+    const previewInferenceMode = ttsMode === "edge" ? "local" : ttsMode;
+    const previewServiceName = ttsMode === "minimax" ? "MiniMax" : ttsMode === "comfyui" ? "ComfyUI" : "Edge";
+    addToast(`正在生成 ${previewServiceName} TTS 试听音频...`, "info");
+
+    try {
+      const response = await fetch("/api/tts/synthesize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: previewTtsText,
+          inference_mode: previewInferenceMode,
+          voice_id: voice,
+          speed,
+          minimax_model: ttsMode === "minimax" ? minimaxModel : undefined,
+          minimax_emotion: ttsMode === "minimax" ? emotion || undefined : undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || `${previewServiceName} TTS 试听生成失败。`);
+      }
+      const audioUrl = audioPathToUrl(data.audio_path);
+      setPreviewTtsAudioUrl(audioUrl);
+      addToast(`${previewServiceName} TTS 试听音频已生成。`, "success");
+
+      const audio = new Audio(audioUrl);
+      audio.play().catch(() => {
+        addToast("试听音频已生成，请点击播放器播放。", "info");
+      });
+    } catch (err: any) {
+      addToast(err.message || "TTS 试听生成失败。", "error");
+    } finally {
       setPreviewingTts(false);
-      addToast("TTS 试听接口尚未接入，当前只保存语音配置。", "info");
-    }, 500);
+    }
   };
 
   // Apply Preset
@@ -166,8 +232,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       if (activePreset.viewMode) setViewMode(activePreset.viewMode);
       if (activePreset.enableMotion !== undefined) setEnableMotion(activePreset.enableMotion);
       if (activePreset.enableSubtitles !== undefined) setEnableSubtitles(activePreset.enableSubtitles);
-      if (activePreset.minimaxModel) setMinimaxModel(activePreset.minimaxModel);
-      if (activePreset.emotion) setEmotion(activePreset.emotion);
+      setMinimaxModel(activePreset.minimaxModel || "speech-2.8-turbo");
+      setEmotion(activePreset.emotion || "");
       addToast(`已成功应用预设: ${activePreset.name}`, "success");
     }
   }, [activePreset]);
@@ -203,7 +269,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         setMode("manual"); // switch to manual scene editor so user can review and edit
         addToast(`AI 分镜脚本生成就绪！已帮您切分成 ${generated.length} 个分镜，您可直接在下方编辑或点击渲染。`, "success");
       } else {
-        addToast(resData.error || "脚本构思异常，请检查 LLM 设置。", "error");
+        addToast(resData.detail || resData.error || "脚本构思异常，请检查 LLM 设置。", "error");
       }
     } catch (err: any) {
       addToast("连接服务器超时，请确保 dev 服务器就绪。", "error");
@@ -246,7 +312,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       voice,
       speed,
       minimaxModel,
-      emotion,
+      emotion: emotion || undefined,
+      mediaWidth: imageWidth,
+      mediaHeight: imageHeight,
       bgm,
       bgmVolume: volume,
       promptPrefix,
@@ -280,7 +348,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       enableMotion,
       enableSubtitles,
       minimaxModel,
-      emotion
+      emotion: emotion || undefined,
+      mediaWidth: imageWidth,
+      mediaHeight: imageHeight
     };
     onSavePreset(presetData);
   };
@@ -570,10 +640,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     onChange={(e) => setEmotion(e.target.value)}
                     className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-amber-500"
                   >
-                    <option value="excited">振奋高亢 (Excited)</option>
-                    <option value="neutral">沉稳平缓 (Neutral)</option>
+                    <option value="">自动匹配 (Auto)</option>
                     <option value="happy">欢快愉悦 (Happy)</option>
-                    <option value="angry">严厉低沉 (Angry)</option>
+                    <option value="sad">悲伤低落 (Sad)</option>
+                    <option value="angry">严厉愤怒 (Angry)</option>
+                    <option value="fearful">紧张害怕 (Fearful)</option>
+                    <option value="disgusted">厌恶嫌弃 (Disgusted)</option>
+                    <option value="surprised">惊讶意外 (Surprised)</option>
+                    <option value="calm">平静克制 (Calm)</option>
+                    <option value="fluent">流畅自然 (Fluent)</option>
+                    <option value="whisper">低声耳语 (Whisper)</option>
                   </select>
                 </div>
                 <div>
@@ -583,8 +659,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     onChange={(e) => setMinimaxModel(e.target.value)}
                     className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-amber-500"
                   >
-                    <option value="speech-mimic-v1">Mimic v1.0-Pro</option>
-                    <option value="speech-mimic-v2">Mimic v2.0-Ultra</option>
+                    <option value="speech-2.8-turbo">speech-2.8-turbo</option>
+                    <option value="speech-2.8-hd">speech-2.8-hd</option>
+                    <option value="speech-2.6-turbo">speech-2.6-turbo</option>
+                    <option value="speech-2.6-hd">speech-2.6-hd</option>
+                    <option value="speech-02-turbo">speech-02-turbo</option>
+                    <option value="speech-02-hd">speech-02-hd</option>
                   </select>
                 </div>
               </div>
@@ -602,6 +682,26 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 </div>
               </div>
             )}
+
+            <div className="bg-[#17181c] p-2.5 rounded border border-zinc-850 space-y-2">
+              <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                试听文案 / Preview Script
+              </label>
+              <textarea
+                value={previewTtsText}
+                onChange={(e) => setPreviewTtsText(e.target.value)}
+                rows={3}
+                className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 leading-relaxed resize-none focus:outline-none focus:border-amber-500"
+                placeholder="输入一段用于试听配音效果的文案"
+              />
+              {previewTtsAudioUrl && (
+                <audio
+                  src={previewTtsAudioUrl}
+                  controls
+                  className="w-full h-8"
+                />
+              )}
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center pt-2">
               <div>
@@ -778,7 +878,61 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             </div>
           </div>
         ) : (
-          <div className="p-3 bg-[#17181c] border border-zinc-850 rounded-md grid grid-cols-2 gap-4">
+          <div className="p-3 bg-[#17181c] border border-zinc-850 rounded-md space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                  图片比例 / Size
+                </label>
+                <select
+                  value={imageAspectRatio}
+                  onChange={(e) => applyImageSizePreset(e.target.value)}
+                  className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                >
+                  {IMAGE_SIZE_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label} · {preset.id === "custom" ? "手动输入" : `${preset.width}x${preset.height}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                  宽度 / Width
+                </label>
+                <input
+                  type="number"
+                  min="512"
+                  max="3840"
+                  step="16"
+                  value={imageWidth}
+                  onChange={(e) => {
+                    setImageAspectRatio("custom");
+                    setImageWidth(parseInt(e.target.value || "1024"));
+                  }}
+                  className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                  高度 / Height
+                </label>
+                <input
+                  type="number"
+                  min="512"
+                  max="3840"
+                  step="16"
+                  value={imageHeight}
+                  onChange={(e) => {
+                    setImageAspectRatio("custom");
+                    setImageHeight(parseInt(e.target.value || "1536"));
+                  }}
+                  className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="flex items-center gap-3 cursor-pointer p-1">
               <input
                 type="checkbox"
@@ -804,6 +958,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <span className="text-[10px] text-zinc-500 block">自动对其 TTS 脚本音频进行叠字渲染</span>
               </div>
             </label>
+            </div>
           </div>
         )}
       </div>

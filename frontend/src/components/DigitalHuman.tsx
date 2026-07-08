@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { User, FileText, Settings, Sparkles, Mic, Play, ArrowRight, Volume2, Upload } from "lucide-react";
+import { VOICE_OPTIONS } from "../data";
 
 interface DigitalHumanProps {
   onGenerateTask: (taskInput: any) => void;
@@ -9,7 +10,7 @@ interface DigitalHumanProps {
 export const DigitalHuman: React.FC<DigitalHumanProps> = ({ onGenerateTask, addToast }) => {
   const [title, setTitle] = useState("智能AI数字人口播带货短视频");
   const [speech, setSpeech] = useState("大家好！今天给大家推荐一款颠覆性的 AI 生产力应用。无需繁琐的剪辑，只需输入创意主题，三步即可生成大片级视觉视频！");
-  const [voice, setVoice] = useState("minimax-emotion-db1");
+  const [voice, setVoice] = useState("male-qn-qingse");
   const [activeAvatar, setActiveAvatar] = useState("av-1");
   const [bgType, setBgType] = useState<"office" | "studio" | "upload">("studio");
   const [generatingScript, setGeneratingScript] = useState(false);
@@ -45,6 +46,7 @@ export const DigitalHuman: React.FC<DigitalHumanProps> = ({ onGenerateTask, addT
       ttsMode: "minimax",
       voice,
       speed: 1.05,
+      minimaxModel: "speech-2.8-turbo",
       bgm: "bgm-tech",
       bgmVolume: 15,
       promptPrefix: `talking digital human anchor, detailed face, speaking realistically, high-fidelity lip sync`,
@@ -167,8 +169,11 @@ export const DigitalHuman: React.FC<DigitalHumanProps> = ({ onGenerateTask, addT
                   onChange={(e) => setVoice(e.target.value)}
                   className="w-full bg-[#17181c] border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                 >
-                  <option value="minimax-emotion-db1">MiniMax-阿波罗 (爆款男音)</option>
-                  <option value="minimax-emotion-db2">MiniMax-雅典娜 (知识讲解)</option>
+                  {VOICE_OPTIONS.minimax.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

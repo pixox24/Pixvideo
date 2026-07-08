@@ -14,13 +14,17 @@
 TTS API schemas
 """
 
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
 class TTSSynthesizeRequest(BaseModel):
     """TTS synthesis request"""
     text: str = Field(..., description="Text to synthesize")
+    inference_mode: Optional[Literal["local", "comfyui", "minimax"]] = Field(
+        None,
+        description="TTS inference mode override. Use 'local' for Edge TTS."
+    )
     workflow: Optional[str] = Field(
         None, 
         description="TTS workflow key (e.g., 'runninghub/tts_edge.json' or 'selfhost/tts_edge.json'). If not specified, uses default workflow from config."
@@ -33,12 +37,31 @@ class TTSSynthesizeRequest(BaseModel):
         None, 
         description="Voice ID (deprecated, use workflow instead)"
     )
+    speed: Optional[float] = Field(
+        None,
+        ge=0.5,
+        le=2.0,
+        description="Speech speed multiplier"
+    )
+    minimax_model: Optional[str] = Field(
+        None,
+        description="MiniMax TTS model override"
+    )
+    minimax_emotion: Optional[str] = Field(
+        None,
+        description="MiniMax TTS emotion override"
+    )
     
     class Config:
         json_schema_extra = {
             "example": {
                 "text": "Hello, welcome to Pixelle-Video!",
+                "inference_mode": "local",
                 "workflow": "runninghub/tts_edge.json",
+                "voice_id": "zh-CN-YunjianNeural",
+                "speed": 1.1,
+                "minimax_model": "speech-2.8-turbo",
+                "minimax_emotion": None,
                 "ref_audio": None
             }
         }
@@ -50,4 +73,3 @@ class TTSSynthesizeResponse(BaseModel):
     message: str = "Success"
     audio_path: str = Field(..., description="Path to generated audio file")
     duration: float = Field(..., description="Audio duration in seconds")
-

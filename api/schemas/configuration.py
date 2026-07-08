@@ -18,6 +18,12 @@ class LLMConfigPayload(BaseModel):
     model: Optional[str] = None
 
 
+class ImageGenerationConfigPayload(BaseModel):
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+
+
 class ComfyUIConfigPayload(BaseModel):
     comfyui_url: Optional[str] = None
     comfyui_api_key: Optional[str] = None
@@ -30,11 +36,12 @@ class ComfyUIConfigPayload(BaseModel):
 
 class ConfigUpdateRequest(BaseModel):
     llm: Optional[LLMConfigPayload] = None
+    image_generation: Optional[ImageGenerationConfigPayload] = None
     comfyui: Optional[ComfyUIConfigPayload] = None
 
 
 class ServiceTestRequest(BaseModel):
-    service: Literal["llm", "comfyui", "runninghub", "bizyair", "minimax"]
+    service: Literal["llm", "image_generation", "comfyui", "runninghub", "bizyair", "minimax"]
     config: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -46,4 +53,3 @@ class QuickCreatePresetRequest(BaseModel):
 class APIResponse(BaseModel):
     success: bool = True
     message: str = "Success"
-

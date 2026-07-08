@@ -11,6 +11,15 @@ llm:
   base_url: ""
   model: ""
 
+# ==================== Image Generation API Configuration ====================
+# OpenAI Images-compatible API. 65535.space defaults:
+# base_url: "https://img-cn.65535.space/v1"
+# model: "gpt-image-2"
+image_generation:
+  api_key: ""
+  base_url: "https://img-cn.65535.space/v1"
+  model: "gpt-image-2"
+
 # Popular presets:
 # Qwen Max:        base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"  model: "qwen-max"
 # OpenAI GPT-4o:   base_url: "https://api.openai.com/v1"                          model: "gpt-4o"

@@ -219,6 +219,17 @@ class ConfigManager:
         if updates:
             self.update({"comfyui": updates})
 
+    def set_prompt_prefix(self, prompt_prefix: str):
+        """Persist the shared prompt prefix for image and video generation."""
+        value = prompt_prefix or ""
+        self.update({
+            "comfyui": {
+                "image": {"prompt_prefix": value},
+                "video": {"prompt_prefix": value},
+            }
+        })
+        self.save()
+
     def save_quick_create_config(self, video_params: dict):
         """
         Persist reusable Quick Create settings from the current UI state.

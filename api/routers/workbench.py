@@ -47,6 +47,12 @@ class TestConnectionRequest(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
 
 
+class PromptPrefixSaveRequest(BaseModel):
+    """Persisted prompt prefix for Quick Create test and generation flows."""
+
+    promptPrefix: str = ""
+
+
 def _frontend_tts_mode(mode: str | None) -> str:
     if mode == "minimax":
         return "minimax"
@@ -207,6 +213,18 @@ async def save_preset(preset: dict[str, Any]):
         config_manager.save_quick_create_config(_quick_create_config_from_preset(preset))
         saved = _preset_from_config(preset.get("name") or "当前保存配置")
         return {"success": True, "preset": saved, "presets": [saved]}
+    except Exception as exc:
+        logger.exception(exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.put("/prompt-prefix")
+async def save_prompt_prefix(request: PromptPrefixSaveRequest):
+    """Persist only the shared prompt prefix without touching other quick-create settings."""
+    try:
+        config_manager.set_prompt_prefix(request.promptPrefix)
+        saved = _preset_from_config()
+        return {"success": True, "promptPrefix": saved.get("promptPrefix", ""), "preset": saved}
     except Exception as exc:
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc

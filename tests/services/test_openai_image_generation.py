@@ -43,3 +43,62 @@ async def test_media_service_uses_configured_openai_compatible_image_api(monkeyp
     assert captured["json"]["prompt"] == "a cinematic robot"
     assert captured["json"]["n"] == 1
     assert captured["json"]["size"] == "1280x720"
+
+
+@pytest.mark.asyncio
+async def test_media_service_normalizes_schemeless_openai_image_status_url(monkeypatch):
+    captured = {}
+
+    async def fake_post(self, url, *, headers=None, json=None):
+        return httpx.Response(
+            202,
+            json={
+                "data": {
+                    "job_id": "job-123",
+                    "status_url": "img-cn.65535.space/v1/images/async-generations/job-123",
+                }
+            },
+            request=httpx.Request("POST", url),
+        )
+
+    async def fake_poll(self, client, poll_url, headers):
+        captured["poll_url"] = poll_url
+        return "https://cdn.example.com/generated.png"
+
+    monkeypatch.setattr(
+        "pixelle_video.services.media.config_manager.get_image_generation_config",
+        lambda: {
+            "api_key": "img-key",
+            "base_url": "https://img-cn.65535.space/v1",
+            "model": "gpt-image-2",
+        },
+    )
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    monkeypatch.setattr(MediaService, "_poll_openai_image_job", fake_poll)
+
+    service = MediaService({}, core=DummyCore())
+    result = await service(prompt="a cinematic robot", width=1024, height=1536)
+
+    assert result.url == "https://cdn.example.com/generated.png"
+    assert captured["poll_url"] == "https://img-cn.65535.space/v1/images/async-generations/job-123"
+
+
+def test_media_service_normalizes_relative_openai_image_status_urls():
+    service = MediaService({}, core=DummyCore())
+
+    assert (
+        service._normalize_openai_image_status_url(
+            base_url="https://img-cn.65535.space/v1",
+            status_url="images/async-generations/job-123",
+            job_id="job-123",
+        )
+        == "https://img-cn.65535.space/v1/images/async-generations/job-123"
+    )
+    assert (
+        service._normalize_openai_image_status_url(
+            base_url="https://img-cn.65535.space/v1",
+            status_url="/v1/images/async-generations/job-123",
+            job_id="job-123",
+        )
+        == "https://img-cn.65535.space/v1/images/async-generations/job-123"
+    )

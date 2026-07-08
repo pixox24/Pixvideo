@@ -124,7 +124,13 @@ export default function App() {
 
         if (presetsRes.ok) {
           const data = await presetsRes.json();
-          if (data.success) setPresets(data.presets || []);
+          if (data.success) {
+            const loadedPresets = data.presets || [];
+            setPresets(loadedPresets);
+            if (data.preset || loadedPresets[0]) {
+              setActivePreset(data.preset || loadedPresets[0]);
+            }
+          }
         }
 
         if (configRes.ok) {
@@ -170,6 +176,25 @@ export default function App() {
     } catch (err) {
       addToast("保存失败：无法连接后端配置服务。", "error");
     }
+  };
+
+  const handleSavePromptPrefix = async (promptPrefix: string) => {
+    const response = await fetch("/api/prompt-prefix", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ promptPrefix }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.detail || data.error || "保存提示词失败");
+    }
+
+    const savedPreset = data.preset;
+    if (savedPreset) {
+      setPresets([savedPreset]);
+    }
+    addToast("提示词前缀已保存，下次打开会自动使用。", "success");
+    return data.promptPrefix;
   };
 
   // Delete task handler
@@ -581,6 +606,7 @@ export default function App() {
               onGenerateTask={handleGenerateTask}
               activePreset={activePreset}
               onSavePreset={handleSavePreset}
+              onSavePromptPrefix={handleSavePromptPrefix}
               resources={resources}
               addToast={addToast}
             />

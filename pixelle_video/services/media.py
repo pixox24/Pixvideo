@@ -23,6 +23,7 @@ import os
 import uuid
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from loguru import logger
@@ -396,8 +397,43 @@ class MediaService(ComfyBaseService):
         if not job_id:
             raise RuntimeError(f"Image generation response did not include image data or job_id: {response_data}")
 
-        poll_url = status_url or f"{base_url}/images/async-generations/{job_id}"
+        poll_url = self._normalize_openai_image_status_url(
+            base_url=base_url,
+            status_url=status_url,
+            job_id=job_id,
+        )
         return await self._poll_openai_image_job(client, poll_url, headers)
+
+    def _normalize_openai_image_status_url(
+        self,
+        base_url: str,
+        status_url: Optional[str],
+        job_id: str,
+    ) -> str:
+        fallback_url = f"{base_url.rstrip('/')}/images/async-generations/{job_id}"
+        if not status_url:
+            return fallback_url
+
+        candidate = str(status_url).strip()
+        parsed = urlparse(candidate)
+        if parsed.scheme in {"http", "https"}:
+            return candidate
+
+        base = base_url.rstrip("/")
+        base_parts = urlparse(base)
+        if candidate.startswith("//"):
+            scheme = base_parts.scheme or "https"
+            return f"{scheme}:{candidate}"
+
+        if parsed.netloc or "." in candidate.split("/", 1)[0]:
+            scheme = base_parts.scheme or "https"
+            return f"{scheme}://{candidate.lstrip('/')}"
+
+        if candidate.startswith("/"):
+            origin = f"{base_parts.scheme}://{base_parts.netloc}"
+            return urljoin(origin, candidate)
+
+        return urljoin(f"{base}/", candidate)
 
     def _extract_direct_image_result(self, response_data: dict[str, Any]) -> Optional[str]:
         data = response_data.get("data")

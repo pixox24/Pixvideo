@@ -17,6 +17,7 @@ import {
   Plus,
   Trash2,
   SquareEqual,
+  Save,
 } from "lucide-react";
 import { Preset, WorkbenchResources } from "../types";
 import { VOICE_OPTIONS } from "../data";
@@ -25,6 +26,7 @@ interface QuickCreateProps {
   onGenerateTask: (taskInput: any) => void;
   activePreset: Preset | null;
   onSavePreset: (presetInput: any) => void;
+  onSavePromptPrefix: (promptPrefix: string) => Promise<string | void>;
   resources: WorkbenchResources;
   addToast: (text: string, type: "success" | "error" | "info") => void;
 }
@@ -46,6 +48,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   onGenerateTask,
   activePreset,
   onSavePreset,
+  onSavePromptPrefix,
   resources,
   addToast,
 }) => {
@@ -98,6 +101,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   // Render Workflow states
   const [workflowId, setWorkflowId] = useState("");
   const [promptPrefix, setPromptPrefix] = useState("masterpiece, best quality, ultra-detailed, photorealistic, cinematic volumetric lighting, warm color palette, amber glow");
+  const [testImagePrompt, setTestImagePrompt] = useState("a futuristic robot walking through a warm cinematic city street");
+  const [testImageUrl, setTestImageUrl] = useState<string | null>(null);
+  const [testImageError, setTestImageError] = useState<string | null>(null);
+  const [testingImage, setTestingImage] = useState(false);
+  const [savingPromptPrefix, setSavingPromptPrefix] = useState(false);
 
   const bgmOptions = resources.bgm;
   const templateOptions = resources.templates;
@@ -163,12 +171,73 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     return `/api/files/${audioPath}`;
   };
 
+  const mediaPathToUrl = (mediaPath: string) => {
+    if (/^(https?:|data:|blob:)/.test(mediaPath)) return mediaPath;
+    const normalizedPath = mediaPath.replace(/\\/g, "/");
+    return `/api/files/${normalizedPath}`;
+  };
+
   const applyImageSizePreset = (presetId: string) => {
     setImageAspectRatio(presetId);
     const preset = IMAGE_SIZE_PRESETS.find((item) => item.id === presetId);
     if (preset && preset.id !== "custom") {
       setImageWidth(preset.width);
       setImageHeight(preset.height);
+    }
+  };
+
+  const handleTestImageGenerate = async () => {
+    if (!testImagePrompt.trim()) {
+      addToast("请先填写测试出图提示词。", "error");
+      return;
+    }
+
+    const mergedPrompt = [promptPrefix.trim(), testImagePrompt.trim()]
+      .filter(Boolean)
+      .join(", ");
+
+    setTestingImage(true);
+    setTestImageError(null);
+    setTestImageUrl(null);
+    addToast("正在根据当前画风参数测试出图...", "info");
+
+    try {
+      const response = await fetch("/api/image/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: mergedPrompt,
+          width: imageWidth,
+          height: imageHeight,
+          workflow: workflowId || undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || "测试出图失败，请检查图像生成服务配置。");
+      }
+      setTestImageUrl(mediaPathToUrl(data.image_path));
+      addToast("测试图已生成。", "success");
+    } catch (err: any) {
+      const message = err.message || "测试出图失败，请检查 ComfyUI / RunningHub / 图像 API 配置。";
+      setTestImageError(message);
+      addToast(message, "error");
+    } finally {
+      setTestingImage(false);
+    }
+  };
+
+  const handleSavePromptPrefix = async () => {
+    setSavingPromptPrefix(true);
+    try {
+      const savedPromptPrefix = await onSavePromptPrefix(promptPrefix);
+      if (typeof savedPromptPrefix === "string") {
+        setPromptPrefix(savedPromptPrefix);
+      }
+    } catch (err: any) {
+      addToast(err.message || "提示词保存失败，请检查后端配置服务。", "error");
+    } finally {
+      setSavingPromptPrefix(false);
     }
   };
 
@@ -835,6 +904,88 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           </div>
         </div>
 
+        <div className="space-y-3">
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                底模提示词前缀固定参数 / Prompt Prefix
+              </label>
+              <button
+                type="button"
+                onClick={handleSavePromptPrefix}
+                disabled={savingPromptPrefix}
+                className="px-2.5 py-1 bg-[#17181c] text-zinc-300 hover:text-white rounded border border-zinc-800 hover:border-amber-500/40 text-[10px] font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                title="保存当前提示词前缀"
+              >
+                {savingPromptPrefix ? <Loader className="w-3 h-3 animate-spin text-amber-500" /> : <Save className="w-3 h-3 text-amber-500" />}
+                保存提示词
+              </button>
+            </div>
+            <textarea
+              value={promptPrefix}
+              onChange={(e) => setPromptPrefix(e.target.value)}
+              rows={3}
+              className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 font-mono resize-none leading-relaxed"
+              placeholder="输入会固定拼接在每个分镜画面提示词前面的底模风格参数"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-3">
+            <div className="bg-[#17181c] border border-zinc-850 rounded-md p-3 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                  测试出图提示词 / Test Prompt
+                </label>
+                <span className="text-[9px] text-zinc-600 font-mono truncate">
+                  {currentWorkflow?.name || "Default workflow"} · {imageWidth}x{imageHeight}
+                </span>
+              </div>
+              <textarea
+                value={testImagePrompt}
+                onChange={(e) => setTestImagePrompt(e.target.value)}
+                rows={3}
+                className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 resize-none leading-relaxed"
+                placeholder="输入一条用于测试当前前缀画风的画面提示词"
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={handleTestImageGenerate}
+                  disabled={testingImage}
+                  className="px-3 py-1.5 bg-zinc-800 text-zinc-300 hover:text-white rounded border border-zinc-750 hover:border-amber-500/40 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                >
+                  {testingImage ? <Loader className="w-3.5 h-3.5 animate-spin text-amber-500" /> : <Sparkles className="w-3.5 h-3.5 text-amber-500" />}
+                  生成测试图
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-[#17181c] border border-dashed border-zinc-800 rounded-md min-h-44 overflow-hidden flex items-center justify-center">
+              {testingImage ? (
+                <div className="text-center text-xs text-zinc-500 space-y-2 px-4">
+                  <Loader className="w-5 h-5 animate-spin text-amber-500 mx-auto" />
+                  <p>正在测试出图...</p>
+                </div>
+              ) : testImageUrl ? (
+                <img
+                  src={testImageUrl}
+                  alt="测试出图预览"
+                  className="w-full h-full min-h-44 object-cover"
+                />
+              ) : testImageError ? (
+                <div className="text-center text-[11px] text-rose-400 leading-relaxed px-4">
+                  {testImageError}
+                </div>
+              ) : (
+                <div className="text-center text-xs text-zinc-500 space-y-2 px-4">
+                  <Eye className="w-5 h-5 text-zinc-650 mx-auto" />
+                  <p>测试出图区域</p>
+                  <p className="text-[10px] text-zinc-600">生成后将在这里预览当前前缀画风效果</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {viewMode === "template" ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto pr-1">
@@ -961,6 +1112,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             </div>
           </div>
         )}
+
       </div>
 
       {/* 5. ComfyUI Media Workflows selections */}
@@ -1000,17 +1152,6 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           ))}
         </div>
 
-        <div>
-          <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
-            底模提示词前缀固定参数 / Prompt Prefix
-          </label>
-          <input
-            type="text"
-            value={promptPrefix}
-            onChange={(e) => setPromptPrefix(e.target.value)}
-            className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 font-mono"
-          />
-        </div>
       </div>
 
       {/* Primary Action Button */}

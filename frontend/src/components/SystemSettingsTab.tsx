@@ -5,7 +5,7 @@ import { SystemSettings } from "../types";
 interface SystemSettingsProps {
   settings: SystemSettings;
   onUpdateSettings: (newSettings: SystemSettings) => void;
-  onSaveSettings: (newSettings: SystemSettings) => void;
+  onSaveSettings: (newSettings: SystemSettings) => void | Promise<void>;
   addToast: (text: string, type: "success" | "error" | "info") => void;
 }
 
@@ -17,10 +17,19 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
 }) => {
   const [testingService, setTestingService] = useState<string | null>(null);
 
+  const providerDefaults = {
+    gemini: { model: "gemini-3.5-flash", baseUrl: "" },
+    deepseek: { model: "deepseek-v4-flash", baseUrl: "https://api.deepseek.com" },
+    openai: { model: "gpt-4o-mini", baseUrl: "https://api.openai.com/v1" },
+    anthropic: { model: "claude-sonnet-4-5", baseUrl: "https://api.anthropic.com/v1/" },
+  };
+
   const handleFieldChange = (section: keyof SystemSettings, field: string, value: any) => {
     const updated = { ...settings };
     if (section === "llm") {
       updated.llm = { ...updated.llm, [field]: value };
+    } else if (section === "imageGeneration") {
+      updated.imageGeneration = { ...updated.imageGeneration, [field]: value };
     } else if (section === "comfy") {
       updated.comfy = { ...updated.comfy, [field]: value };
     } else if (section === "runninghub") {
@@ -29,6 +38,19 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
       (updated as any)[section] = value;
     }
     onUpdateSettings(updated);
+  };
+
+  const handleProviderChange = (provider: SystemSettings["llm"]["provider"]) => {
+    const defaults = providerDefaults[provider];
+    onUpdateSettings({
+      ...settings,
+      llm: {
+        ...settings.llm,
+        provider,
+        model: defaults.model,
+        baseUrl: defaults.baseUrl,
+      },
+    });
   };
 
   const testConnection = async (service: string, payload: any) => {
@@ -42,8 +64,11 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
       const data = await res.json();
       if (res.ok && data.success) {
         addToast(data.message || "连接测试成功！", "success");
+        if (service === "llm") {
+          await onSaveSettings(settings);
+        }
       } else {
-        addToast(data.error || "连接测试失败，请检查配置。", "error");
+        addToast(data.detail || data.error || data.message || "连接测试失败，请检查配置。", "error");
       }
     } catch (err: any) {
       addToast(err.message || "网络请求异常，无法连接服务器。", "error");
@@ -81,7 +106,7 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
             <label className="block text-xs font-medium text-zinc-400 mb-1">供应商 Preset</label>
             <select
               value={settings.llm.provider}
-              onChange={(e) => handleFieldChange("llm", "provider", e.target.value)}
+              onChange={(e) => handleProviderChange(e.target.value as SystemSettings["llm"]["provider"])}
               className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
             >
               <option value="gemini">Google Gemini AI</option>
@@ -105,8 +130,8 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
               )}
               {settings.llm.provider === "deepseek" && (
                 <>
-                  <option value="deepseek-chat">deepseek-chat</option>
-                  <option value="deepseek-coder">deepseek-coder</option>
+                  <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+                  <option value="deepseek-v4-flash">deepseek-v4-flash</option>
                 </>
               )}
               {settings.llm.provider === "openai" && (
@@ -160,7 +185,70 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
         </div>
       </div>
 
-      {/* 2. ComfyUI Local Settings */}
+      {/* 2. Image Generation API */}
+      <div className="bg-[#101114] border border-zinc-800 p-4 rounded-lg space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-sm font-medium text-zinc-200 flex items-center gap-2 font-display">
+            <Cpu className="w-4 h-4 text-amber-500" />
+            图片生成模型设置
+          </h3>
+          <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+            OpenAI Images 兼容
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-zinc-400 mb-1">Base URL</label>
+            <input
+              type="text"
+              placeholder="https://img-cn.65535.space/v1"
+              value={settings.imageGeneration.baseUrl}
+              onChange={(e) => handleFieldChange("imageGeneration", "baseUrl", e.target.value)}
+              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1">API Key</label>
+            <input
+              type="password"
+              placeholder="请输入图片生成 API Key"
+              value={settings.imageGeneration.apiKey}
+              onChange={(e) => handleFieldChange("imageGeneration", "apiKey", e.target.value)}
+              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1">Model</label>
+            <input
+              type="text"
+              placeholder="gpt-image-2"
+              value={settings.imageGeneration.model}
+              onChange={(e) => handleFieldChange("imageGeneration", "model", e.target.value)}
+              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={() => testConnection("image_generation", settings.imageGeneration)}
+            disabled={testingService !== null}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-zinc-800 bg-[#17181c] hover:bg-zinc-800 text-zinc-300 transition-colors disabled:opacity-50"
+          >
+            {testingService === "image_generation" ? (
+              <RefreshCw className="w-3 h-3 animate-spin" />
+            ) : (
+              <Server className="w-3 h-3 text-amber-500" />
+            )}
+            测试图片生成配置
+          </button>
+        </div>
+      </div>
+
+      {/* 3. ComfyUI Local Settings */}
       <div className="bg-[#101114] border border-zinc-800 p-4 rounded-lg space-y-4">
         <h3 className="text-sm font-medium text-zinc-200 flex items-center gap-2 font-display">
           <Cpu className="w-4 h-4 text-amber-500" />
@@ -206,7 +294,7 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
         </div>
       </div>
 
-      {/* 3. Cloud Render node integrations */}
+      {/* 4. Cloud Render node integrations */}
       <div className="bg-[#101114] border border-zinc-800 p-4 rounded-lg space-y-4">
         <h3 className="text-sm font-medium text-zinc-200 flex items-center gap-2 font-display">
           <Cpu className="w-4 h-4 text-amber-500" />

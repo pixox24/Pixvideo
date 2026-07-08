@@ -54,6 +54,7 @@ export default function App() {
   const [resources, setResources] = useState(EMPTY_WORKBENCH_RESOURCES);
   const [serviceStatus, setServiceStatus] = useState({
     llm: false,
+    image_generation: false,
     comfyui: false,
     runninghub: false,
     bizyair: false,
@@ -67,6 +68,11 @@ export default function App() {
       apiKey: "",
       baseUrl: "",
       model: "gemini-3.5-flash"
+    },
+    imageGeneration: {
+      apiKey: "",
+      baseUrl: "https://img-cn.65535.space/v1",
+      model: "gpt-image-2"
     },
     comfy: {
       url: "http://127.0.0.1:8188",
@@ -304,6 +310,7 @@ export default function App() {
   const hasLlmKey = serviceStatus.llm || settings.llm.apiKey !== "";
   const hasComfyUrl = serviceStatus.comfyui || settings.comfy.url !== "";
   const hasRunningHub = serviceStatus.runninghub || settings.runninghub.apiKey !== "";
+  const hasImageGeneration = serviceStatus.image_generation || settings.imageGeneration.apiKey !== "";
   const hasMiniMax = serviceStatus.minimax || settings.minimaxKey !== "";
 
   return (
@@ -443,6 +450,20 @@ export default function App() {
               <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-semibold bg-emerald-500/5 px-1 rounded">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                 已就绪
+              </span>
+            </div>
+
+            {/* Image Generation */}
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-500 flex items-center gap-1">
+                <Cpu className="w-3.5 h-3.5 text-zinc-600" />
+                Image API
+              </span>
+              <span className={`flex items-center gap-1 text-[10px] px-1 rounded font-semibold ${
+                hasImageGeneration ? "text-emerald-400 bg-emerald-500/5" : "text-amber-400 bg-amber-500/5"
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${hasImageGeneration ? "bg-emerald-500" : "bg-amber-500"}`}></span>
+                {hasImageGeneration ? "已就绪" : "待配置"}
               </span>
             </div>
 

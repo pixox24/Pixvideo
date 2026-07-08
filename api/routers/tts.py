@@ -63,6 +63,9 @@ async def tts_synthesize(
         
         # Build TTS parameters
         tts_params = {"text": request.text}
+
+        if request.inference_mode:
+            tts_params["inference_mode"] = request.inference_mode
         
         # Add workflow if specified
         if request.workflow:
@@ -73,9 +76,16 @@ async def tts_synthesize(
             tts_params["ref_audio"] = request.ref_audio
         
         # Legacy voice_id support (deprecated)
-        if request.voice_id and not request.workflow:
-            logger.warning("voice_id parameter is deprecated, please use workflow instead")
+        if request.voice_id and (request.inference_mode == "local" or not request.workflow):
             tts_params["voice"] = request.voice_id
+
+        if request.speed is not None:
+            tts_params["speed"] = request.speed
+
+        if request.minimax_model:
+            tts_params["minimax_model"] = request.minimax_model
+        if request.minimax_emotion:
+            tts_params["minimax_emotion"] = request.minimax_emotion
         
         # Call TTS service
         audio_path = await pixelle_video.tts(**tts_params)
@@ -91,4 +101,3 @@ async def tts_synthesize(
     except Exception as e:
         logger.error(f"TTS synthesis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

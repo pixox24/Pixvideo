@@ -35,6 +35,7 @@ def _mask_secret(value: str | None) -> str:
 def _sanitized_config() -> dict:
     """Build sanitized config for frontend display."""
     llm = config_manager.get_llm_config()
+    image_generation = config_manager.get_image_generation_config()
     comfyui = config_manager.get_comfyui_config()
     minimax = comfyui.get("tts", {}).get("minimax", {})
 
@@ -46,6 +47,12 @@ def _sanitized_config() -> dict:
             "api_key_masked": _mask_secret(llm.get("api_key")),
             "base_url": llm.get("base_url", ""),
             "model": llm.get("model", ""),
+        },
+        "image_generation": {
+            "api_key_set": bool(image_generation.get("api_key")),
+            "api_key_masked": _mask_secret(image_generation.get("api_key")),
+            "base_url": image_generation.get("base_url", ""),
+            "model": image_generation.get("model", ""),
         },
         "comfyui": {
             "comfyui_url": comfyui.get("comfyui_url", ""),
@@ -60,6 +67,11 @@ def _sanitized_config() -> dict:
         "template": config_manager.get("template", {}),
         "service_status": {
             "llm": bool(llm.get("api_key") and llm.get("base_url") and llm.get("model")),
+            "image_generation": bool(
+                image_generation.get("api_key")
+                and image_generation.get("base_url")
+                and image_generation.get("model")
+            ),
             "comfyui": bool(comfyui.get("comfyui_url")),
             "runninghub": bool(comfyui.get("runninghub_api_key")),
             "bizyair": bool(comfyui.get("bizyair_api_key")),
@@ -84,6 +96,25 @@ async def update_config(request: ConfigUpdateRequest):
             base_url = request.llm.base_url if request.llm.base_url is not None else current["base_url"]
             model = request.llm.model if request.llm.model is not None else current["model"]
             config_manager.set_llm_config(api_key, base_url, model)
+
+        if request.image_generation:
+            current = config_manager.get_image_generation_config()
+            api_key = (
+                request.image_generation.api_key
+                if request.image_generation.api_key is not None
+                else current["api_key"]
+            )
+            base_url = (
+                request.image_generation.base_url
+                if request.image_generation.base_url is not None
+                else current["base_url"]
+            )
+            model = (
+                request.image_generation.model
+                if request.image_generation.model is not None
+                else current["model"]
+            )
+            config_manager.set_image_generation_config(api_key, base_url, model)
 
         if request.comfyui:
             config_manager.set_comfyui_config(
@@ -113,7 +144,8 @@ async def test_service(request: ServiceTestRequest):
             llm = config_manager.get_llm_config()
             api_key = request.config.get("api_key") or llm.get("api_key")
             base_url = request.config.get("base_url") or llm.get("base_url")
-            success, message, model_count = test_llm_connection(api_key, base_url)
+            model = request.config.get("model") or llm.get("model")
+            success, message, model_count = test_llm_connection(api_key, base_url, model=model)
             return {
                 "success": success,
                 "message": message,
@@ -129,6 +161,27 @@ async def test_service(request: ServiceTestRequest):
                 "message": "ComfyUI connection successful"
                 if response.status_code == 200
                 else f"ComfyUI returned {response.status_code}",
+            }
+
+        if request.service == "image_generation":
+            image_generation = config_manager.get_image_generation_config()
+            api_key = request.config.get("api_key") or image_generation.get("api_key")
+            base_url = request.config.get("base_url") or image_generation.get("base_url")
+            model = request.config.get("model") or image_generation.get("model")
+            missing = [
+                name
+                for name, value in {
+                    "api_key": api_key,
+                    "base_url": base_url,
+                    "model": model,
+                }.items()
+                if not value
+            ]
+            return {
+                "success": not missing,
+                "message": "image_generation configuration is complete"
+                if not missing
+                else f"image_generation missing: {', '.join(missing)}",
             }
 
         key_names = {
@@ -181,4 +234,3 @@ async def save_quick_create_preset(request: QuickCreatePresetRequest):
     except Exception as exc:
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-

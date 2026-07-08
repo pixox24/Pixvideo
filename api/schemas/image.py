@@ -21,8 +21,8 @@ from pydantic import BaseModel, Field
 class ImageGenerateRequest(BaseModel):
     """Image generation request"""
     prompt: str = Field(..., description="Image generation prompt")
-    width: int = Field(1024, ge=512, le=2048, description="Image width")
-    height: int = Field(1024, ge=512, le=2048, description="Image height")
+    width: int = Field(1024, ge=512, le=3840, description="Image width")
+    height: int = Field(1024, ge=512, le=3840, description="Image height")
     workflow: Optional[str] = Field(None, description="Custom workflow filename")
     
     class Config:
@@ -40,4 +40,3 @@ class ImageGenerateResponse(BaseModel):
     success: bool = True
     message: str = "Success"
     image_path: str = Field(..., description="Path to generated image")
-

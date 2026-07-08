@@ -1,9 +1,0 @@
-{
-  "source": "bizyair",
-  "api_type": "modelzoo",
-  "endpoint": "bqwen-image/text-to-image",
-  "display_name": "BizyAir QWEN Image",
-  "defaults": {
-    "quality": "medium"
-  }
-}

@@ -115,11 +115,34 @@ class ConfigManager:
             "base_url": self.config.llm.base_url,
             "model": self.config.llm.model,
         }
+
+    def get_image_generation_config(self) -> dict:
+        """Get OpenAI-compatible image generation configuration as dict."""
+        return {
+            "api_key": self.config.image_generation.api_key,
+            "base_url": self.config.image_generation.base_url,
+            "model": self.config.image_generation.model,
+        }
     
     def set_llm_config(self, api_key: str, base_url: str, model: str):
         """Set LLM configuration"""
         self.update({
             "llm": {
+                "api_key": api_key,
+                "base_url": base_url,
+                "model": model,
+            }
+        })
+
+    def set_image_generation_config(
+        self,
+        api_key: str,
+        base_url: str,
+        model: str,
+    ):
+        """Set OpenAI-compatible image generation configuration."""
+        self.update({
+            "image_generation": {
                 "api_key": api_key,
                 "base_url": base_url,
                 "model": model,

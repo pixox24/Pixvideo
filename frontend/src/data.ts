@@ -7,8 +7,15 @@ export const VOICE_OPTIONS = {
   ],
   minimax: [
     { id: "male-qn-qingse", name: "MiniMax 青涩男声", desc: "清晰自然，适合科普讲解" },
-    { id: "female-shaonv", name: "MiniMax 少女声", desc: "轻快明亮，适合生活内容" },
     { id: "male-qn-jingying", name: "MiniMax 精英男声", desc: "稳重正式，适合商业叙事" },
+    { id: "male-qn-daxuesheng", name: "MiniMax 大学生男声", desc: "年轻自然，适合口播内容" },
+    { id: "female-shaonv", name: "MiniMax 少女声", desc: "轻快明亮，适合生活内容" },
+    { id: "female-yujie", name: "MiniMax 御姐声", desc: "成熟清亮，适合品牌叙事" },
+    { id: "female-chengshu", name: "MiniMax 成熟女声", desc: "稳重亲和，适合知识讲解" },
+    { id: "female-tianmei", name: "MiniMax 甜美女声", desc: "甜美轻快，适合种草短视频" },
+    { id: "Chinese (Mandarin)_News_Anchor", name: "中文新闻主播", desc: "标准播报语气" },
+    { id: "Chinese (Mandarin)_Warm_Girl", name: "中文温暖女声", desc: "温柔自然" },
+    { id: "Chinese (Mandarin)_Gentleman", name: "中文绅士男声", desc: "沉稳商务" },
   ],
   comfyui: [
     { id: "comfy-custom-voice1", name: "自定义参考音频 (根据上传克隆)", desc: "由 ComfyUI Audio-Prompt 提取特征" },

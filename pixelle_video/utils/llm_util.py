@@ -16,7 +16,7 @@ LLM utility functions for model discovery and connection testing.
 Uses the standard OpenAI-compatible /v1/models endpoint.
 """
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import httpx
 from loguru import logger
 
@@ -70,7 +70,12 @@ def fetch_available_models(api_key: str, base_url: str, timeout: float = 10.0) -
         return models
 
 
-def test_llm_connection(api_key: str, base_url: str, timeout: float = 10.0) -> Tuple[bool, str, int]:
+def test_llm_connection(
+    api_key: str,
+    base_url: str,
+    timeout: float = 10.0,
+    model: Optional[str] = None,
+) -> Tuple[bool, str, int]:
     """
     Test the LLM API connection by attempting to fetch the models list.
     
@@ -78,6 +83,7 @@ def test_llm_connection(api_key: str, base_url: str, timeout: float = 10.0) -> T
         api_key: The API key for authentication
         base_url: The base URL of the API
         timeout: Request timeout in seconds
+        model: Optional model ID to verify in the provider's model list
     
     Returns:
         Tuple of (success: bool, message: str, model_count: int)
@@ -85,8 +91,17 @@ def test_llm_connection(api_key: str, base_url: str, timeout: float = 10.0) -> T
         - message: Human-readable status message
         - model_count: Number of models available (0 if failed)
     """
+    if not api_key or not api_key.strip():
+        return False, "Authentication failed: API Key is missing", 0
+    if not base_url or not base_url.strip():
+        return False, "API endpoint missing: Base URL is required", 0
+
     try:
         models = fetch_available_models(api_key, base_url, timeout)
+        if model and model not in models:
+            return False, f"Connection reached, but model '{model}' is not available.", len(models)
+        if model:
+            return True, f"Connection successful! Model '{model}' is available.", len(models)
         return True, f"Connection successful! {len(models)} models available.", len(models)
     except httpx.HTTPStatusError as e:
         status_code = e.response.status_code

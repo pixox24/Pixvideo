@@ -15,7 +15,7 @@ Configuration schema with Pydantic models
 
 Single source of truth for all configuration defaults and validation.
 """
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -124,6 +124,12 @@ class QuickCreateConfig(BaseModel):
     bgm_volume: float = Field(default=0.2, ge=0.0, le=0.5, description="Default BGM volume")
 
 
+class SubtitleConfig(BaseModel):
+    """Subtitle rendering configuration"""
+    custom_font_folder: Optional[str] = Field(default=None, description="User-selected custom subtitle font folder")
+    default_style: Dict[str, Any] = Field(default_factory=dict, description="Default subtitle style")
+
+
 class PixelleVideoConfig(BaseModel):
     """Pixelle-Video main configuration"""
     project_name: str = Field(default="Pixelle-Video", description="Project name")
@@ -132,6 +138,7 @@ class PixelleVideoConfig(BaseModel):
     comfyui: ComfyUIConfig = Field(default_factory=ComfyUIConfig)
     template: TemplateConfig = Field(default_factory=TemplateConfig)
     quick_create: QuickCreateConfig = Field(default_factory=QuickCreateConfig)
+    subtitle: SubtitleConfig = Field(default_factory=SubtitleConfig)
     
     def is_llm_configured(self) -> bool:
         """Check if LLM is properly configured"""

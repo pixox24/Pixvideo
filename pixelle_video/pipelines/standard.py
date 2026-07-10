@@ -322,6 +322,7 @@ class StandardPipeline(LinearVideoPipeline):
             composition_mode=ctx.params.get("composition_mode", "template"),
             image_motion_enabled=ctx.params.get("image_motion_enabled", False),
             subtitle_enabled=ctx.params.get("subtitle_enabled", True),
+            subtitle_style=ctx.params.get("subtitle_style"),
             image_motion_mode=ctx.params.get("image_motion_mode", "auto"),
             image_motion_strength=ctx.params.get("image_motion_strength", "subtle"),
             image_fit_mode=ctx.params.get("image_fit_mode", "cover"),

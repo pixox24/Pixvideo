@@ -24,6 +24,33 @@ from typing import List, Optional, Literal
 from loguru import logger
 
 
+_NARRATION_PREFIX_PATTERNS = [
+    re.compile(r"^\s*[\(\（\[]?\s*\d{1,3}\s*[\)\）\]]\s*[、,，.．:：\-]?\s*"),
+    re.compile(r"^\s*\d{1,3}\s*[、,，.．:：\-]\s*"),
+    re.compile(r"^\s*第\s*[\d一二三四五六七八九十百千万]+\s*(?:句|段|条|部分|幕|镜|个)?\s*[、,，.．:：\-]\s*"),
+    re.compile(r"^\s*(?:旁白|分镜|镜头|场景)\s*[\d一二三四五六七八九十百千万]+\s*[、,，.．:：\-]\s*"),
+    re.compile(r"^\s*(?:scene|storyboard|narration|segment)\s*\d{1,3}\s*[.:\-]\s*", re.IGNORECASE),
+]
+
+
+def clean_narration_text(text: str) -> str:
+    """Remove speakable ordering labels before narration text reaches TTS."""
+    cleaned = str(text).strip()
+
+    for _ in range(3):
+        previous = cleaned
+        for pattern in _NARRATION_PREFIX_PATTERNS:
+            cleaned = pattern.sub("", cleaned, count=1).strip()
+        if cleaned == previous:
+            break
+
+    return cleaned
+
+
+def _clean_narrations(narrations: List[str]) -> List[str]:
+    return [clean_narration_text(narration) for narration in narrations]
+
+
 async def generate_title(
     llm_service,
     content: str,
@@ -146,6 +173,7 @@ async def generate_narrations_from_topic(
     elif len(narrations) < n_scenes:
         raise ValueError(f"Expected {n_scenes} narrations, got only {len(narrations)}")
     
+    narrations = _clean_narrations(narrations)
     logger.info(f"Generated {len(narrations)} narrations successfully")
     return narrations
 
@@ -202,6 +230,7 @@ async def generate_narrations_from_content(
     elif len(narrations) < n_scenes:
         raise ValueError(f"Expected {n_scenes} narrations, got only {len(narrations)}")
     
+    narrations = _clean_narrations(narrations)
     logger.info(f"Generated {len(narrations)} narrations successfully")
     return narrations
 
@@ -235,7 +264,7 @@ async def split_narration_script(
             # Only strip leading/trailing whitespace, preserve internal newlines
             cleaned = para.strip()
             if cleaned:
-                narrations.append(para)
+                narrations.append(cleaned)
         logger.info(f"✅ Split script into {len(narrations)} segments (by paragraph)")
     
     elif split_mode == "line":
@@ -258,6 +287,8 @@ async def split_narration_script(
         logger.warning(f"Unknown split_mode '{split_mode}', falling back to 'line'")
         narrations = [line.strip() for line in script.split('\n') if line.strip()]
     
+    narrations = _clean_narrations(narrations)
+
     # Log statistics
     if narrations:
         lengths = [len(s) for s in narrations]
@@ -500,4 +531,3 @@ def _parse_json(text: str) -> dict:
     
     # If all fails, raise error
     raise json.JSONDecodeError("No valid JSON found", text, 0)
-

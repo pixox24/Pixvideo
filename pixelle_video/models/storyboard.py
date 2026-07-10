@@ -59,6 +59,7 @@ class StoryboardConfig:
     composition_mode: str = "template"         # "template" or "plain_image"
     image_motion_enabled: bool = False         # Enable Ken Burns-style motion in plain image mode
     subtitle_enabled: bool = True              # Show narration subtitles in plain image mode
+    subtitle_style: Optional[Dict[str, Any]] = None  # Styled subtitle rendering options
     image_motion_mode: str = "auto"            # Motion selection mode
     image_motion_strength: str = "subtle"      # Motion strength
     image_fit_mode: str = "cover"              # Image fit mode for plain image composition

@@ -11,7 +11,10 @@ def test_saved_prompt_prefix_updates_active_preset_for_quick_create_remount():
     )
 
     assert match is not None
-    assert "setActivePreset(savedPreset)" in match.group(0)
+    assert "setActivePreset((currentPreset)" in match.group(0)
+    assert "setPresets((currentPresets)" in match.group(0)
+    assert "presetId: activePreset?.id" in match.group(0)
+    assert "setPresets([savedPreset])" not in match.group(0)
 
 
 def test_quick_create_same_preset_refreshes_only_prompt_prefix():

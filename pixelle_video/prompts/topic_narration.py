@@ -87,6 +87,8 @@ Based on the topic content, various expression methods such as statements, scene
 
 ## Other Specifications
 - Prohibitions: No URLs, emojis, numeric numbering, no empty talk or clichés, no excessive sentimentality
+- TTS safety: Each `narrations` item must be pure speakable narration text. The JSON array order already represents storyboard order, so do not put any order marker inside the text.
+- Do not start any narration string with numbering or labels such as `1.`, `1、`, `(1)`, `第1句：`, `第一段：`, `Scene 1:`, or `Narration 1:`.
 - Word count check: After generation, must self-verify not less than {min_words} words. If insufficient, supplement with specific viewpoints or examples
 
 ## Storyboard Coherence Requirements
@@ -103,9 +105,9 @@ Strictly output in the following JSON format, do not add any additional text exp
 ```json
 {{
   "narrations": [
-    "First narration content",
-    "Second narration content",
-    "Third narration content"
+    "Pure speakable narration text without numbering",
+    "Pure speakable narration text without labels",
+    "Pure speakable narration text for TTS only"
   ]
 }}
 ```
@@ -155,4 +157,3 @@ def build_topic_narration_prompt(
         min_words=min_words,
         max_words=max_words
     )
-

@@ -294,6 +294,10 @@ class ConfigManager:
         if bgm_volume is None:
             bgm_volume = self.config.quick_create.bgm_volume
 
+        subtitle_updates: dict[str, Any] = {}
+        if "subtitle_style" in video_params:
+            subtitle_updates["default_style"] = video_params.get("subtitle_style") or {}
+
         updates = {
             "comfyui": comfyui_updates,
             "template": {
@@ -327,6 +331,8 @@ class ConfigManager:
                 "bgm_volume": bgm_volume,
             },
         }
+        if subtitle_updates:
+            updates["subtitle"] = subtitle_updates
 
         self.update(updates)
         self.save()

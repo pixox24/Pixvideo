@@ -1,6 +1,7 @@
 import {
   ActiveTab,
   BgmOption,
+  FontOption,
   SystemSettings,
   Task,
   TemplateOption,
@@ -12,6 +13,7 @@ export const EMPTY_WORKBENCH_RESOURCES: WorkbenchResources = {
   workflows: [],
   bgm: [{ id: "bgm-none", name: "无背景音乐" }],
   templates: [],
+  fonts: [],
 };
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -43,10 +45,11 @@ function apiFileUrl(path?: string): string | undefined {
 }
 
 export async function fetchQuickCreateResources(): Promise<WorkbenchResources> {
-  const [workflowsRes, templatesRes, bgmRes] = await Promise.all([
+  const [workflowsRes, templatesRes, bgmRes, fontsRes] = await Promise.all([
     fetchJson<any>("/api/resources/workflows/media"),
     fetchJson<any>("/api/resources/templates"),
     fetchJson<any>("/api/resources/bgm"),
+    fetchJson<any>("/api/resources/fonts"),
   ]);
 
   const workflows: WorkflowOption[] = (workflowsRes.workflows || []).map((workflow: any) => ({
@@ -81,7 +84,13 @@ export async function fetchQuickCreateResources(): Promise<WorkbenchResources> {
     })),
   ];
 
-  return { workflows, templates, bgm };
+  const fonts: FontOption[] = (fontsRes.fonts || []).map((font: any) => ({
+    name: font.name,
+    path: font.path,
+    source: font.source,
+  }));
+
+  return { workflows, templates, bgm, fonts };
 }
 
 export function buildConfigPayload(settings: SystemSettings) {
@@ -161,7 +170,8 @@ export function optimisticTaskFromInput(input: any, id: string): Task {
 
 function buildVideoPayload(input: any) {
   const scenes = input.scenes || [];
-  const text = scenes.map((scene: any) => scene.ttsText).filter(Boolean).join("\n") || input.title;
+  const sceneTexts = scenes.map((scene: any) => scene.ttsText).filter(Boolean);
+  const text = sceneTexts.join("\n\n") || input.title;
   const ttsMode = input.ttsMode === "minimax" ? "minimax" : input.ttsMode === "comfyui" ? "comfyui" : "local";
   const bgmPath = input.bgm && input.bgm !== "bgm-none" ? input.bgm : undefined;
   const bgmVolume = input.bgmVolume > 1 ? input.bgmVolume / 100 : input.bgmVolume;
@@ -171,7 +181,7 @@ function buildVideoPayload(input: any) {
     text,
     title: input.title,
     mode: "fixed",
-    split_mode: input.splitType || "line",
+    split_mode: scenes.length > 0 ? "paragraph" : input.splitType || "line",
     n_scenes: scenes.length || 1,
     media_workflow: input.workflowId || undefined,
     prompt_prefix: input.promptPrefix || undefined,
@@ -179,6 +189,7 @@ function buildVideoPayload(input: any) {
     composition_mode: input.viewMode === "pure-image" ? "plain_image" : "template",
     image_motion_enabled: Boolean(input.enableMotion),
     subtitle_enabled: input.enableSubtitles !== false,
+    subtitle_style: input.subtitleStyle || undefined,
     tts_inference_mode: ttsMode,
     tts_voice: input.voice || undefined,
     tts_speed: input.speed,

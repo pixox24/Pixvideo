@@ -67,3 +67,16 @@ class BGMListResponse(BaseModel):
     message: str = "Success"
     bgm_files: List[BGMInfo] = Field(..., description="List of available BGM files")
 
+
+class FontInfo(BaseModel):
+    """Subtitle font information"""
+    name: str = Field(..., description="Font display name")
+    path: str = Field(..., description="Font file path")
+    source: str = Field(..., description="Source (system, project, data, or custom-folder)")
+
+
+class FontListResponse(BaseModel):
+    """Subtitle font list response"""
+    success: bool = True
+    message: str = "Success"
+    fonts: List[FontInfo] = Field(..., description="List of available subtitle fonts")

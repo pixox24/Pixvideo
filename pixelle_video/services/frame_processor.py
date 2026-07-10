@@ -481,6 +481,7 @@ class FrameProcessor:
                     motion_strength=config.image_motion_strength,
                     image_fit_mode=config.image_fit_mode,
                     frame_index=frame.index,
+                    subtitle_style=config.subtitle_style,
                 )
             else:
                 logger.debug("  → Using image-based composition")

@@ -58,13 +58,21 @@ async def test_plain_image_segment_uses_original_image(monkeypatch, tmp_path):
 
     monkeypatch.setattr("pixelle_video.services.video.VideoService", FakeVideoService)
 
-    await processor._step_create_video_segment(frame, make_config(task_id="task-plain"))
+    await processor._step_create_video_segment(
+        frame,
+        make_config(
+            task_id="task-plain",
+            subtitle_style={"mode": "ass", "fontSize": 48},
+        ),
+    )
 
     assert calls["image"] == frame.image_path
     assert calls["audio"] == frame.audio_path
     assert calls["width"] == 1080
     assert calls["height"] == 1920
     assert calls["subtitle_text"] == "旁白"
+    assert calls["subtitle_style"]["mode"] == "ass"
+    assert calls["subtitle_style"]["fontSize"] == 48
     assert calls["motion_enabled"] is True
     assert calls["subtitle_enabled"] is True
     assert frame.video_segment_path == calls["output"]

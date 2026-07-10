@@ -37,6 +37,7 @@ import ffmpeg
 from loguru import logger
 
 from pixelle_video.config import config_manager
+from pixelle_video.services.subtitle_renderer import SubtitleRenderer
 from pixelle_video.utils.os_util import get_resource_path, list_resource_files, resource_exists
 
 
@@ -455,6 +456,7 @@ class VideoService:
         motion_strength: str = "subtle",
         image_fit_mode: str = "cover",
         frame_index: int = 0,
+        subtitle_style: Optional[dict] = None,
     ) -> str:
         """
         Create a video segment directly from a generated image and narration audio.
@@ -533,7 +535,31 @@ class VideoService:
                 if wrapped_text:
                     font_size = max(24, min(56, width // 22))
                     bottom_margin = max(48, height // 14)
-                    if self._ffmpeg_filter_available("drawtext"):
+                    normalized_style = subtitle_style or {}
+                    if (
+                        normalized_style.get("mode", "ass") == "ass"
+                        and self._ffmpeg_filter_available("subtitles")
+                    ):
+                        renderer = SubtitleRenderer()
+                        subtitle_overlay_path = renderer.create_ass_file(
+                            text=subtitle_text,
+                            duration=audio_duration,
+                            width=width,
+                            height=height,
+                            style=normalized_style,
+                        )
+                        subtitle_filter_kwargs = {}
+                        custom_font_path = str(normalized_style.get("fontPath") or "").strip()
+                        if custom_font_path:
+                            subtitle_filter_kwargs["fontsdir"] = str(
+                                Path(custom_font_path).expanduser().parent
+                            )
+                        video_stream = video_stream.filter(
+                            "subtitles",
+                            subtitle_overlay_path,
+                            **subtitle_filter_kwargs,
+                        )
+                    elif self._ffmpeg_filter_available("drawtext"):
                         video_stream = video_stream.filter(
                             "drawtext",
                             fontfile=font_path,

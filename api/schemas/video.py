@@ -18,6 +18,28 @@ from typing import Optional, Literal, Dict, Any
 from pydantic import BaseModel, Field
 
 
+class SubtitleStyle(BaseModel):
+    """Styled subtitle rendering options."""
+
+    mode: Literal["drawtext", "ass"] = Field("ass", description="Subtitle renderer mode")
+    preset: str = Field("short-video-bold", description="Subtitle visual preset")
+    fontFamily: Optional[str] = Field(None, description="Font family display name")
+    fontPath: Optional[str] = Field(None, description="Absolute or project-relative font path")
+    fontSize: int = Field(52, ge=12, le=120, description="Subtitle font size in pixels")
+    primaryColor: str = Field("#FFFFFF", description="Primary text color")
+    accentColor: str = Field("#FFD43B", description="Accent/highlight color")
+    outlineColor: str = Field("#000000", description="Outline color")
+    backColor: str = Field("#000000", description="Background box color")
+    outlineWidth: int = Field(3, ge=0, le=12, description="Outline width")
+    shadow: int = Field(0, ge=0, le=12, description="ASS shadow depth")
+    marginV: int = Field(120, ge=0, le=600, description="Vertical margin from aligned edge")
+    alignment: int = Field(2, ge=1, le=9, description="ASS alignment code")
+    maxCharsPerLine: int = Field(14, ge=4, le=40, description="Max CJK chars per subtitle line")
+    maxLines: int = Field(2, ge=1, le=4, description="Max lines per subtitle segment")
+    animation: Literal["none", "fade"] = Field("fade", description="Subtitle animation")
+    segmentMode: Literal["line", "sentence", "phrase"] = Field("phrase", description="Subtitle segmentation")
+
+
 class VideoGenerateRequest(BaseModel):
     """Video generation request"""
 
@@ -102,6 +124,7 @@ class VideoGenerateRequest(BaseModel):
     composition_mode: Literal["template", "plain_image"] = Field("template", description="Composition mode")
     image_motion_enabled: bool = Field(False, description="Enable image motion in plain image mode")
     subtitle_enabled: bool = Field(True, description="Enable subtitles")
+    subtitle_style: Optional[SubtitleStyle] = Field(None, description="Styled subtitle rendering options")
     image_motion_mode: str = Field("auto", description="Image motion mode")
     image_motion_strength: str = Field("subtle", description="Image motion strength")
     image_fit_mode: str = Field("cover", description="Image fit mode")
@@ -140,4 +163,3 @@ class VideoGenerateAsyncResponse(BaseModel):
     success: bool = True
     message: str = "Task created successfully"
     task_id: str = Field(..., description="Task ID for tracking progress")
-

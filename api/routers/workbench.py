@@ -12,8 +12,11 @@ existing FastAPI and Pixelle-Video services.
 """
 
 from __future__ import annotations
-
+from datetime import datetime, timezone
+import json
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -23,9 +26,13 @@ from api.dependencies import PixelleVideoDep
 from api.routers.configuration import test_service
 from api.schemas.configuration import ServiceTestRequest
 from pixelle_video.config import config_manager
+from pixelle_video.services.subtitle_renderer import SUBTITLE_STYLE_DEFAULTS
 from pixelle_video.utils.content_generators import (
+    clean_narration_text,
     generate_image_prompts,
+    generate_narrations_from_content,
     generate_narrations_from_topic,
+    split_narration_script,
 )
 from pixelle_video.utils.os_util import resource_exists
 
@@ -38,6 +45,19 @@ class GenerateScriptRequest(BaseModel):
     topic: str = Field(..., min_length=1)
     sceneCount: int = Field(5, ge=1, le=20)
     splitType: str = "line"
+    draftMode: str = "full"
+    confirmedText: str | None = None
+
+
+class GenerateCopyDraftRequest(BaseModel):
+    """Create editable copy before generating storyboard prompts."""
+
+    topic: str = Field(..., min_length=1)
+    sceneCount: int = Field(5, ge=1, le=20)
+    draftMode: str = "full"
+    splitType: str = "line"
+    targetCharCount: int = Field(175, ge=50, le=3000)
+    charCountMode: str = "around"
 
 
 class TestConnectionRequest(BaseModel):
@@ -51,6 +71,140 @@ class PromptPrefixSaveRequest(BaseModel):
     """Persisted prompt prefix for Quick Create test and generation flows."""
 
     promptPrefix: str = ""
+    presetId: str | None = None
+
+
+QUICK_CREATE_PRESETS_PATH = Path("data/quick_create_presets.json")
+
+PRESET_FIELDS = {
+    "id",
+    "name",
+    "createdAt",
+    "updatedAt",
+    "ttsMode",
+    "voice",
+    "speed",
+    "workflow",
+    "bgm",
+    "bgmVolume",
+    "promptPrefix",
+    "splitType",
+    "template",
+    "viewMode",
+    "enableMotion",
+    "enableSubtitles",
+    "minimaxModel",
+    "emotion",
+    "sceneCount",
+    "copyCharCount",
+    "copyCharCountMode",
+    "copyDraftMode",
+    "mediaWidth",
+    "mediaHeight",
+    "imageAspectRatio",
+    "subtitleStyle",
+}
+
+PRESET_DEFAULTS = {
+    "name": "当前保存配置",
+    "ttsMode": "minimax",
+    "voice": "male-qn-qingse",
+    "speed": 1.0,
+    "workflow": "",
+    "bgm": "bgm-none",
+    "bgmVolume": 30,
+    "promptPrefix": "",
+    "splitType": "line",
+    "template": "",
+    "viewMode": "pure-image",
+    "enableMotion": True,
+    "enableSubtitles": True,
+    "minimaxModel": "speech-2.8-turbo",
+    "emotion": "",
+    "sceneCount": 5,
+    "copyCharCount": 175,
+    "copyCharCountMode": "around",
+    "copyDraftMode": "full",
+    "mediaWidth": 1024,
+    "mediaHeight": 1536,
+    "imageAspectRatio": "1024x1536",
+    "subtitleStyle": SUBTITLE_STYLE_DEFAULTS,
+}
+
+
+def _ensure_llm_configured():
+    llm_config = config_manager.get_llm_config()
+    if not (
+        llm_config.get("api_key")
+        and llm_config.get("base_url")
+        and llm_config.get("model")
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="LLM 配置未保存。请在系统设置中测试 LLM 连接，成功后配置会自动保存。",
+        )
+
+
+def _normalize_draft_mode(mode: str | None) -> str:
+    return "segmented" if mode == "segmented" else "full"
+
+
+def _normalize_split_type(split_type: str | None) -> str:
+    return split_type if split_type in {"paragraph", "line", "sentence"} else "line"
+
+
+def _normalize_char_count_mode(mode: str | None) -> str:
+    return "within" if mode == "within" else "around"
+
+
+def _char_count_phrase(target_char_count: int, mode: str | None) -> str:
+    suffix = "以内" if _normalize_char_count_mode(mode) == "within" else "左右"
+    return f"{target_char_count} 字{suffix}"
+
+
+def _per_storyboard_word_range(target_char_count: int, scene_count: int, mode: str | None) -> tuple[int, int]:
+    per_storyboard = max(1, target_char_count / max(scene_count, 1))
+    if _normalize_char_count_mode(mode) == "within":
+        return max(5, int(per_storyboard * 0.55)), max(6, int(per_storyboard))
+    return max(5, int(per_storyboard * 0.75)), max(6, int(per_storyboard * 1.25))
+
+
+def _format_segmented_draft(narrations: list[str]) -> str:
+    cleaned_narrations = [clean_narration_text(narration) for narration in narrations]
+    return "\n\n".join(narration for narration in cleaned_narrations if narration)
+
+
+def _strip_segment_prefix(text: str) -> str:
+    return clean_narration_text(text)
+
+
+async def _narrations_from_confirmed_copy(request: GenerateScriptRequest, llm_service) -> list[str]:
+    confirmed_text = (request.confirmedText or "").strip()
+    if not confirmed_text:
+        return await generate_narrations_from_topic(
+            llm_service=llm_service,
+            topic=request.topic,
+            n_scenes=request.sceneCount,
+            min_words=5,
+            max_words=40,
+        )
+
+    if _normalize_draft_mode(request.draftMode) == "segmented":
+        split_type = _normalize_split_type(request.splitType)
+        segments = await split_narration_script(confirmed_text, split_mode=split_type)
+        narrations = [_strip_segment_prefix(segment) for segment in segments]
+        narrations = [narration for narration in narrations if narration]
+        if not narrations:
+            raise ValueError("确认文案为空，无法生成分镜脚本。")
+        return narrations
+
+    return await generate_narrations_from_content(
+        llm_service=llm_service,
+        content=confirmed_text,
+        n_scenes=request.sceneCount,
+        min_words=5,
+        max_words=40,
+    )
 
 
 def _frontend_tts_mode(mode: str | None) -> str:
@@ -80,6 +234,126 @@ def _template_type_from_path(template_path: str | None) -> str:
     if filename.startswith("static_"):
         return "static"
     return "image"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _coerce_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    return min(max(number, minimum), maximum)
+
+
+def _coerce_float(value: Any, default: float, minimum: float, maximum: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = default
+    return min(max(number, minimum), maximum)
+
+
+def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = None) -> dict[str, Any]:
+    now = _now_iso()
+    base = {**PRESET_DEFAULTS, **(existing or {}), **preset}
+    normalized = {key: base.get(key) for key in PRESET_FIELDS if key in base}
+
+    normalized["id"] = str(existing.get("id") if existing else preset.get("id") or f"preset-{uuid4().hex[:12]}")
+    normalized["name"] = str(base.get("name") or "未命名预设").strip()[:60] or "未命名预设"
+    normalized["createdAt"] = str((existing or {}).get("createdAt") or base.get("createdAt") or now)
+    normalized["updatedAt"] = now
+
+    normalized["ttsMode"] = normalized.get("ttsMode") if normalized.get("ttsMode") in {"edge", "comfyui", "minimax"} else "minimax"
+    normalized["splitType"] = _normalize_split_type(str(normalized.get("splitType") or "line"))
+    normalized["copyCharCountMode"] = _normalize_char_count_mode(str(normalized.get("copyCharCountMode") or "around"))
+    normalized["copyDraftMode"] = _normalize_draft_mode(str(normalized.get("copyDraftMode") or "full"))
+    normalized["viewMode"] = "template" if normalized.get("viewMode") == "template" else "pure-image"
+
+    normalized["speed"] = _coerce_float(normalized.get("speed"), 1.0, 0.5, 2.0)
+    normalized["bgmVolume"] = _coerce_int(normalized.get("bgmVolume"), 30, 0, 100)
+    normalized["sceneCount"] = _coerce_int(normalized.get("sceneCount"), 5, 1, 30)
+    normalized["copyCharCount"] = _coerce_int(normalized.get("copyCharCount"), 175, 50, 3000)
+    normalized["mediaWidth"] = _coerce_int(normalized.get("mediaWidth"), 1024, 512, 3840)
+    normalized["mediaHeight"] = _coerce_int(normalized.get("mediaHeight"), 1536, 512, 3840)
+
+    normalized["enableMotion"] = bool(normalized.get("enableMotion", True))
+    normalized["enableSubtitles"] = bool(normalized.get("enableSubtitles", True))
+    subtitle_style = normalized.get("subtitleStyle")
+    if not isinstance(subtitle_style, dict):
+        subtitle_style = {}
+    normalized["subtitleStyle"] = {**SUBTITLE_STYLE_DEFAULTS, **subtitle_style}
+
+    for key in ["voice", "workflow", "bgm", "promptPrefix", "template", "minimaxModel", "emotion", "imageAspectRatio"]:
+        normalized[key] = str(normalized.get(key) or "")
+
+    if not normalized["imageAspectRatio"]:
+        normalized["imageAspectRatio"] = f"{normalized['mediaWidth']}x{normalized['mediaHeight']}"
+
+    return normalized
+
+
+def _legacy_preset_from_config(name: str = "当前保存配置") -> dict[str, Any]:
+    legacy = _preset_from_config(name)
+    return _normalize_preset({**PRESET_DEFAULTS, **legacy}, existing={"id": "quick-create-default"})
+
+
+def _read_presets_store() -> dict[str, Any]:
+    if not QUICK_CREATE_PRESETS_PATH.exists():
+        fallback = _legacy_preset_from_config()
+        return {"defaultPresetId": fallback["id"], "presets": [fallback]}
+
+    try:
+        data = json.loads(QUICK_CREATE_PRESETS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        logger.warning("Quick-create preset store is invalid; falling back to current config.")
+        fallback = _legacy_preset_from_config()
+        return {"defaultPresetId": fallback["id"], "presets": [fallback]}
+
+    raw_presets = data.get("presets") if isinstance(data, dict) else []
+    presets: list[dict[str, Any]] = []
+    for raw_preset in raw_presets or []:
+        if isinstance(raw_preset, dict):
+            presets.append(_normalize_preset(raw_preset, existing=raw_preset))
+
+    if not presets:
+        fallback = _legacy_preset_from_config()
+        return {"defaultPresetId": fallback["id"], "presets": [fallback]}
+
+    default_preset_id = str(data.get("defaultPresetId") or presets[0]["id"])
+    if not any(preset["id"] == default_preset_id for preset in presets):
+        default_preset_id = presets[0]["id"]
+
+    return {"defaultPresetId": default_preset_id, "presets": presets}
+
+
+def _write_presets_store(store: dict[str, Any]) -> None:
+    QUICK_CREATE_PRESETS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    QUICK_CREATE_PRESETS_PATH.write_text(
+        json.dumps(store, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _preset_response(store: dict[str, Any], preset: dict[str, Any] | None = None) -> dict[str, Any]:
+    presets = store["presets"]
+    default_preset_id = store["defaultPresetId"]
+    active_preset = preset or next((item for item in presets if item["id"] == default_preset_id), presets[0])
+    return {
+        "success": True,
+        "presets": presets,
+        "preset": active_preset,
+        "defaultPresetId": default_preset_id,
+    }
+
+
+def _find_preset_or_404(store: dict[str, Any], preset_id: str) -> dict[str, Any]:
+    preset = next((item for item in store["presets"] if item["id"] == preset_id), None)
+    if not preset:
+        raise HTTPException(status_code=404, detail="预设不存在或已被删除。")
+    return preset
 
 
 def _preset_from_config(name: str = "当前保存配置") -> dict[str, Any]:
@@ -129,6 +403,7 @@ def _preset_from_config(name: str = "当前保存配置") -> dict[str, Any]:
         "viewMode": quick_create.get("view_mode") or "pure-image",
         "enableMotion": config_manager.get("template", {}).get("image_motion_enabled", True),
         "enableSubtitles": config_manager.get("template", {}).get("subtitle_enabled", True),
+        "subtitleStyle": config_manager.get("subtitle", {}).get("default_style") or SUBTITLE_STYLE_DEFAULTS,
         "minimaxModel": tts.get("minimax", {}).get("model"),
         "emotion": tts.get("minimax", {}).get("emotion"),
     }
@@ -164,6 +439,7 @@ def _quick_create_config_from_preset(preset: dict[str, Any]) -> dict[str, Any]:
         else "template",
         "image_motion_enabled": preset.get("enableMotion", True),
         "subtitle_enabled": preset.get("enableSubtitles", True),
+        "subtitle_style": preset.get("subtitleStyle") or SUBTITLE_STYLE_DEFAULTS,
     }
 
 
@@ -200,18 +476,95 @@ def _service_test_request(request: TestConnectionRequest) -> ServiceTestRequest:
 
 @router.get("/presets")
 async def list_presets():
-    """Return the saved quick-create preset in the shape expected by React."""
-    preset = _preset_from_config()
-    return {"success": True, "presets": [preset], "preset": preset}
+    """Return all saved quick-create presets and the current default preset."""
+    store = _read_presets_store()
+    return _preset_response(store)
 
 
 @router.post("/presets")
 async def save_preset(preset: dict[str, Any]):
-    """Persist the reusable quick-create configuration from React."""
+    """Create a new reusable quick-create preset from the current React state."""
     try:
+        store = _read_presets_store()
+        existing_presets = [
+            item for item in store["presets"] if item.get("id") != "quick-create-default"
+        ]
+        saved = _normalize_preset(preset)
+        presets = [*existing_presets, saved]
+        store = {"defaultPresetId": saved["id"], "presets": presets}
+        _write_presets_store(store)
+        config_manager.save_quick_create_config(_quick_create_config_from_preset(saved))
+        return _preset_response(store, saved)
+    except Exception as exc:
+        logger.exception(exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.put("/presets/{preset_id}")
+async def update_preset(preset_id: str, preset: dict[str, Any]):
+    """Overwrite an existing reusable quick-create preset."""
+    try:
+        store = _read_presets_store()
+        existing = _find_preset_or_404(store, preset_id)
+        saved = _normalize_preset({**preset, "id": preset_id}, existing=existing)
+        store["presets"] = [
+            saved if item["id"] == preset_id else item for item in store["presets"]
+        ]
+        if not store.get("defaultPresetId"):
+            store["defaultPresetId"] = preset_id
+        _write_presets_store(store)
+        config_manager.save_quick_create_config(_quick_create_config_from_preset(saved))
+        return _preset_response(store, saved)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.put("/presets/{preset_id}/default")
+async def set_default_preset(preset_id: str):
+    """Set an existing preset as the default quick-create preset."""
+    try:
+        store = _read_presets_store()
+        preset = _find_preset_or_404(store, preset_id)
+        store["defaultPresetId"] = preset_id
+        _write_presets_store(store)
         config_manager.save_quick_create_config(_quick_create_config_from_preset(preset))
-        saved = _preset_from_config(preset.get("name") or "当前保存配置")
-        return {"success": True, "preset": saved, "presets": [saved]}
+        return _preset_response(store, preset)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.delete("/presets/{preset_id}")
+async def delete_preset(preset_id: str):
+    """Delete a reusable quick-create preset."""
+    try:
+        store = _read_presets_store()
+        _find_preset_or_404(store, preset_id)
+        remaining = [item for item in store["presets"] if item["id"] != preset_id]
+        if not remaining:
+            fallback = _legacy_preset_from_config()
+            remaining = [fallback]
+            default_preset_id = fallback["id"]
+        elif store.get("defaultPresetId") == preset_id:
+            default_preset_id = remaining[0]["id"]
+        else:
+            default_preset_id = store.get("defaultPresetId") or remaining[0]["id"]
+
+        store = {"defaultPresetId": default_preset_id, "presets": remaining}
+        active_preset = next(
+            (item for item in remaining if item["id"] == default_preset_id),
+            remaining[0],
+        )
+        _write_presets_store(store)
+        config_manager.save_quick_create_config(_quick_create_config_from_preset(active_preset))
+        return _preset_response(store, active_preset)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -222,8 +575,22 @@ async def save_prompt_prefix(request: PromptPrefixSaveRequest):
     """Persist only the shared prompt prefix without touching other quick-create settings."""
     try:
         config_manager.set_prompt_prefix(request.promptPrefix)
-        saved = _preset_from_config()
-        return {"success": True, "promptPrefix": saved.get("promptPrefix", ""), "preset": saved}
+        store = _read_presets_store()
+        preset_id = request.presetId or store["defaultPresetId"]
+        existing = _find_preset_or_404(store, preset_id)
+        saved = _normalize_preset(
+            {"id": preset_id, "promptPrefix": request.promptPrefix},
+            existing=existing,
+        )
+        store["presets"] = [
+            saved if item["id"] == preset_id else item for item in store["presets"]
+        ]
+        _write_presets_store(store)
+        config_manager.save_quick_create_config(_quick_create_config_from_preset(saved))
+        return {
+            **_preset_response(store, saved),
+            "promptPrefix": saved.get("promptPrefix", ""),
+        }
     except Exception as exc:
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -235,28 +602,62 @@ async def test_connection(request: TestConnectionRequest):
     return await test_service(_service_test_request(request))
 
 
+@router.post("/generate-copy-draft")
+async def generate_copy_draft(request: GenerateCopyDraftRequest, pixelle_video: PixelleVideoDep):
+    """Generate editable copy draft before storyboard generation."""
+    try:
+        _ensure_llm_configured()
+
+        draft_mode = _normalize_draft_mode(request.draftMode)
+        if draft_mode == "segmented":
+            min_words, max_words = _per_storyboard_word_range(
+                request.targetCharCount,
+                request.sceneCount,
+                request.charCountMode,
+            )
+            narrations = await generate_narrations_from_topic(
+                llm_service=pixelle_video.llm,
+                topic=request.topic,
+                n_scenes=request.sceneCount,
+                min_words=min_words,
+                max_words=max_words,
+            )
+            draft_text = _format_segmented_draft(narrations)
+        else:
+            length_phrase = _char_count_phrase(request.targetCharCount, request.charCountMode)
+            prompt = (
+                "请基于下面的创作主题，写一篇适合短视频旁白的完整中文口播稿。\n"
+                f"创作主题：{request.topic}\n\n"
+                f"目标：整篇文案总字数控制在 {length_phrase}；后续会拆成约 {request.sceneCount} 个分镜，所以内容要有清晰的起承转合。\n"
+                "要求：\n"
+                "1. 只输出口播正文，不要标题、编号、Markdown 或解释。\n"
+                "2. 语气自然、有画面感，适合 TTS 朗读。\n"
+                "3. 不要分镜提示词，不要镜头描述。\n"
+                "4. 内容应方便创作者继续编辑。"
+            )
+            draft_text = str(
+                await pixelle_video.llm(
+                    prompt=prompt,
+                    temperature=0.8,
+                    max_tokens=2000,
+                )
+            ).strip()
+
+        return {"success": True, "draftMode": draft_mode, "draftText": draft_text}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.post("/generate-script")
 async def generate_script(request: GenerateScriptRequest, pixelle_video: PixelleVideoDep):
     """Generate editable scene narration and visual prompts through the real LLM."""
     try:
-        llm_config = config_manager.get_llm_config()
-        if not (
-            llm_config.get("api_key")
-            and llm_config.get("base_url")
-            and llm_config.get("model")
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail="LLM 配置未保存。请在系统设置中测试 LLM 连接，成功后配置会自动保存。",
-            )
+        _ensure_llm_configured()
 
-        narrations = await generate_narrations_from_topic(
-            llm_service=pixelle_video.llm,
-            topic=request.topic,
-            n_scenes=request.sceneCount,
-            min_words=5,
-            max_words=40,
-        )
+        narrations = await _narrations_from_confirmed_copy(request, pixelle_video.llm)
         image_prompts = await generate_image_prompts(
             llm_service=pixelle_video.llm,
             narrations=narrations,

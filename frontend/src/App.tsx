@@ -49,6 +49,7 @@ export default function App() {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [activePreset, setActivePreset] = useState<Preset | null>(null);
+  const [defaultPresetId, setDefaultPresetId] = useState<string | null>(null);
   const [lang, setLang] = useState<"zh" | "en">("zh");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [resources, setResources] = useState(EMPTY_WORKBENCH_RESOURCES);
@@ -117,6 +118,17 @@ export default function App() {
     setResources(await fetchQuickCreateResources());
   };
 
+  const applyPresetResponse = (data: any) => {
+    const loadedPresets = data.presets || [];
+    setPresets(loadedPresets);
+    setDefaultPresetId(data.defaultPresetId || null);
+    if (data.preset) {
+      setActivePreset(data.preset);
+    } else if (loadedPresets[0]) {
+      setActivePreset(loadedPresets[0]);
+    }
+  };
+
   // Load persisted backend state
   useEffect(() => {
     const loadBackendState = async () => {
@@ -129,11 +141,7 @@ export default function App() {
         if (presetsRes.ok) {
           const data = await presetsRes.json();
           if (data.success) {
-            const loadedPresets = data.presets || [];
-            setPresets(loadedPresets);
-            if (data.preset || loadedPresets[0]) {
-              setActivePreset(data.preset || loadedPresets[0]);
-            }
+            applyPresetResponse(data);
           }
         }
 
@@ -162,8 +170,8 @@ export default function App() {
     loadBackendState();
   }, []);
 
-  // Save preset handler
-  const handleSavePreset = async (presetInput: Omit<Preset, "id">) => {
+  // Preset handlers
+  const handleCreatePreset = async (presetInput: Omit<Preset, "id">) => {
     try {
       const res = await fetch("/api/presets", {
         method: "POST",
@@ -172,13 +180,66 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setPresets(data.presets || [data.preset]);
-        addToast(`成功保存预设并同步至云端: ${data.preset.name}`, "success");
+        applyPresetResponse(data);
+        addToast(`已另存为工作台预设: ${data.preset.name}`, "success");
       } else {
-        addToast(data.error || "保存预设失败", "error");
+        addToast(data.detail || data.error || "保存预设失败", "error");
       }
     } catch (err) {
       addToast("保存失败：无法连接后端配置服务。", "error");
+    }
+  };
+
+  const handleUpdatePreset = async (presetId: string, presetInput: Preset) => {
+    try {
+      const res = await fetch(`/api/presets/${presetId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(presetInput),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        applyPresetResponse(data);
+        addToast(`已覆盖当前预设: ${data.preset.name}`, "success");
+      } else {
+        addToast(data.detail || data.error || "覆盖预设失败", "error");
+      }
+    } catch (err) {
+      addToast("覆盖失败：无法连接后端配置服务。", "error");
+    }
+  };
+
+  const handleDeletePreset = async (presetId: string) => {
+    try {
+      const res = await fetch(`/api/presets/${presetId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        applyPresetResponse(data);
+        addToast("预设已删除。", "success");
+      } else {
+        addToast(data.detail || data.error || "删除预设失败", "error");
+      }
+    } catch (err) {
+      addToast("删除失败：无法连接后端配置服务。", "error");
+    }
+  };
+
+  const handleSetDefaultPreset = async (presetId: string) => {
+    try {
+      const res = await fetch(`/api/presets/${presetId}/default`, {
+        method: "PUT",
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        applyPresetResponse(data);
+        addToast(`已设为默认预设: ${data.preset.name}`, "success");
+      } else {
+        addToast(data.detail || data.error || "设置默认预设失败", "error");
+      }
+    } catch (err) {
+      addToast("设置失败：无法连接后端配置服务。", "error");
     }
   };
 
@@ -186,7 +247,7 @@ export default function App() {
     const response = await fetch("/api/prompt-prefix", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ promptPrefix }),
+      body: JSON.stringify({ promptPrefix, presetId: activePreset?.id }),
     });
     const data = await response.json();
     if (!response.ok || !data.success) {
@@ -195,8 +256,22 @@ export default function App() {
 
     const savedPreset = data.preset;
     if (savedPreset) {
-      setPresets([savedPreset]);
-      setActivePreset(savedPreset);
+      setPresets((currentPresets) =>
+        currentPresets.map((preset) =>
+          preset.id === savedPreset.id
+            ? savedPreset
+            : preset.id === activePreset?.id
+            ? { ...preset, promptPrefix: savedPreset.promptPrefix }
+            : preset
+        )
+      );
+      setActivePreset((currentPreset) =>
+        currentPreset?.id === savedPreset.id
+          ? savedPreset
+          : currentPreset
+          ? { ...currentPreset, promptPrefix: savedPreset.promptPrefix }
+          : savedPreset
+      );
     }
     addToast("提示词前缀已保存，下次打开会自动使用。", "success");
     return data.promptPrefix;
@@ -561,6 +636,8 @@ export default function App() {
         </div>
       </aside>
 
+      <div className="flex-1 min-w-0 h-full flex justify-center">
+        <div className="w-full max-w-[1680px] h-full flex min-w-0">
       {/* 2. CENTER WORKSPACE WITH HEADER & BODY */}
       <main className="flex-1 flex flex-col min-w-0 h-full">
         {/* TOP STATUS BAR */}
@@ -605,12 +682,18 @@ export default function App() {
         </header>
 
         {/* MAIN BODY AREA */}
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-5 xl:p-6">
           {activeTab === "quick-create" && (
             <QuickCreate
               onGenerateTask={handleGenerateTask}
+              presets={presets}
               activePreset={activePreset}
-              onSavePreset={handleSavePreset}
+              defaultPresetId={defaultPresetId}
+              onSelectPreset={setActivePreset}
+              onCreatePreset={handleCreatePreset}
+              onUpdatePreset={handleUpdatePreset}
+              onDeletePreset={handleDeletePreset}
+              onSetDefaultPreset={handleSetDefaultPreset}
               onSavePromptPrefix={handleSavePromptPrefix}
               onRefreshResources={refreshResources}
               resources={resources}
@@ -665,6 +748,8 @@ export default function App() {
         }}
         addToast={addToast}
       />
+        </div>
+      </div>
     </div>
   );
 }

@@ -30,12 +30,47 @@ from api.schemas.resources import (
     TemplateListResponse,
     BGMInfo,
     BGMListResponse,
+    FontInfo,
+    FontListResponse,
 )
 from pixelle_video.config import config_manager
 from pixelle_video.utils.os_util import list_resource_files, get_root_path, get_data_path
 from pixelle_video.utils.template_util import get_all_templates_with_info
 
 router = APIRouter(prefix="/resources", tags=["Resources"])
+
+FONT_EXTENSIONS = {".ttf", ".otf", ".ttc"}
+SYSTEM_FONT_DIRS = (
+    Path("/System/Library/Fonts"),
+    Path("/Library/Fonts"),
+    Path.home() / "Library/Fonts",
+    Path("/usr/share/fonts"),
+    Path("/usr/local/share/fonts"),
+    Path("C:/Windows/Fonts"),
+)
+
+
+def _font_name(path: Path) -> str:
+    """Return a readable font name from a font file path."""
+    return path.stem.replace("_", " ").replace("-", " ").strip() or path.name
+
+
+def _collect_fonts_from_dir(base: Path, source: str) -> list[FontInfo]:
+    """Collect subtitle font files from a folder recursively."""
+    if not base.exists() or not base.is_dir():
+        return []
+
+    fonts: list[FontInfo] = []
+    for item in sorted(base.rglob("*")):
+        if item.is_file() and item.suffix.lower() in FONT_EXTENSIONS:
+            fonts.append(
+                FontInfo(
+                    name=_font_name(item),
+                    path=str(item),
+                    source=source,
+                )
+            )
+    return fonts
 
 
 @router.get("/workflows/tts", response_model=WorkflowListResponse)
@@ -278,6 +313,79 @@ async def list_bgm():
         
     except Exception as e:
         logger.error(f"List BGM error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/fonts", response_model=FontListResponse)
+async def list_fonts():
+    """
+    List available subtitle font files.
+
+    Fonts are discovered from project resources, data/fonts, system font folders,
+    and the user-selected custom font folder.
+    """
+    try:
+        font_map: dict[str, FontInfo] = {}
+        candidates: list[tuple[Path, str]] = [
+            (Path(get_root_path("resources", "fonts")), "project"),
+            (Path(get_data_path("fonts")), "data"),
+            *[(path, "system") for path in SYSTEM_FONT_DIRS],
+        ]
+
+        custom_font_folder = str(config_manager.get("subtitle", {}).get("custom_font_folder") or "").strip()
+        if custom_font_folder:
+            candidates.append((Path(custom_font_folder).expanduser().resolve(), "custom-folder"))
+
+        for base, source in candidates:
+            for font in _collect_fonts_from_dir(base, source):
+                font_map[font.path] = font
+
+        fonts = sorted(
+            font_map.values(),
+            key=lambda item: (
+                0 if item.source == "custom-folder" else 1 if item.source in {"project", "data"} else 2,
+                item.name.lower(),
+            ),
+        )
+        return FontListResponse(fonts=fonts)
+    except Exception as e:
+        logger.error(f"List fonts error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/fonts/select-folder")
+async def select_custom_font_folder():
+    """Select and persist a custom subtitle font folder."""
+    try:
+        system_name = platform.system()
+        if system_name != "Darwin":
+            raise HTTPException(status_code=501, detail="当前仅支持 macOS 文件夹选择。")
+
+        script = 'POSIX path of (choose folder with prompt "选择自定义字幕字体文件夹")'
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        selected_path = result.stdout.strip()
+        if not selected_path:
+            raise HTTPException(status_code=400, detail="未选择字体文件夹。")
+
+        selected_folder = Path(selected_path).expanduser().resolve()
+        if not selected_folder.exists() or not selected_folder.is_dir():
+            raise HTTPException(status_code=400, detail="选择的路径不是有效文件夹。")
+
+        config_manager.update({"subtitle": {"custom_font_folder": str(selected_folder)}})
+        config_manager.save()
+        return {"success": True, "path": str(selected_folder)}
+    except HTTPException:
+        raise
+    except subprocess.CalledProcessError as exc:
+        logger.info(f"Custom font folder selection cancelled or failed: {exc}")
+        raise HTTPException(status_code=400, detail="已取消选择自定义字幕字体文件夹。") from exc
+    except Exception as e:
+        logger.error(f"Select custom font folder error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

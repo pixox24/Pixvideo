@@ -14,26 +14,49 @@ import {
   AlertTriangle,
   Upload,
   Workflow,
+  Download,
   Plus,
   Trash2,
-  SquareEqual,
   Save,
   ChevronDown,
   ChevronUp,
   FolderOpen,
+  XCircle,
 } from "lucide-react";
-import { Preset, WorkbenchResources } from "../types";
+import { Preset, SubtitleStyle, WorkbenchResources } from "../types";
 import { VOICE_OPTIONS } from "../data";
 
 interface QuickCreateProps {
   onGenerateTask: (taskInput: any) => void;
+  presets: Preset[];
   activePreset: Preset | null;
-  onSavePreset: (presetInput: any) => void;
+  defaultPresetId: string | null;
+  onSelectPreset: (preset: Preset) => void;
+  onCreatePreset: (presetInput: Omit<Preset, "id">) => void | Promise<void>;
+  onUpdatePreset: (presetId: string, presetInput: Preset) => void | Promise<void>;
+  onDeletePreset: (presetId: string) => void | Promise<void>;
+  onSetDefaultPreset: (presetId: string) => void | Promise<void>;
   onSavePromptPrefix: (promptPrefix: string) => Promise<string | void>;
   onRefreshResources: () => Promise<void>;
   resources: WorkbenchResources;
   addToast: (text: string, type: "success" | "error" | "info") => void;
 }
+
+const DEFAULT_PREVIEW_TTS_TEXT = "这是一段 TTS 试听文案，用来检查音色、语速和发音效果。";
+
+const extractPreviewSentenceFromCopyDraft = (rawDraftText: string) => {
+  const draftText = rawDraftText
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .replace(/^\s*(?:[-*•]|\d+[\.\、．)]|第\s*\d+\s*[分镜幕段]?[:：、.．]?)\s*/, "")
+        .trim()
+    )
+    .filter(Boolean)
+    .join("\n");
+  const firstSentence = draftText.split(/[。\.]/)[0]?.split(/\r?\n/)[0]?.trim();
+  return firstSentence || "";
+};
 
 const IMAGE_SIZE_PRESETS = [
   { id: "1024x1024", label: "1:1 正方形", width: 1024, height: 1024 },
@@ -48,10 +71,42 @@ const IMAGE_SIZE_PRESETS = [
   { id: "custom", label: "自定义", width: 1024, height: 1536 },
 ];
 
+const suggestCopyCharCount = (storyboardCount: number) =>
+  Math.max(120, Math.min(600, storyboardCount * 35));
+
+const estimateNarrationSeconds = (charCount: number) =>
+  Math.max(1, Math.round((charCount / 260) * 60));
+
+const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
+  mode: "ass",
+  preset: "short-video-bold",
+  fontFamily: "",
+  fontPath: "",
+  fontSize: 52,
+  primaryColor: "#FFFFFF",
+  accentColor: "#FFD43B",
+  outlineColor: "#000000",
+  backColor: "#000000",
+  outlineWidth: 3,
+  shadow: 0,
+  marginV: 120,
+  alignment: 2,
+  maxCharsPerLine: 14,
+  maxLines: 2,
+  animation: "fade",
+  segmentMode: "phrase",
+};
+
 export const QuickCreate: React.FC<QuickCreateProps> = ({
   onGenerateTask,
+  presets,
   activePreset,
-  onSavePreset,
+  defaultPresetId,
+  onSelectPreset,
+  onCreatePreset,
+  onUpdatePreset,
+  onDeletePreset,
+  onSetDefaultPreset,
   onSavePromptPrefix,
   onRefreshResources,
   resources,
@@ -65,6 +120,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [aiTopic, setAiTopic] = useState("探索未来世界的智能机器人生活碎片");
   const [aiSceneCount, setAiSceneCount] = useState(5);
   const [aiLoading, setAiLoading] = useState(false);
+  const [copyDraftMode, setCopyDraftMode] = useState<"full" | "segmented">("full");
+  const [copyDraft, setCopyDraft] = useState("");
+  const [copyDraftLoading, setCopyDraftLoading] = useState(false);
+  const [copyCharCount, setCopyCharCount] = useState(() => suggestCopyCharCount(5));
+  const [copyCharCountTouched, setCopyCharCountTouched] = useState(false);
+  const [copyCharCountMode, setCopyCharCountMode] = useState<"around" | "within">("around");
 
   // Manual Creation states (Scenes list)
   const [scenes, setScenes] = useState<Array<{ id: number; ttsText: string; visualPrompt: string }>>([
@@ -91,14 +152,21 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [minimaxModel, setMinimaxModel] = useState("speech-2.8-turbo");
   const [customAudioFile, setCustomAudioFile] = useState<string | null>(null);
   const [previewingTts, setPreviewingTts] = useState(false);
-  const [previewTtsText, setPreviewTtsText] = useState("这是一段 TTS 试听文案，用来检查音色、语速和发音效果。");
+  const [previewTtsText, setPreviewTtsText] = useState(DEFAULT_PREVIEW_TTS_TEXT);
   const [previewTtsAudioUrl, setPreviewTtsAudioUrl] = useState<string | null>(null);
+  const previewTtsTextUserEditedRef = React.useRef(false);
+  const autoPreviewTtsTextRef = React.useRef("");
+  const [synthesizingCopy, setSynthesizingCopy] = useState(false);
+  const [copyTtsAudioUrl, setCopyTtsAudioUrl] = useState<string | null>(null);
+  const [copyTtsDuration, setCopyTtsDuration] = useState<number | null>(null);
+  const [copyTtsSourceLabel, setCopyTtsSourceLabel] = useState("");
 
   // Layout Template states
   const [viewMode, setViewMode] = useState<"template" | "pure-image">("pure-image");
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [enableMotion, setEnableMotion] = useState(true);
   const [enableSubtitles, setEnableSubtitles] = useState(true);
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(DEFAULT_SUBTITLE_STYLE);
   const [imageAspectRatio, setImageAspectRatio] = useState("1024x1536");
   const [imageWidth, setImageWidth] = useState(1024);
   const [imageHeight, setImageHeight] = useState(1536);
@@ -112,12 +180,21 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [testImageError, setTestImageError] = useState<string | null>(null);
   const [testingImage, setTestingImage] = useState(false);
   const [savingPromptPrefix, setSavingPromptPrefix] = useState(false);
+  const [presetNameDraft, setPresetNameDraft] = useState("");
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false);
 
   const bgmOptions = resources.bgm;
   const templateOptions = resources.templates;
   const workflowOptions = resources.workflows;
+  const fontOptions = resources.fonts || [];
   const selectedBgm = bgmOptions.find((item) => item.id === bgm);
   const lastAppliedPresetId = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!copyCharCountTouched) {
+      setCopyCharCount(suggestCopyCharCount(aiSceneCount));
+    }
+  }, [aiSceneCount, copyCharCountTouched]);
 
   React.useEffect(() => {
     if (workflowOptions.length === 0) return;
@@ -196,6 +273,18 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setBgm(value);
   };
 
+  const updateSubtitleStyle = (patch: Partial<SubtitleStyle>) => {
+    setSubtitleStyle((current) => ({ ...current, ...patch }));
+  };
+
+  const handleSubtitleFontChange = (fontPath: string) => {
+    const font = fontOptions.find((item) => item.path === fontPath);
+    updateSubtitleStyle({
+      fontPath,
+      fontFamily: font?.name || "",
+    });
+  };
+
   const openCustomBgmFolder = async () => {
     try {
       const response = await fetch("/api/resources/bgm/select-folder", { method: "POST" });
@@ -207,6 +296,20 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       addToast("已保存自定义音乐文件夹，音乐列表已刷新。", "success");
     } catch (err: any) {
       addToast(err.message || "无法选择自定义音乐文件夹。", "error");
+    }
+  };
+
+  const openCustomFontFolder = async () => {
+    try {
+      const response = await fetch("/api/resources/fonts/select-folder", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || "无法选择自定义字体文件夹。");
+      }
+      await onRefreshResources();
+      addToast("已保存自定义字体文件夹，字体列表已刷新。", "success");
+    } catch (err: any) {
+      addToast(err.message || "无法选择自定义字体文件夹。", "error");
     }
   };
 
@@ -330,15 +433,94 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     }
   };
 
+  const getCurrentCopyForTts = () => {
+    const sceneTexts = scenes.map((scene) => scene.ttsText).map((text) => text.trim()).filter(Boolean);
+    const draftText = copyDraft.trim();
+
+    if (mode === "manual" && sceneTexts.length > 0) {
+      return {
+        text: sceneTexts.join("\n"),
+        label: `${sceneTexts.length} 段分镜旁白`,
+      };
+    }
+
+    if (mode === "ai" && draftText) {
+      return {
+        text: draftText,
+        label: copyDraftMode === "segmented" ? "分镜旁白草稿" : "完整口播稿",
+      };
+    }
+
+    return {
+      text: "",
+      label: "暂无可合成文案",
+    };
+  };
+
+  const formatCopyTtsDuration = (duration: number | null) => {
+    if (!duration || !Number.isFinite(duration)) return "--:--";
+    const minutes = Math.floor(duration / 60);
+    const seconds = Math.round(duration % 60);
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  };
+
+  const handleSynthesizeCurrentCopy = async () => {
+    const currentCopy = getCurrentCopyForTts();
+
+    if (!currentCopy.text.trim()) {
+      addToast("请先生成或填写当前文案，再合成音频。", "error");
+      return;
+    }
+
+    setSynthesizingCopy(true);
+    setCopyTtsAudioUrl(null);
+    setCopyTtsDuration(null);
+    setCopyTtsSourceLabel(currentCopy.label);
+
+    const copyInferenceMode = ttsMode === "edge" ? "local" : ttsMode;
+    const copyServiceName = ttsMode === "minimax" ? "MiniMax" : ttsMode === "comfyui" ? "ComfyUI" : "Edge";
+    addToast(`正在合成 ${copyServiceName} 当前文案音频...`, "info");
+
+    try {
+      const response = await fetch("/api/tts/synthesize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: currentCopy.text,
+          inference_mode: copyInferenceMode,
+          voice_id: voice,
+          speed,
+          minimax_model: ttsMode === "minimax" ? minimaxModel : undefined,
+          minimax_emotion: ttsMode === "minimax" ? emotion || undefined : undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || `${copyServiceName} 当前文案合成失败。`);
+      }
+
+      setCopyTtsAudioUrl(audioPathToUrl(data.audio_path));
+      setCopyTtsDuration(typeof data.duration === "number" ? data.duration : null);
+      addToast(`${copyServiceName} 当前文案音频已生成。`, "success");
+    } catch (err: any) {
+      addToast(err.message || "当前文案音频合成失败。", "error");
+    } finally {
+      setSynthesizingCopy(false);
+    }
+  };
+
   // Apply Preset
   React.useEffect(() => {
     if (activePreset) {
       if (lastAppliedPresetId.current === activePreset.id) {
         setPromptPrefix(activePreset.promptPrefix);
+        setPresetNameDraft(activePreset.name);
+        setSubtitleStyle({ ...DEFAULT_SUBTITLE_STYLE, ...(activePreset.subtitleStyle || {}) });
         return;
       }
 
       lastAppliedPresetId.current = activePreset.id;
+      setPresetNameDraft(activePreset.name);
       setTtsMode(activePreset.ttsMode);
       setVoice(activePreset.voice);
       setSpeed(activePreset.speed);
@@ -351,11 +533,82 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       if (activePreset.viewMode) setViewMode(activePreset.viewMode);
       if (activePreset.enableMotion !== undefined) setEnableMotion(activePreset.enableMotion);
       if (activePreset.enableSubtitles !== undefined) setEnableSubtitles(activePreset.enableSubtitles);
+      setSubtitleStyle({ ...DEFAULT_SUBTITLE_STYLE, ...(activePreset.subtitleStyle || {}) });
       setMinimaxModel(activePreset.minimaxModel || "speech-2.8-turbo");
       setEmotion(activePreset.emotion || "");
+      if (activePreset.sceneCount) setAiSceneCount(activePreset.sceneCount);
+      if (activePreset.copyCharCount) {
+        setCopyCharCount(activePreset.copyCharCount);
+        setCopyCharCountTouched(true);
+      }
+      if (activePreset.copyCharCountMode) setCopyCharCountMode(activePreset.copyCharCountMode);
+      if (activePreset.copyDraftMode) setCopyDraftMode(activePreset.copyDraftMode);
+      if (activePreset.mediaWidth) setImageWidth(activePreset.mediaWidth);
+      if (activePreset.mediaHeight) setImageHeight(activePreset.mediaHeight);
+      if (activePreset.imageAspectRatio) setImageAspectRatio(activePreset.imageAspectRatio);
       addToast(`已成功应用预设: ${activePreset.name}`, "success");
     }
   }, [activePreset]);
+
+  const maybeSyncCopyDraftToPreviewTts = (draftText: string) => {
+    const previewSentence = extractPreviewSentenceFromCopyDraft(draftText);
+    if (!previewSentence) return;
+
+    setPreviewTtsText((currentText) => {
+      const canAutoFill =
+        !previewTtsTextUserEditedRef.current ||
+        !currentText.trim() ||
+        currentText === DEFAULT_PREVIEW_TTS_TEXT ||
+        currentText === autoPreviewTtsTextRef.current;
+
+      if (!canAutoFill) return currentText;
+
+      autoPreviewTtsTextRef.current = previewSentence;
+      previewTtsTextUserEditedRef.current = false;
+      return previewSentence;
+    });
+  };
+
+  const handleGenerateCopyDraft = async () => {
+    if (!aiTopic.trim()) {
+      addToast("请输入创作主题，以便 AI 生成文案草稿", "error");
+      return;
+    }
+
+    setCopyDraftLoading(true);
+    addToast(
+      copyDraftMode === "full" ? "AI 正在生成口播稿草稿..." : "AI 正在生成分镜旁白草稿...",
+      "info"
+    );
+
+    try {
+      const response = await fetch("/api/generate-copy-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: aiTopic,
+          sceneCount: aiSceneCount,
+          draftMode: copyDraftMode,
+          targetCharCount: copyCharCount,
+          charCountMode: copyCharCountMode,
+          splitType,
+        }),
+      });
+      const resData = await response.json();
+      if (response.ok && resData.success) {
+        const draftText = resData.draftText || "";
+        setCopyDraft(draftText);
+        maybeSyncCopyDraftToPreviewTts(draftText);
+        addToast("AI 文案草稿已生成，你可以先预览或编辑。", "success");
+      } else {
+        addToast(resData.detail || resData.error || "文案草稿生成异常，请检查 LLM 设置。", "error");
+      }
+    } catch (err: any) {
+      addToast("连接服务器超时，请确保 dev 服务器就绪。", "error");
+    } finally {
+      setCopyDraftLoading(false);
+    }
+  };
 
   // AI Generation fetch via Gemini API route
   const handleAIGenerateScript = async () => {
@@ -363,8 +616,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       addToast("请输入创作主题，以便 AI 生成分镜脚本", "error");
       return;
     }
+    if (!copyDraft.trim()) {
+      addToast("请先生成或填写确认文案，再生成 AI 分镜脚本。", "error");
+      return;
+    }
     setAiLoading(true);
-    addToast("大模型正在深度构思分镜逻辑，请稍候...", "info");
+    addToast("大模型正在基于确认文案生成分镜脚本，请稍候...", "info");
 
     try {
       const response = await fetch("/api/generate-script", {
@@ -372,6 +629,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic: aiTopic,
+          confirmedText: copyDraft.trim(),
+          draftMode: copyDraftMode,
           sceneCount: aiSceneCount,
           splitType
         }),
@@ -411,6 +670,89 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setScenes(scenes.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
   };
 
+  const splitDraftByCurrentRule = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return [];
+
+    if (splitType === "paragraph") {
+      return trimmed.split(/\n\s*\n/).map((segment) => segment.trim()).filter(Boolean);
+    }
+
+    if (splitType === "sentence") {
+      return trimmed.match(/[^。！？.!?\n]+[。！？.!?]?/g)?.map((segment) => segment.trim()).filter(Boolean) || [];
+    }
+
+    return trimmed.split(/\r?\n/).map((segment) => segment.trim()).filter(Boolean);
+  };
+
+  const rebalanceDraftSegments = (segments: string[], targetCount: number) => {
+    const cleanSegments = segments.map((segment) => segment.trim()).filter(Boolean);
+    const safeTargetCount = Math.max(1, targetCount);
+
+    if (cleanSegments.length === safeTargetCount) return cleanSegments;
+
+    if (cleanSegments.length > safeTargetCount) {
+      return Array.from({ length: safeTargetCount }, (_, index) => {
+        const start = Math.floor((index * cleanSegments.length) / safeTargetCount);
+        const end = Math.floor(((index + 1) * cleanSegments.length) / safeTargetCount);
+        return cleanSegments.slice(start, Math.max(end, start + 1)).join("").trim();
+      }).filter(Boolean);
+    }
+
+    const mergedText = cleanSegments.join("");
+    if (!mergedText) return [];
+
+    const chars = Array.from(mergedText);
+    const chunkSize = Math.ceil(chars.length / safeTargetCount);
+    return Array.from({ length: safeTargetCount }, (_, index) =>
+      chars.slice(index * chunkSize, (index + 1) * chunkSize).join("").trim()
+    ).filter(Boolean);
+  };
+
+  const splitFullCopyDraftForRender = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return [];
+
+    const units = trimmed.match(/[^。！？.!?\n]+[。！？.!?]?/g)?.map((segment) => segment.trim()).filter(Boolean) || [trimmed];
+    return rebalanceDraftSegments(units, aiSceneCount);
+  };
+
+  const buildScenesForRender = () => {
+    if (mode === "manual") {
+      return scenes.map((scene) => ({
+        id: scene.id,
+        ttsText: scene.ttsText.trim(),
+        visualPrompt: scene.visualPrompt,
+      }));
+    }
+
+    if (mode === "ai") {
+      const draftText = copyDraft.trim();
+      if (!draftText) return [];
+
+      const draftSegments =
+        copyDraftMode === "full"
+          ? splitFullCopyDraftForRender(draftText)
+          : splitDraftByCurrentRule(draftText);
+
+      return draftSegments.map((ttsText, index) => ({
+        id: index + 1,
+        ttsText,
+        visualPrompt: "",
+      }));
+    }
+
+    return batchInput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((ttsText, index) => ({
+        id: index + 1,
+        ttsText,
+        visualPrompt: "",
+      }));
+  };
+
   // Trigger main generator callback
   const handleTriggerRender = () => {
     if (!title.trim()) {
@@ -418,8 +760,20 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       return;
     }
 
-    if (mode === "manual" && scenes.some((s) => !s.ttsText.trim())) {
+    const renderScenes = buildScenesForRender();
+
+    if (mode === "ai" && renderScenes.length === 0) {
+      addToast("请先生成或填写确认文案，再开始生成视频。", "error");
+      return;
+    }
+
+    if (mode === "manual" && renderScenes.some((s) => !s.ttsText.trim())) {
       addToast("检测到未填写的旁白文本，请完善每一个分镜！", "error");
+      return;
+    }
+
+    if (renderScenes.length === 0) {
+      addToast("没有可用于生成视频的文案内容。", "error");
       return;
     }
 
@@ -441,19 +795,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       viewMode,
       enableMotion,
       enableSubtitles,
+      subtitleStyle,
       splitType,
-      scenes: mode === "manual" ? scenes : [
-        { id: 1, ttsText: aiTopic, visualPrompt: "Creative visualization of: " + aiTopic }
-      ]
+      scenes: renderScenes
     };
 
     onGenerateTask(taskInput);
   };
 
-  // Preset Save Callback
-  const handleTriggerSavePreset = () => {
-    const presetData = {
-      name: `预设-${title.substring(0, 8)}`,
+  const buildWorkbenchPreset = (name: string): Omit<Preset, "id"> => ({
+      name,
       ttsMode,
       voice,
       speed,
@@ -466,21 +817,65 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       viewMode,
       enableMotion,
       enableSubtitles,
+      subtitleStyle,
       minimaxModel,
       emotion: emotion || undefined,
+      sceneCount: aiSceneCount,
+      copyCharCount,
+      copyCharCountMode,
+      copyDraftMode,
       mediaWidth: imageWidth,
-      mediaHeight: imageHeight
-    };
-    onSavePreset(presetData);
+      mediaHeight: imageHeight,
+      imageAspectRatio
+  });
+
+  const getPresetName = () => {
+    const fallbackName = `预设-${title.trim().slice(0, 8) || "工作台"}`;
+    return presetNameDraft.trim() || activePreset?.name || fallbackName;
+  };
+
+  const handleCreatePreset = async () => {
+    await onCreatePreset(buildWorkbenchPreset(getPresetName()));
+    setPresetMenuOpen(false);
+  };
+
+  const handleUpdatePreset = async () => {
+    if (!activePreset) {
+      await handleCreatePreset();
+      return;
+    }
+    await onUpdatePreset(activePreset.id, {
+      ...activePreset,
+      ...buildWorkbenchPreset(getPresetName()),
+      id: activePreset.id,
+    });
+    setPresetMenuOpen(false);
+  };
+
+  const handleDeletePreset = async () => {
+    if (!activePreset) return;
+    await onDeletePreset(activePreset.id);
+    setPresetMenuOpen(false);
+  };
+
+  const handleSetDefaultPreset = async () => {
+    if (!activePreset) return;
+    await onSetDefaultPreset(activePreset.id);
+    setPresetMenuOpen(false);
   };
 
   const currentWorkflow = workflowOptions.find((w) => w.id === workflowId);
   const selectedTemplateOption = templateOptions.find((template) => template.id === selectedTemplate);
+  const averageCopyCharsPerStoryboard = Math.max(1, Math.round(copyCharCount / Math.max(aiSceneCount, 1)));
+  const estimatedCopySeconds = estimateNarrationSeconds(copyCharCount);
+  const currentCopyForTts = getCurrentCopyForTts();
+  const copyTtsDownloadName = `${title.trim() || "pixelle"}-current-copy-tts.mp3`.replace(/[\\/:*?"<>|]+/g, "-");
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-4xl pb-10">
+    <div className="space-y-6 animate-fade-in w-full max-w-[1240px] mx-auto pb-10">
       {/* Task Header Title */}
-      <div className="bg-[#101114] border border-zinc-900 rounded-md p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-[#101114] border border-zinc-900 rounded-md p-3.5 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex-1">
           <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-0.5">
             当前生产项目名称 / Project Title
@@ -492,12 +887,96 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             className="bg-transparent border-b border-zinc-800 text-zinc-100 font-medium text-sm w-full py-0.5 focus:outline-none focus:border-amber-500 font-display transition-colors"
           />
         </div>
-        <button
-          onClick={handleTriggerSavePreset}
-          className="px-3 py-1.5 text-xs text-amber-500 border border-amber-500/20 hover:border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 rounded font-medium flex items-center gap-1 flex-shrink-0 transition-colors"
-        >
-          保存为常用预设
-        </button>
+        <div className="text-[10px] text-zinc-600 font-mono">
+          {activePreset ? `当前预设: ${activePreset.name}` : "尚未选择预设"}
+          {activePreset?.id === defaultPresetId && " · 默认"}
+        </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(180px,260px)_minmax(180px,1fr)_auto] gap-2 items-end">
+          <div>
+            <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+              工作台预设 / Workspace Preset
+            </label>
+            <select
+              value={activePreset?.id || ""}
+              onChange={(e) => {
+                const preset = presets.find((item) => item.id === e.target.value);
+                if (preset) onSelectPreset(preset);
+              }}
+              className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+            >
+              <option value="">选择工作台预设</option>
+              {presets.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name}{preset.id === defaultPresetId ? " · 默认" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+              预设名称
+            </label>
+            <input
+              type="text"
+              value={presetNameDraft}
+              onChange={(e) => setPresetNameDraft(e.target.value)}
+              placeholder="例如：小红书竖屏口播"
+              className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 justify-start xl:justify-end relative">
+            <button
+              type="button"
+              onClick={handleUpdatePreset}
+              disabled={!activePreset}
+              className="px-3 py-1.5 text-xs bg-zinc-800 text-zinc-300 hover:text-white disabled:text-zinc-600 disabled:bg-zinc-900 rounded border border-zinc-750 hover:border-amber-500/40 font-medium flex items-center gap-1.5 transition-colors"
+            >
+              <Save className="w-3.5 h-3.5 text-amber-500" />
+              覆盖当前预设
+            </button>
+            <button
+              type="button"
+              onClick={handleCreatePreset}
+              className="px-3 py-1.5 text-xs text-black bg-amber-500 hover:bg-amber-400 rounded border border-amber-400/40 font-semibold flex items-center gap-1.5 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5 text-black" />
+              另存为
+            </button>
+            <button
+              type="button"
+              onClick={() => setPresetMenuOpen((open) => !open)}
+              className="px-2.5 py-1.5 text-xs text-zinc-400 bg-[#17181c] hover:text-zinc-100 rounded border border-zinc-800 hover:border-zinc-700 flex items-center gap-1 transition-colors"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+              更多
+            </button>
+
+            {presetMenuOpen && (
+              <div className="absolute right-0 top-full mt-1.5 z-20 w-36 bg-[#101114] border border-zinc-800 rounded shadow-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={handleSetDefaultPreset}
+                  disabled={!activePreset || activePreset.id === defaultPresetId}
+                  className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:bg-zinc-900 disabled:text-zinc-600"
+                >
+                  设为默认
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeletePreset}
+                  disabled={!activePreset}
+                  className="w-full px-3 py-2 text-left text-xs text-rose-300 hover:bg-rose-950/20 disabled:text-zinc-600"
+                >
+                  删除预设
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* 1. Creative Mode Tab Switches */}
@@ -553,12 +1032,59 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 className="w-full h-24 bg-[#17181c] border border-zinc-800 rounded p-2.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 placeholder-zinc-650"
               />
             </div>
+
+            <div className="bg-[#17181c] border border-zinc-850 rounded-md p-3 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <label className="block text-xs font-medium text-zinc-400">文案生成方式</label>
+                <div className="flex gap-1.5 bg-[#101114] border border-zinc-900 p-0.5 rounded">
+                  <button
+                    type="button"
+                    onClick={() => setCopyDraftMode("full")}
+                    className={`px-2.5 py-1 text-[10px] rounded transition-all ${
+                      copyDraftMode === "full" ? "bg-amber-500/10 text-amber-400 font-medium" : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    整篇口播稿
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCopyDraftMode("segmented")}
+                    className={`px-2.5 py-1 text-[10px] rounded transition-all ${
+                      copyDraftMode === "segmented" ? "bg-amber-500/10 text-amber-400 font-medium" : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    分镜旁白列表
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-3 mb-1.5">
+                  <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                    AI 生成文案草稿 / Editable Copy Draft
+                  </label>
+                  <span className="text-[10px] text-zinc-600">
+                    {copyDraftMode === "full" ? "先确认完整口播，再智能拆分" : "一段对应一个分镜旁白"}
+                  </span>
+                </div>
+                <textarea
+                  value={copyDraft}
+                  onChange={(e) => setCopyDraft(e.target.value)}
+                  placeholder={
+                    copyDraftMode === "full"
+                      ? "点击“生成口播稿草稿”后，AI 会在这里生成一整篇可编辑口播稿。你也可以直接粘贴自己的成稿。"
+                      : "点击“生成分镜旁白草稿”后，AI 会在这里按段落生成旁白列表。你可以逐段修改，每段会进入一个分镜。"
+                  }
+                  className="w-full min-h-36 max-h-80 bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 placeholder-zinc-650 resize-y leading-relaxed"
+                />
+              </div>
+            </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="font-medium text-zinc-400">分镜切片数量: {aiSceneCount} 帧</span>
-                  <span className="text-[10px] text-zinc-500 font-mono">建议 5-10 帧</span>
+                  <span className="font-medium text-zinc-400">分镜切片数量: {aiSceneCount} 个分镜</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">建议 5-10 个分镜</span>
                 </div>
                 <input
                   type="range"
@@ -569,6 +1095,35 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   onChange={(e) => setAiSceneCount(parseInt(e.target.value))}
                   className="w-full accent-amber-500 cursor-pointer h-1.5 bg-zinc-800 rounded"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">文案总字数</label>
+                <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-1.5">
+                  <input
+                    type="number"
+                    min="50"
+                    max="3000"
+                    step="10"
+                    value={copyCharCount}
+                    onChange={(e) => {
+                      setCopyCharCountTouched(true);
+                      setCopyCharCount(parseInt(e.target.value || "120"));
+                    }}
+                    className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  />
+                  <select
+                    value={copyCharCountMode}
+                    onChange={(e: any) => setCopyCharCountMode(e.target.value)}
+                    className="w-full bg-[#17181c] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="around">字左右</option>
+                    <option value="within">字以内</option>
+                  </select>
+                </div>
+                <p className="mt-1 text-[10px] text-zinc-500 leading-relaxed">
+                  预计口播 {estimatedCopySeconds} 秒 · 每分镜约 {averageCopyCharsPerStoryboard} 字
+                </p>
               </div>
 
               <div>
@@ -585,11 +1140,30 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               </div>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-zinc-900">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2 border-t border-zinc-900">
               <button
+                type="button"
+                onClick={handleGenerateCopyDraft}
+                disabled={copyDraftLoading || aiLoading}
+                className="px-4 py-1.5 bg-zinc-800 text-zinc-300 hover:text-white disabled:bg-zinc-900 disabled:text-zinc-600 border border-zinc-750 hover:border-amber-500/40 text-xs font-semibold rounded shadow-md flex items-center justify-center gap-1.5 transition-colors"
+              >
+                {copyDraftLoading ? (
+                  <>
+                    <Loader className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                    AI 正在生成文案...
+                  </>
+                ) : (
+                  <>
+                    <Edit3 className="w-3.5 h-3.5 text-amber-500" />
+                    {copyDraftMode === "full" ? "生成口播稿草稿" : "生成分镜旁白草稿"}
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
                 onClick={handleAIGenerateScript}
-                disabled={aiLoading}
-                className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-800 text-black font-semibold text-xs rounded shadow-md flex items-center gap-1.5 transition-colors"
+                disabled={aiLoading || copyDraftLoading}
+                className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-800 text-black disabled:text-zinc-500 font-semibold text-xs rounded shadow-md flex items-center justify-center gap-1.5 transition-colors"
               >
                 {aiLoading ? (
                   <>
@@ -599,7 +1173,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 ) : (
                   <>
                     <Sparkles className="w-3.5 h-3.5 text-black" />
-                    生成 AI 分镜脚本
+                    基于确认文案生成 AI 分镜脚本
                   </>
                 )}
               </button>
@@ -638,7 +1212,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                         分镜配音旁白 (TTS Text)
                       </label>
                       <textarea
-                        placeholder="请输入本帧念出来的配音旁白文案..."
+                        placeholder="请输入本分镜念出来的配音旁白文案..."
                         value={scene.ttsText}
                         onChange={(e) => updateScene(scene.id, "ttsText", e.target.value)}
                         rows={3}
@@ -650,7 +1224,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                         画面视觉绘图 Prompt (英文最佳)
                       </label>
                       <textarea
-                        placeholder="请输入本帧的画面提示词，留空将沿用主题..."
+                        placeholder="请输入本分镜的画面提示词，留空将沿用主题..."
                         value={scene.visualPrompt}
                         onChange={(e) => updateScene(scene.id, "visualPrompt", e.target.value)}
                         rows={3}
@@ -809,7 +1383,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               </label>
               <textarea
                 value={previewTtsText}
-                onChange={(e) => setPreviewTtsText(e.target.value)}
+                onChange={(e) => {
+                  previewTtsTextUserEditedRef.current = true;
+                  setPreviewTtsText(e.target.value);
+                }}
                 rows={3}
                 className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 leading-relaxed resize-none focus:outline-none focus:border-amber-500"
                 placeholder="输入一段用于试听配音效果的文案"
@@ -850,6 +1427,64 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   试听 TTS 语音
                 </button>
               </div>
+            </div>
+
+            <div className="bg-[#17181c] p-2.5 rounded border border-zinc-850 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                    当前文案音频 / Current Copy
+                  </span>
+                  <span className="text-[10px] text-zinc-500">
+                    {currentCopyForTts.label}
+                    {currentCopyForTts.text && ` · ${currentCopyForTts.text.length} 字`}
+                  </span>
+                </div>
+                <button
+                  onClick={handleSynthesizeCurrentCopy}
+                  disabled={synthesizingCopy || !currentCopyForTts.text}
+                  className="px-2.5 py-1 bg-amber-500 text-black hover:bg-amber-400 disabled:bg-zinc-800 disabled:text-zinc-500 rounded border border-amber-400/40 disabled:border-zinc-750 text-xs font-semibold flex items-center gap-1 transition-colors"
+                >
+                  {synthesizingCopy ? <Loader className="w-3 h-3 animate-spin text-black" /> : <Volume2 className="w-3 h-3 text-black" />}
+                  合成当前文案
+                </button>
+              </div>
+
+              {copyTtsAudioUrl && (
+                <div className="space-y-2 pt-2 border-t border-zinc-850">
+                  <audio
+                    src={copyTtsAudioUrl}
+                    controls
+                    className="w-full h-8"
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      时长 {formatCopyTtsDuration(copyTtsDuration)} · {copyTtsSourceLabel}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={copyTtsAudioUrl}
+                        download={copyTtsDownloadName}
+                        className="px-2 py-1 text-[10px] bg-zinc-800 text-zinc-300 hover:text-white rounded border border-zinc-750 hover:border-zinc-650 flex items-center gap-1 transition-colors"
+                      >
+                        <Download className="w-3 h-3 text-amber-500" />
+                        下载音频
+                      </a>
+                      <button
+                        onClick={() => {
+                          setCopyTtsAudioUrl(null);
+                          setCopyTtsDuration(null);
+                          setCopyTtsSourceLabel("");
+                        }}
+                        className="px-2 py-1 text-[10px] bg-zinc-900 text-zinc-400 hover:text-rose-300 rounded border border-zinc-800 hover:border-rose-900/70 flex items-center gap-1 transition-colors"
+                      >
+                        <XCircle className="w-3 h-3 text-rose-400" />
+                        清除音频
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1175,6 +1810,171 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <span className="text-[10px] text-zinc-500 block">自动对其 TTS 脚本音频进行叠字渲染</span>
               </div>
             </label>
+
+            {enableSubtitles && (
+              <div className="sm:col-span-2 bg-[#17181c] border border-zinc-900 rounded p-3 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-zinc-300">字幕样式</span>
+                  <select
+                    value={subtitleStyle.preset}
+                    onChange={(e) => updateSubtitleStyle({ preset: e.target.value as SubtitleStyle["preset"] })}
+                    className="bg-[#101114] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="short-video-bold">短视频粗体</option>
+                    <option value="clean-white">清爽白字</option>
+                    <option value="cinema-soft">电影柔光</option>
+                    <option value="caption-box">字幕黑底框</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      字体 / Font
+                    </label>
+                    <select
+                      value={subtitleStyle.fontPath || ""}
+                      onChange={(e) => handleSubtitleFontChange(e.target.value)}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="">自动选择中文字体</option>
+                      {fontOptions.map((font) => (
+                        <option key={font.path} value={font.path}>
+                          {font.name} · {font.source}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openCustomFontFolder}
+                    className="self-end inline-flex items-center justify-center gap-1.5 bg-[#101114] border border-zinc-800 hover:border-amber-500/60 text-zinc-300 rounded px-3 py-1.5 text-xs transition-colors"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    自定义字体文件夹
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      字号
+                    </label>
+                    <input
+                      type="number"
+                      min="12"
+                      max="120"
+                      value={subtitleStyle.fontSize}
+                      onChange={(e) => updateSubtitleStyle({ fontSize: parseInt(e.target.value || "52", 10) })}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      描边
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="12"
+                      value={subtitleStyle.outlineWidth}
+                      onChange={(e) => updateSubtitleStyle({ outlineWidth: parseInt(e.target.value || "3", 10) })}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      底部距离
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="600"
+                      value={subtitleStyle.marginV}
+                      onChange={(e) => updateSubtitleStyle({ marginV: parseInt(e.target.value || "120", 10) })}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      每行字数
+                    </label>
+                    <input
+                      type="number"
+                      min="4"
+                      max="40"
+                      value={subtitleStyle.maxCharsPerLine}
+                      onChange={(e) => updateSubtitleStyle({ maxCharsPerLine: parseInt(e.target.value || "14", 10) })}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                  {[
+                    ["文字", "primaryColor"],
+                    ["强调", "accentColor"],
+                    ["描边色", "outlineColor"],
+                    ["底色", "backColor"],
+                  ].map(([label, key]) => (
+                    <label key={key} className="block">
+                      <span className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                        {label}
+                      </span>
+                      <input
+                        type="color"
+                        value={subtitleStyle[key as keyof SubtitleStyle] as string}
+                        onChange={(e) => updateSubtitleStyle({ [key]: e.target.value } as Partial<SubtitleStyle>)}
+                        className="w-full h-8 bg-[#101114] border border-zinc-900 rounded px-1 py-1"
+                      />
+                    </label>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      分段方式
+                    </label>
+                    <select
+                      value={subtitleStyle.segmentMode}
+                      onChange={(e) => updateSubtitleStyle({ segmentMode: e.target.value as SubtitleStyle["segmentMode"] })}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="phrase">短句切分</option>
+                      <option value="sentence">按句号切分</option>
+                      <option value="line">按换行切分</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      行数
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="4"
+                      value={subtitleStyle.maxLines}
+                      onChange={(e) => updateSubtitleStyle({ maxLines: parseInt(e.target.value || "2", 10) })}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      动画
+                    </label>
+                    <select
+                      value={subtitleStyle.animation}
+                      onChange={(e) => updateSubtitleStyle({ animation: e.target.value as SubtitleStyle["animation"] })}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="fade">淡入淡出</option>
+                      <option value="none">无动画</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
             </div>
           </div>
         )}

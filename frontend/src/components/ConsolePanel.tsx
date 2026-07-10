@@ -116,7 +116,7 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
   addToast,
 }) => {
   return (
-    <div className="bg-[#101114] border-l border-zinc-900 w-full lg:w-80 flex-shrink-0 flex flex-col h-full overflow-y-auto">
+    <div className="bg-[#101114] border-l border-zinc-900 w-full lg:w-96 xl:w-[400px] flex-shrink-0 flex flex-col h-full overflow-y-auto">
       {/* 1. Header Title */}
       <div className="p-3 border-b border-zinc-900 bg-[#0c0d10] flex items-center justify-between">
         <span className="text-xs font-semibold text-zinc-300 font-mono tracking-wider uppercase">

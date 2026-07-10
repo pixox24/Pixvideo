@@ -95,6 +95,86 @@ def test_motion_output_uses_supersampled_zoompan_canvas(monkeypatch, tmp_path):
     assert "scale=360:640:flags=lanczos" in captured["command"]
 
 
+def test_create_video_from_image_with_motion_uses_ass_subtitles(monkeypatch, tmp_path):
+    captured = {}
+    image_path = tmp_path / "image.png"
+    audio_path = tmp_path / "audio.wav"
+    output_path = tmp_path / "segment.mp4"
+
+    Image.new("RGB", (640, 960), color=(80, 120, 160)).save(image_path)
+    audio_path.write_bytes(b"placeholder")
+
+    service = VideoService()
+    monkeypatch.setattr(service, "_ensure_ffmpeg", lambda: None)
+    monkeypatch.setattr(service, "_get_audio_duration", lambda _audio: 1.0)
+    monkeypatch.setattr(service, "_ffmpeg_filter_available", lambda name: name in {"subtitles"})
+
+    def fake_run(self, *args, **kwargs):
+        captured["command"] = " ".join(str(arg) for arg in self.get_args())
+        output_path.write_bytes(b"video")
+        return b"", b""
+
+    monkeypatch.setattr("ffmpeg.nodes.OutputStream.run", fake_run)
+
+    service.create_video_from_image_with_motion(
+        image=str(image_path),
+        audio=str(audio_path),
+        output=str(output_path),
+        fps=24,
+        width=360,
+        height=640,
+        subtitle_text="测试字幕第一句。测试字幕第二句。",
+        subtitle_enabled=True,
+        subtitle_style={"mode": "ass", "fontSize": 48, "segmentMode": "sentence"},
+        motion_enabled=True,
+    )
+
+    assert "subtitles=" in captured["command"]
+    assert "drawtext" not in captured["command"]
+
+
+def test_create_video_from_image_with_motion_passes_custom_font_dir_to_ass(monkeypatch, tmp_path):
+    captured = {}
+    image_path = tmp_path / "image.png"
+    audio_path = tmp_path / "audio.wav"
+    output_path = tmp_path / "segment.mp4"
+    font_dir = tmp_path / "fonts"
+    font_dir.mkdir()
+    font_path = font_dir / "BrandFont.ttf"
+    font_path.write_bytes(b"font")
+
+    Image.new("RGB", (640, 960), color=(80, 120, 160)).save(image_path)
+    audio_path.write_bytes(b"placeholder")
+
+    service = VideoService()
+    monkeypatch.setattr(service, "_ensure_ffmpeg", lambda: None)
+    monkeypatch.setattr(service, "_get_audio_duration", lambda _audio: 1.0)
+    monkeypatch.setattr(service, "_ffmpeg_filter_available", lambda name: name in {"subtitles"})
+
+    def fake_run(self, *args, **kwargs):
+        captured["command"] = " ".join(str(arg) for arg in self.get_args())
+        output_path.write_bytes(b"video")
+        return b"", b""
+
+    monkeypatch.setattr("ffmpeg.nodes.OutputStream.run", fake_run)
+
+    service.create_video_from_image_with_motion(
+        image=str(image_path),
+        audio=str(audio_path),
+        output=str(output_path),
+        fps=24,
+        width=360,
+        height=640,
+        subtitle_text="测试自定义字体字幕",
+        subtitle_enabled=True,
+        subtitle_style={"mode": "ass", "fontPath": str(font_path), "fontFamily": "BrandFont"},
+        motion_enabled=True,
+    )
+
+    assert "fontsdir=" in captured["command"]
+    assert str(font_dir) in captured["command"]
+
+
 def test_create_video_from_image_with_motion_validates_mode(tmp_path):
     service = VideoService()
 

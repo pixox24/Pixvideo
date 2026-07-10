@@ -10,6 +10,8 @@ export type ActiveTab =
 export interface Preset {
   id: string;
   name: string;
+  createdAt?: string;
+  updatedAt?: string;
   ttsMode: "edge" | "comfyui" | "minimax";
   voice: string;
   speed: number;
@@ -24,6 +26,14 @@ export interface Preset {
   enableSubtitles?: boolean;
   minimaxModel?: string;
   emotion?: string;
+  sceneCount?: number;
+  copyCharCount?: number;
+  copyCharCountMode?: "around" | "within";
+  copyDraftMode?: "full" | "segmented";
+  mediaWidth?: number;
+  mediaHeight?: number;
+  imageAspectRatio?: string;
+  subtitleStyle?: SubtitleStyle;
 }
 
 export interface Task {
@@ -106,6 +116,32 @@ export interface BgmOption {
   src?: string;
 }
 
+export interface SubtitleStyle {
+  mode: "drawtext" | "ass";
+  preset: "clean-white" | "short-video-bold" | "cinema-soft" | "caption-box";
+  fontFamily?: string;
+  fontPath?: string;
+  fontSize: number;
+  primaryColor: string;
+  accentColor: string;
+  outlineColor: string;
+  backColor: string;
+  outlineWidth: number;
+  shadow: number;
+  marginV: number;
+  alignment: number;
+  maxCharsPerLine: number;
+  maxLines: number;
+  animation: "none" | "fade";
+  segmentMode: "line" | "sentence" | "phrase";
+}
+
+export interface FontOption {
+  name: string;
+  path: string;
+  source: string;
+}
+
 export interface TemplateOption {
   id: string;
   name: string;
@@ -119,4 +155,5 @@ export interface WorkbenchResources {
   workflows: WorkflowOption[];
   bgm: BgmOption[];
   templates: TemplateOption[];
+  fonts: FontOption[];
 }

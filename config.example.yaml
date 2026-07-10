@@ -105,3 +105,8 @@ quick_create:
   custom_bgm_folder: null
   bgm_path: default.mp3
   bgm_volume: 0.2
+
+# ==================== Subtitle Defaults ====================
+subtitle:
+  custom_font_folder: null
+  default_style: {}

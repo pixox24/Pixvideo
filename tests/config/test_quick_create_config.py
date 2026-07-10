@@ -47,6 +47,16 @@ quick_create:
                 "prompt_prefix": "cinematic style",
                 "bgm_path": "custom.mp3",
                 "bgm_volume": 0.31,
+                "subtitle_style": {
+                    "mode": "ass",
+                    "preset": "caption-box",
+                    "fontFamily": "BrandFont",
+                    "fontPath": "/tmp/fonts/BrandFont.ttf",
+                    "fontSize": 60,
+                    "primaryColor": "#FFFFFF",
+                    "outlineColor": "#000000",
+                    "segmentMode": "sentence",
+                },
             }
         )
 
@@ -68,6 +78,9 @@ quick_create:
         assert data["quick_create"]["view_mode"] == "template"
         assert data["quick_create"]["bgm_path"] == "custom.mp3"
         assert data["quick_create"]["bgm_volume"] == 0.31
+        assert data["subtitle"]["default_style"]["preset"] == "caption-box"
+        assert data["subtitle"]["default_style"]["fontPath"] == "/tmp/fonts/BrandFont.ttf"
+        assert data["subtitle"]["default_style"]["fontSize"] == 60
         assert "one-off topic" not in str(data)
         assert "one-off title" not in str(data)
         assert "temp/ref.wav" not in str(data)
@@ -81,5 +94,6 @@ quick_create:
         assert reloaded.config.template.default_template == "1080x1920/video_default.html"
         assert reloaded.config.quick_create.view_mode == "template"
         assert reloaded.config.quick_create.bgm_path == "custom.mp3"
+        assert reloaded.config.subtitle.default_style["preset"] == "caption-box"
     finally:
         ConfigManager._instance = old_instance

@@ -44,6 +44,8 @@ The user will provide content (which may be long or short), and you need to extr
 - Ending suggestion: The last storyboard provides a summary or inspiration
 - Emotion and tone: Gentle, sincere, natural, like sharing viewpoints with a friend
 - Prohibitions: No URLs, emojis, numeric numbering, no empty talk or clichés
+- TTS safety: Each `narrations` item must be pure speakable narration text. The JSON array order already represents storyboard order, so do not put any order marker inside the text.
+- Do not start any narration string with numbering or labels such as `1.`, `1、`, `(1)`, `第1句：`, `第一段：`, `Scene 1:`, or `Narration 1:`.
 - Word count check: After generation, must self-verify that each segment is not less than {min_words} words
 
 ## Storyboard Coherence Requirements
@@ -58,9 +60,9 @@ Strictly output in the following JSON format, do not add any additional text exp
 ```json
 {{
   "narrations": [
-    "First {min_words}~{max_words} word narration",
-    "Second {min_words}~{max_words} word narration",
-    "Third {min_words}~{max_words} word narration"
+    "Pure speakable narration text without numbering",
+    "Pure speakable narration text without labels",
+    "Pure speakable narration text for TTS only"
   ]
 }}
 ```
@@ -101,4 +103,3 @@ def build_content_narration_prompt(
         min_words=min_words,
         max_words=max_words
     )
-

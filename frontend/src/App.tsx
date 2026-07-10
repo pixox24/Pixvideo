@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Select } from "./components/Select";
 import {
   Sparkles,
   Layers,
@@ -39,6 +40,10 @@ import {
   mapHistoryTask,
   optimisticTaskFromInput,
   resumeHistoryTask,
+  submitActionTransferTask,
+  submitCustomMediaTask,
+  submitDigitalHumanTask,
+  submitImageToVideoTask,
   submitVideoTask,
 } from "./lib/api";
 
@@ -340,7 +345,15 @@ export default function App() {
     addToast(`开始提交视频渲染任务: ${taskInput.title}`, "info");
 
     try {
-      const response = await submitVideoTask(taskInput);
+      const response = taskInput.tabType === "custom-media"
+        ? await submitCustomMediaTask(taskInput)
+        : taskInput.tabType === "image-to-video"
+          ? await submitImageToVideoTask(taskInput)
+          : taskInput.tabType === "action-transfer"
+            ? await submitActionTransferTask(taskInput)
+            : taskInput.tabType === "digital-human"
+              ? await submitDigitalHumanTask(taskInput)
+          : await submitVideoTask(taskInput);
       const backendTask = { ...optimisticTask, id: response.task_id };
       setTasks((prev) =>
         prev.map((task) => (task.id === tempTaskId ? backendTask : task))
@@ -617,7 +630,7 @@ export default function App() {
               <label className="block text-[9px] text-zinc-650 font-mono uppercase mb-1">
                 已载入云端预设:
               </label>
-              <select
+              <Select
                 onChange={(e) => {
                   const p = presets.find((pr) => pr.id === e.target.value);
                   if (p) setActivePreset(p);
@@ -630,7 +643,7 @@ export default function App() {
                     {p.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
         </div>

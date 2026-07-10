@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Select } from "./Select";
 import { SubtitleStylePreview } from "./SubtitleStylePreview";
 import {
   Sparkles,
@@ -899,7 +900,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
               工作台预设 / Workspace Preset
             </label>
-            <select
+            <Select
               value={activePreset?.id || ""}
               onChange={(e) => {
                 const preset = presets.find((item) => item.id === e.target.value);
@@ -913,7 +914,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   {preset.name}{preset.id === defaultPresetId ? " · 默认" : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div>
@@ -1113,14 +1114,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     }}
                     className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                   />
-                  <select
+                  <Select
                     value={copyCharCountMode}
                     onChange={(e: any) => setCopyCharCountMode(e.target.value)}
                     className="w-full bg-[#17181c] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                   >
                     <option value="around">字左右</option>
                     <option value="within">字以内</option>
-                  </select>
+                  </Select>
                 </div>
                 <p className="mt-1 text-[10px] text-zinc-500 leading-relaxed">
                   预计口播 {estimatedCopySeconds} 秒 · 每分镜约 {averageCopyCharsPerStoryboard} 字
@@ -1129,7 +1130,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1">切分规则方式</label>
-                <select
+                <Select
                   value={splitType}
                   onChange={(e: any) => setSplitType(e.target.value)}
                   className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -1137,7 +1138,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   <option value="paragraph">按段落智能切分</option>
                   <option value="line">按每一行/换行切分</option>
                   <option value="sentence">按句子标点切分</option>
-                </select>
+                </Select>
               </div>
             </div>
 
@@ -1312,7 +1313,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                 选择合成音色及风格 / Voice Model
               </label>
-              <select
+              <Select
                 value={voice}
                 onChange={(e) => setVoice(e.target.value)}
                 className="w-full bg-[#17181c] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -1322,7 +1323,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     {v.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             {/* Sub options if MiniMax */}
@@ -1330,7 +1331,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               <div className="grid grid-cols-2 gap-2 bg-[#17181c] p-2 rounded border border-zinc-850">
                 <div>
                   <label className="block text-[9px] text-zinc-500 mb-0.5">声音情感 / Emotion</label>
-                  <select
+                  <Select
                     value={emotion}
                     onChange={(e) => setEmotion(e.target.value)}
                     className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -1345,11 +1346,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     <option value="calm">平静克制 (Calm)</option>
                     <option value="fluent">流畅自然 (Fluent)</option>
                     <option value="whisper">低声耳语 (Whisper)</option>
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-[9px] text-zinc-500 mb-0.5">MiniMax 基座模型</label>
-                  <select
+                  <Select
                     value={minimaxModel}
                     onChange={(e) => setMinimaxModel(e.target.value)}
                     className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -1360,7 +1361,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     <option value="speech-2.6-hd">speech-2.6-hd</option>
                     <option value="speech-02-turbo">speech-02-turbo</option>
                     <option value="speech-02-hd">speech-02-hd</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
             )}
@@ -1503,7 +1504,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 选择背景配乐 / Background Audio
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
-                <select
+                <Select
                   value={bgm}
                   onChange={(e) => handleBgmChange(e.target.value)}
                   className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -1513,7 +1514,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       {b.name}{b.author ? ` · ${b.author}` : ""}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <button
                   type="button"
                   onClick={() => selectedBgm?.src && toggleBgmListen(selectedBgm.id)}
@@ -1734,7 +1735,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                   图片/视频画布比例 / Output Size
                 </label>
-                <select
+                <Select
                   value={imageAspectRatio}
                   onChange={(e) => applyImageSizePreset(e.target.value)}
                   className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -1744,7 +1745,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       {preset.label} · {preset.id === "custom" ? "手动输入" : `${preset.width}x${preset.height}`}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <p className="mt-1 text-[10px] text-zinc-600 leading-relaxed">
                   此尺寸会同时用于生成图片素材和最终视频画布
                 </p>
@@ -1818,7 +1819,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-zinc-300">字幕样式</span>
-                  <select
+                  <Select
                     value={subtitleStyle.preset}
                     onChange={(e) => updateSubtitleStyle({ preset: e.target.value as SubtitleStyle["preset"] })}
                     className="bg-[#101114] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -1827,7 +1828,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     <option value="clean-white">清爽白字</option>
                     <option value="cinema-soft">电影柔光</option>
                     <option value="caption-box">字幕黑底框</option>
-                  </select>
+                  </Select>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
@@ -1835,7 +1836,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                       字体 / Font
                     </label>
-                    <select
+                    <Select
                       value={subtitleStyle.fontPath || ""}
                       onChange={(e) => handleSubtitleFontChange(e.target.value)}
                       className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -1846,7 +1847,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                           {font.name} · {font.source}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                   <button
                     type="button"
@@ -1939,7 +1940,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                       分段方式
                     </label>
-                    <select
+                    <Select
                       value={subtitleStyle.segmentMode}
                       onChange={(e) => updateSubtitleStyle({ segmentMode: e.target.value as SubtitleStyle["segmentMode"] })}
                       className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -1947,7 +1948,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       <option value="phrase">短句切分</option>
                       <option value="sentence">按句号切分</option>
                       <option value="line">按换行切分</option>
-                    </select>
+                    </Select>
                   </div>
                   <div>
                     <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
@@ -1966,14 +1967,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                       动画
                     </label>
-                    <select
+                    <Select
                       value={subtitleStyle.animation}
                       onChange={(e) => updateSubtitleStyle({ animation: e.target.value as SubtitleStyle["animation"] })}
                       className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                     >
                       <option value="fade">淡入淡出</option>
                       <option value="none">无动画</option>
-                    </select>
+                    </Select>
                   </div>
                 </div>
               </div>

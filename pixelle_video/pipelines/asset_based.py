@@ -169,7 +169,7 @@ class AssetBasedPipeline(LinearVideoPipeline):
             Updated context with asset_index
         """
         # Create isolated task directory
-        task_dir, task_id = create_task_output_dir()
+        task_dir, task_id = create_task_output_dir(context.request.get("task_id"))
         context.task_id = task_id
         context.task_dir = Path(task_dir)  # Convert to Path for easier usage
         

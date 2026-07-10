@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Select } from "./Select";
 import {
   History,
   Search,
@@ -114,7 +115,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
         <div className="flex items-center gap-2 text-xs text-zinc-400">
           <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-500" />
           <span className="text-[10px] uppercase text-zinc-500 tracking-wider font-mono">排序:</span>
-          <select
+          <Select
             value={sortBy}
             onChange={(e: any) => setSortBy(e.target.value)}
             className="bg-[#17181c] border border-zinc-800 text-xs rounded text-zinc-300 py-0.5 px-2 focus:outline-none"
@@ -122,7 +123,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
             <option value="createdTime">创建时间</option>
             <option value="sceneCount">分镜数量</option>
             <option value="title">任务标题</option>
-          </select>
+          </Select>
 
           <button
             onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}

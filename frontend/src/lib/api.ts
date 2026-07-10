@@ -16,6 +16,16 @@ export const EMPTY_WORKBENCH_RESOURCES: WorkbenchResources = {
   fonts: [],
 };
 
+export type SpecialistUploadPurpose = "custom-media" | "image-to-video" | "action-transfer-video" | "action-transfer-image" | "digital-human-character" | "digital-human-product";
+
+export interface SpecialistUploadedFile {
+  file_key: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  url: string;
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   const data = await response.json().catch(() => ({}));
@@ -207,6 +217,80 @@ export async function submitVideoTask(input: any): Promise<{ task_id: string }> 
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(buildVideoPayload(input)),
+  });
+}
+
+export async function uploadSpecialistFiles(
+  purpose: SpecialistUploadPurpose,
+  files: File[],
+): Promise<SpecialistUploadedFile[]> {
+  const body = new FormData();
+  files.forEach((file) => body.append("files", file));
+  const response = await fetchJson<{ files: SpecialistUploadedFile[] }>(`/api/uploads?purpose=${purpose}`, {
+    method: "POST",
+    body,
+  });
+  return response.files;
+}
+
+export async function submitCustomMediaTask(input: any): Promise<{ task_id: string }> {
+  return fetchJson<{ task_id: string }>("/api/specialist/custom-media/generate/async", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      asset_file_keys: input.assetFileKeys,
+      title: input.title,
+      intent: input.intent,
+      duration: input.duration,
+      voice_id: input.voice,
+      tts_speed: input.speed,
+    }),
+  });
+}
+
+export async function submitImageToVideoTask(input: any): Promise<{ task_id: string }> {
+  return fetchJson<{ task_id: string }>("/api/specialist/image-to-video/generate/async", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      image_file_key: input.imageFileKey,
+      prompt: input.motionPrompt,
+      workflow_key: input.workflowKey,
+      title: input.title,
+    }),
+  });
+}
+
+export async function submitActionTransferTask(input: any): Promise<{ task_id: string }> {
+  return fetchJson<{ task_id: string }>("/api/specialist/action-transfer/generate/async", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      video_file_key: input.videoFileKey,
+      image_file_key: input.imageFileKey,
+      prompt: input.prompt,
+      workflow_key: input.workflowKey,
+      duration: input.duration,
+      title: input.title,
+    }),
+  });
+}
+
+export async function submitDigitalHumanTask(input: any): Promise<{ task_id: string }> {
+  return fetchJson<{ task_id: string }>("/api/specialist/digital-human/generate/async", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mode: input.mode,
+      character_file_key: input.characterFileKey,
+      product_file_key: input.productFileKey,
+      product_title: input.productTitle,
+      script: input.script,
+      tts_inference_mode: "local",
+      voice: input.voice,
+      speed: input.speed,
+      title: input.title,
+    }),
   });
 }
 

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Select } from "./Select";
 import { Server, Database, Key, CheckCircle, RefreshCw, Cpu, HelpCircle } from "lucide-react";
 import { SystemSettings } from "../types";
 
@@ -104,7 +105,7 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1">供应商 Preset</label>
-            <select
+            <Select
               value={settings.llm.provider}
               onChange={(e) => handleProviderChange(e.target.value as SystemSettings["llm"]["provider"])}
               className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -112,12 +113,12 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
               <option value="gemini">Google Gemini AI</option>
               <option value="deepseek">DeepSeek API</option>
               <option value="openai">OpenAI GPT-4</option>
-            </select>
+            </Select>
           </div>
 
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1">模型型号 Select</label>
-            <select
+            <Select
               value={settings.llm.model}
               onChange={(e) => handleFieldChange("llm", "model", e.target.value)}
               className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
@@ -140,7 +141,7 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
                   <option value="gpt-4o-mini">gpt-4o-mini</option>
                 </>
               )}
-            </select>
+            </Select>
           </div>
 
           <div className="md:col-span-2">
@@ -329,14 +330,14 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
               </div>
               <div>
                 <label className="block text-[10px] text-zinc-500 mb-1">物理实例规格</label>
-                <select
+                <Select
                   value={settings.runninghub.instanceType}
                   onChange={(e) => handleFieldChange("runninghub", "instanceType", e.target.value)}
                   className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                 >
                   <option value="24G">RTX 4090 (24G)</option>
                   <option value="48G">RTX A6000 (48G)</option>
-                </select>
+                </Select>
               </div>
             </div>
             <button

@@ -38,6 +38,7 @@ async def get_file(file_path: str):
     - bgm/ - Background music
     - data/bgm/ - Custom background music
     - data/templates/ - Custom templates
+    - data/uploads/ - User-uploaded specialist media
     - resources/ - Other resources (images, fonts, etc.)
     
     - **file_path**: File path relative to allowed directories
@@ -52,6 +53,8 @@ async def get_file(file_path: str):
     Returns file for download or preview.
     """
     try:
+        if file_path.startswith("data/uploads/") and Path(file_path).name == "manifest.json":
+            raise HTTPException(status_code=403, detail="Access denied")
         if file_path.startswith("custom-bgm/"):
             custom_bgm_folder = str(config_manager.get("quick_create", {}).get("custom_bgm_folder") or "").strip()
             if not custom_bgm_folder:
@@ -73,6 +76,7 @@ async def get_file(file_path: str):
                 "bgm/",
                 "data/bgm/",
                 "data/templates/",
+                "data/uploads/",
                 "resources/",
             ]
 
@@ -92,7 +96,7 @@ async def get_file(file_path: str):
             # Security: only allow access to specified directories
             try:
                 rel_path = abs_path.relative_to(Path.cwd())
-                rel_path_str = str(rel_path)
+                rel_path_str = rel_path.as_posix()
 
                 # Check if path starts with any allowed prefix
                 is_allowed = any(rel_path_str.startswith(prefix.rstrip('/')) for prefix in allowed_prefixes)
@@ -121,6 +125,11 @@ async def get_file(file_path: str):
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
             '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.mov': 'video/quicktime',
+            '.avi': 'video/x-msvideo',
+            '.mkv': 'video/x-matroska',
+            '.webm': 'video/webm',
             '.html': 'text/html',
             '.json': 'application/json',
         }

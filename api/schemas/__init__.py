@@ -31,6 +31,8 @@ from api.schemas.video import (
     VideoGenerateResponse,
     VideoGenerateAsyncResponse,
 )
+from api.schemas.uploads import UploadPurpose, UploadedFile, UploadResponse
+from api.schemas.specialist import ActionTransferGenerateRequest, CustomMediaGenerateRequest, DigitalHumanGenerateRequest, ImageToVideoGenerateRequest
 
 __all__ = [
     # Base
@@ -56,5 +58,14 @@ __all__ = [
     "VideoGenerateRequest",
     "VideoGenerateResponse",
     "VideoGenerateAsyncResponse",
+    # Uploads
+    "UploadPurpose",
+    "UploadedFile",
+    "UploadResponse",
+    # Specialist generation
+    "CustomMediaGenerateRequest",
+    "ImageToVideoGenerateRequest",
+    "ActionTransferGenerateRequest",
+    "DigitalHumanGenerateRequest",
 ]
 

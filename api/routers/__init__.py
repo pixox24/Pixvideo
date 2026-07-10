@@ -27,6 +27,8 @@ from api.routers.frame import router as frame_router
 from api.routers.configuration import router as configuration_router
 from api.routers.history import router as history_router
 from api.routers.workbench import router as workbench_router
+from api.routers.uploads import router as uploads_router
+from api.routers.specialist import router as specialist_router
 
 __all__ = [
     "health_router",
@@ -42,5 +44,7 @@ __all__ = [
     "configuration_router",
     "history_router",
     "workbench_router",
+    "uploads_router",
+    "specialist_router",
 ]
 

@@ -36,6 +36,7 @@ import argparse
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from api.config import api_config
@@ -57,6 +58,8 @@ from api.routers import (
     configuration_router,
     history_router,
     workbench_router,
+    uploads_router,
+    specialist_router,
 )
 
 
@@ -139,31 +142,23 @@ app.include_router(frame_router, prefix=api_config.api_prefix)
 app.include_router(configuration_router, prefix=api_config.api_prefix)
 app.include_router(history_router, prefix=api_config.api_prefix)
 app.include_router(workbench_router, prefix=api_config.api_prefix)
+app.include_router(uploads_router, prefix=api_config.api_prefix)
+app.include_router(specialist_router, prefix=api_config.api_prefix)
 
 
-@app.get("/")
-async def root():
-    """Root endpoint with API information"""
-    return {
-        "service": "Pixelle-Video API",
-        "version": "0.1.0",
-        "docs": api_config.docs_url,
-        "health": "/health",
-        "api": {
-            "llm": f"{api_config.api_prefix}/llm",
-            "tts": f"{api_config.api_prefix}/tts",
-            "image": f"{api_config.api_prefix}/image",
-            "content": f"{api_config.api_prefix}/content",
-            "video": f"{api_config.api_prefix}/video",
-            "tasks": f"{api_config.api_prefix}/tasks",
-            "files": f"{api_config.api_prefix}/files",
-            "resources": f"{api_config.api_prefix}/resources",
-            "frame": f"{api_config.api_prefix}/frame",
-            "config": f"{api_config.api_prefix}/config",
-            "history": f"{api_config.api_prefix}/history",
-            "workbench": api_config.api_prefix,
+_frontend_dist = _project_root / "frontend" / "dist"
+if _frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
+else:
+    @app.get("/")
+    async def root():
+        """Development fallback when the React bundle has not been built yet."""
+        return {
+            "service": "Pixelle-Video API",
+            "web_ui": "Run `npm run build` in frontend/ to serve the React workbench here.",
+            "docs": api_config.docs_url,
+            "health": "/health",
         }
-    }
 
 
 if __name__ == "__main__":

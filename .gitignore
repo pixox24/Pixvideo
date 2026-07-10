@@ -69,6 +69,7 @@ tmp/
 .tools/
 .playwright-mcp/
 .streamlit.pid
+.worktrees/
 
 # MkDocs build output
 site/

@@ -548,17 +548,15 @@ class VideoService:
                             height=height,
                             style=normalized_style,
                         )
-                        subtitle_filter_kwargs = {}
+                        subtitle_filter_kwargs = {
+                            "filename": Path(subtitle_overlay_path).as_posix(),
+                        }
                         custom_font_path = str(normalized_style.get("fontPath") or "").strip()
                         if custom_font_path:
-                            subtitle_filter_kwargs["fontsdir"] = str(
-                                Path(custom_font_path).expanduser().parent
+                            subtitle_filter_kwargs["fontsdir"] = (
+                                Path(custom_font_path).expanduser().parent.as_posix()
                             )
-                        video_stream = video_stream.filter(
-                            "subtitles",
-                            subtitle_overlay_path,
-                            **subtitle_filter_kwargs,
-                        )
+                        video_stream = video_stream.filter("subtitles", **subtitle_filter_kwargs)
                     elif self._ffmpeg_filter_available("drawtext"):
                         video_stream = video_stream.filter(
                             "drawtext",

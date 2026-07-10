@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_quick_create_has_tts_preview_text_input_and_calls_tts_api():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "previewTtsText" in component
     assert "试听文案" in component
@@ -14,7 +14,7 @@ def test_quick_create_has_tts_preview_text_input_and_calls_tts_api():
 
 
 def test_quick_create_can_synthesize_current_generated_copy():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "getCurrentCopyForTts" in component
     assert "handleSynthesizeCurrentCopy" in component
@@ -29,7 +29,7 @@ def test_quick_create_can_synthesize_current_generated_copy():
 
 
 def test_generated_copy_draft_autofills_preview_script_first_sentence_without_overwriting_user_text():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "extractPreviewSentenceFromCopyDraft" in component
     assert "maybeSyncCopyDraftToPreviewTts" in component
@@ -40,7 +40,7 @@ def test_generated_copy_draft_autofills_preview_script_first_sentence_without_ov
 
 
 def test_quick_create_uses_real_minimax_defaults_and_models():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert 'useState("male-qn-qingse")' in component
     assert 'useState("speech-2.8-turbo")' in component
@@ -51,7 +51,7 @@ def test_quick_create_uses_real_minimax_defaults_and_models():
 
 
 def test_digital_human_uses_real_minimax_voice_and_model():
-    component = Path("frontend/src/components/DigitalHuman.tsx").read_text()
+    component = Path("frontend/src/components/DigitalHuman.tsx").read_text(encoding="utf-8")
 
     assert 'useState("male-qn-qingse")' in component
     assert 'minimaxModel: "speech-2.8-turbo"' in component

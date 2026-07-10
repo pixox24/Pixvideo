@@ -1,0 +1,104 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { SubtitleStyle } from "../types";
+import {
+  PREVIEW_SAMPLE_TEXT,
+  PreviewAspect,
+  previewTextAlignment,
+  scaleStyleForPreview,
+  segmentPreviewText,
+  wrapPreviewText,
+} from "../lib/subtitlePreview";
+
+type PreviewScene = "bright" | "dark" | "portrait" | "complex";
+
+interface SubtitleStylePreviewProps {
+  style: SubtitleStyle;
+}
+
+const SCENES: Array<{ id: PreviewScene; label: string; background: string }> = [
+  { id: "bright", label: "明亮", background: "linear-gradient(135deg, #fde68a 0%, #fb7185 48%, #7dd3fc 100%)" },
+  { id: "dark", label: "暗色", background: "radial-gradient(circle at 70% 18%, #475569 0%, #111827 38%, #030712 100%)" },
+  { id: "portrait", label: "人像", background: "radial-gradient(ellipse at 52% 35%, #f1c6a5 0 18%, transparent 18.5%), linear-gradient(130deg, #365314 0%, #a3e635 45%, #fef3c7 100%)" },
+  { id: "complex", label: "复杂", background: "linear-gradient(120deg, #0f172a 0 21%, #0ea5e9 21% 38%, #f97316 38% 56%, #4338ca 56% 73%, #eab308 73% 100%)" },
+];
+
+export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ style }) => {
+  const [scene, setScene] = useState<PreviewScene>("bright");
+  const [aspect, setAspect] = useState<PreviewAspect>("landscape");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [segmentIndex, setSegmentIndex] = useState(0);
+  const [fontAvailable, setFontAvailable] = useState(true);
+  const scaledStyle = useMemo(() => scaleStyleForPreview(style, aspect), [aspect, style]);
+  const segments = useMemo(() => segmentPreviewText(PREVIEW_SAMPLE_TEXT, style.segmentMode, style), [style]);
+  const text = isPlaying ? segments[segmentIndex] || PREVIEW_SAMPLE_TEXT : PREVIEW_SAMPLE_TEXT;
+  const lines = useMemo(() => wrapPreviewText(text, style.maxCharsPerLine, style.maxLines), [style.maxCharsPerLine, style.maxLines, text]);
+  const activeScene = SCENES.find((item) => item.id === scene) || SCENES[0];
+
+  useEffect(() => {
+    if (!style.fontFamily || !style.fontPath || !document.fonts) {
+      setFontAvailable(true);
+      return;
+    }
+    setFontAvailable(document.fonts.check(`12px "${style.fontFamily}"`, "让每一帧"));
+  }, [style.fontFamily, style.fontPath]);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timeout = window.setTimeout(() => {
+      if (segmentIndex + 1 < segments.length) setSegmentIndex((current) => current + 1);
+      else setIsPlaying(false);
+    }, Math.max(500, Math.floor(2500 / Math.max(segments.length, 1))));
+    return () => window.clearTimeout(timeout);
+  }, [isPlaying, segmentIndex, segments.length]);
+
+  const replay = () => {
+    setSegmentIndex(0);
+    setIsPlaying(true);
+  };
+  const subtitleBackground = style.preset === "caption-box" ? style.backColor : "transparent";
+  const textShadow = `${scaledStyle.shadow}px ${scaledStyle.shadow}px ${Math.max(1, scaledStyle.shadow * 2)}px ${style.outlineColor}`;
+
+  return (
+    <section className="rounded-md border border-zinc-800 bg-[#101114] p-3 space-y-2.5" aria-label="字幕样式预览">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold text-zinc-200">样式预览</p>
+          <p className="text-[10px] text-zinc-500">实时近似效果，最终以渲染成片为准</p>
+        </div>
+        <button type="button" onClick={replay} className="rounded border border-amber-500/50 px-2 py-1 text-[10px] font-medium text-amber-300 hover:bg-amber-500/10">
+          {isPlaying ? "播放中" : "播放效果"}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5" aria-label="预览场景">
+        {SCENES.map((item) => (
+          <button key={item.id} type="button" onClick={() => setScene(item.id)} className={`rounded px-2 py-1 text-[10px] transition-colors ${scene === item.id ? "bg-zinc-100 text-zinc-900" : "bg-[#17181c] text-zinc-400 hover:text-zinc-200"}`}>
+            {item.label}
+          </button>
+        ))}
+        <span className="mx-0.5 h-5 w-px bg-zinc-800" />
+        {(["landscape", "portrait"] as PreviewAspect[]).map((item) => (
+          <button key={item} type="button" onClick={() => setAspect(item)} className={`rounded px-2 py-1 text-[10px] transition-colors ${aspect === item ? "bg-amber-500/20 text-amber-200" : "bg-[#17181c] text-zinc-400 hover:text-zinc-200"}`}>
+            {item === "landscape" ? "16:9" : "9:16"}
+          </button>
+        ))}
+      </div>
+
+      <div className={`mx-auto overflow-hidden rounded border border-white/10 ${aspect === "landscape" ? "aspect-video w-full" : "aspect-[9/16] w-36"}`} style={{ background: activeScene.background }}>
+        <div className="relative h-full w-full bg-gradient-to-t from-black/60 via-transparent to-black/10">
+          <div className="absolute inset-x-[8%]" style={{ bottom: `${scaledStyle.marginBottom}px`, textAlign: previewTextAlignment(style.alignment) }}>
+            <div className="inline-block max-w-full rounded px-2 py-1" style={{ backgroundColor: subtitleBackground }}>
+              {lines.map((line, index) => (
+                <p key={`${line}-${index}`} className={isPlaying && style.animation === "fade" ? "animate-[pulse_0.7s_ease-out]" : undefined} style={{ color: index === lines.length - 1 ? style.accentColor : style.primaryColor, fontFamily: style.fontFamily || "system-ui, sans-serif", fontSize: `${scaledStyle.fontSize}px`, fontWeight: style.preset === "short-video-bold" ? 800 : 600, lineHeight: 1.35, WebkitTextStroke: `${scaledStyle.outlineWidth}px ${style.outlineColor}`, textShadow }}>
+                  {line}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {!fontAvailable && <p className="text-[10px] text-amber-300">预览使用回退字体；最终渲染仍将使用所选字体。</p>}
+    </section>
+  );
+};

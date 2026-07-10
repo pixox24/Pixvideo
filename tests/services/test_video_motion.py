@@ -172,7 +172,7 @@ def test_create_video_from_image_with_motion_passes_custom_font_dir_to_ass(monke
     )
 
     assert "fontsdir=" in captured["command"]
-    assert str(font_dir) in captured["command"]
+    assert font_dir.as_posix().replace(":", r"\\:") in captured["command"]
 
 
 def test_create_video_from_image_with_motion_validates_mode(tmp_path):

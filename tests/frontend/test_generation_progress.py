@@ -2,8 +2,8 @@ from pathlib import Path
 
 
 def test_api_task_mapping_keeps_backend_progress_metadata():
-    api = Path("frontend/src/lib/api.ts").read_text()
-    types = Path("frontend/src/types.ts").read_text()
+    api = Path("frontend/src/lib/api.ts").read_text(encoding="utf-8")
+    types = Path("frontend/src/types.ts").read_text(encoding="utf-8")
 
     assert "progressEventType" in types
     assert "progressFrameCurrent" in types
@@ -21,7 +21,7 @@ def test_api_task_mapping_keeps_backend_progress_metadata():
 
 
 def test_console_panel_uses_real_pipeline_order_and_current_stage():
-    component = Path("frontend/src/components/ConsolePanel.tsx").read_text()
+    component = Path("frontend/src/components/ConsolePanel.tsx").read_text(encoding="utf-8")
 
     assert "GENERATION_PROGRESS_STEPS" in component
     assert "getProgressStageKey" in component

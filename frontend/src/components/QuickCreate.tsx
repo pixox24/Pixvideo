@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { SubtitleStylePreview } from "./SubtitleStylePreview";
 import {
   Sparkles,
   Edit3,
@@ -1813,6 +1814,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
             {enableSubtitles && (
               <div className="sm:col-span-2 bg-[#17181c] border border-zinc-900 rounded p-3 space-y-3">
+                <SubtitleStylePreview style={subtitleStyle} />
+
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-zinc-300">字幕样式</span>
                   <select

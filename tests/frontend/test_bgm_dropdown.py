@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_quick_create_bgm_panel_uses_dropdown_and_custom_folder_entry():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "FolderOpen" in component
     assert "openCustomBgmFolder" in component

@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_app_supports_multi_preset_api_actions():
-    app = Path("frontend/src/App.tsx").read_text()
+    app = Path("frontend/src/App.tsx").read_text(encoding="utf-8")
 
     assert "defaultPresetId" in app
     assert "handleCreatePreset" in app
@@ -17,7 +17,7 @@ def test_app_supports_multi_preset_api_actions():
 
 
 def test_quick_create_exposes_full_workbench_preset_controls():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "presetNameDraft" in component
     assert "presetMenuOpen" in component
@@ -34,7 +34,7 @@ def test_quick_create_exposes_full_workbench_preset_controls():
 
 
 def test_quick_create_preset_payload_includes_global_workbench_parameters_only():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "sceneCount: aiSceneCount" in component
     assert "copyCharCount" in component

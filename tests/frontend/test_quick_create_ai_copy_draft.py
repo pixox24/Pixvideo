@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_quick_create_ai_mode_has_editable_copy_draft_step():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "copyDraftMode" in component
     assert "setCopyDraftMode" in component
@@ -17,7 +17,7 @@ def test_quick_create_ai_mode_has_editable_copy_draft_step():
 
 
 def test_quick_create_calls_copy_draft_and_confirmed_script_endpoints():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert 'fetch("/api/generate-copy-draft"' in component
     assert "draftMode: copyDraftMode" in component
@@ -27,7 +27,7 @@ def test_quick_create_calls_copy_draft_and_confirmed_script_endpoints():
 
 
 def test_quick_create_exposes_total_copy_length_controls_using_storyboards():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "suggestCopyCharCount" in component
     assert "copyCharCount" in component
@@ -42,7 +42,7 @@ def test_quick_create_exposes_total_copy_length_controls_using_storyboards():
 
 
 def test_quick_create_render_uses_confirmed_copy_in_ai_mode():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text()
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "buildScenesForRender" in component
     assert "const renderScenes = buildScenesForRender()" in component

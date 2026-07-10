@@ -10,7 +10,7 @@ set "VENV_SCRIPTS=%PROJECT_ROOT%\.venv\Scripts"
 set "FFMPEG_BIN=%PROJECT_ROOT%\.tools\ffmpeg\bin"
 
 echo ========================================
-echo   Pixelle-Video Web UI
+echo   Pixelle-Video React Workbench
 echo ========================================
 echo.
 
@@ -26,7 +26,7 @@ if not exist "%VENV_PY%" (
     )
 )
 
-"%VENV_PY%" -c "import streamlit" >nul 2>&1
+"%VENV_PY%" -c "import fastapi, uvicorn" >nul 2>&1
 if errorlevel 1 (
     echo [SETUP] Installing Python dependencies. This can take a few minutes...
     "%VENV_PY%" -m ensurepip --upgrade
@@ -56,14 +56,46 @@ if not exist "%FFMPEG_BIN%\ffmpeg.exe" (
 set "PATH=%VENV_SCRIPTS%;%FFMPEG_BIN%;%PATH%"
 set "PYTHONPATH=%PROJECT_ROOT%"
 set "PIXELLE_VIDEO_ROOT=%PROJECT_ROOT%"
-set "STREAMLIT_BROWSER_GATHER_USAGE_STATS=false"
-set "STREAMLIT_SERVER_HEADLESS=true"
 
-echo [START] Opening http://127.0.0.1:8501
+where npm >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo [ERROR] npm was not found. Install Node.js 22+ and run this script again.
+    pause
+    exit /b 1
+)
+
+if not exist "frontend\node_modules" (
+    echo [SETUP] Installing frontend dependencies...
+    pushd frontend
+    call npm ci
+    if errorlevel 1 (
+        popd
+        echo.
+        echo [ERROR] Failed to install frontend dependencies.
+        pause
+        exit /b 1
+    )
+    popd
+)
+
+echo [BUILD] Building React workbench...
+pushd frontend
+call npm run build
+if errorlevel 1 (
+    popd
+    echo.
+    echo [ERROR] Failed to build the React workbench.
+    pause
+    exit /b 1
+)
+popd
+
+echo [START] Web UI and API: http://127.0.0.1:8000
 echo Press Ctrl+C to stop the server.
 echo.
 
-"%VENV_PY%" -m streamlit run web\app.py --server.address 127.0.0.1 --server.port 8501 --server.headless true --browser.gatherUsageStats false
+"%VENV_PY%" api\app.py --host 127.0.0.1 --port 8000
 
 if errorlevel 1 (
     echo.

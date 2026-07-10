@@ -7,9 +7,10 @@ This script automates the creation of a Windows portable package:
 2. Downloads FFmpeg portable
 3. Prepares Python environment (enable site-packages, install pip)
 4. Installs project dependencies
-5. Copies project files
-6. Generates launcher scripts
-7. Creates final ZIP package
+5. Builds the React frontend
+6. Copies project files
+7. Generates launcher scripts
+8. Creates final ZIP package
 
 Usage:
     python build.py [--config CONFIG] [--output OUTPUT] [--cn-mirror]
@@ -519,6 +520,21 @@ class WindowsPackageBuilder:
                 copied_count += sum(1 for _ in target_path.rglob('*') if _.is_file())
         
         self.log(f"Copied {copied_count} files", "SUCCESS")
+
+    def build_frontend(self):
+        """Build the React bundle that FastAPI serves from frontend/dist."""
+        frontend_dir = self.project_root / "frontend"
+        npm_command = self.config["frontend"].get("node_command", "npm")
+
+        if not frontend_dir.is_dir():
+            raise RuntimeError(f"Frontend directory not found: {frontend_dir}")
+        if not shutil.which(npm_command):
+            raise RuntimeError("npm is required to build the React frontend")
+
+        self.log("Building React frontend...")
+        subprocess.run([npm_command, "ci"], cwd=frontend_dir, check=True)
+        subprocess.run([npm_command, "run", "build"], cwd=frontend_dir, check=True)
+        self.log("React frontend built successfully", "SUCCESS")
     
     def generate_launcher_scripts(self):
         """Generate launcher scripts from templates"""
@@ -636,6 +652,7 @@ class WindowsPackageBuilder:
             
             # Copy project files
             project_target = self.build_dir / "Pixelle-Video"
+            self.build_frontend()
             self.copy_project_files(project_target)
             
             # Generate launcher scripts
@@ -688,4 +705,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

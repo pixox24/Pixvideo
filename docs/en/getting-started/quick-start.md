@@ -4,22 +4,23 @@ Already installed and configured? Let's create your first video!
 
 ---
 
-## Start the Web Interface
+## Start the React Workbench
 
 ### Windows All-in-One Package Users
 
 If you're using the Windows All-in-One Package, simply:
 1. Double-click `start.bat`
-2. Your browser will automatically open `http://localhost:8501`
+2. Open `http://localhost:8000` in your browser
 
 ### Install from Source Users
 
 ```bash
-# Using uv
-uv run streamlit run web/app.py
+# Build the workbench, then start FastAPI
+cd frontend && npm ci && npm run build && cd ..
+uv run python api/app.py --host 127.0.0.1 --port 8000
 ```
 
-Your browser will automatically open `http://localhost:8501`
+Open `http://localhost:8000` to load the workbench.
 
 ---
 
@@ -27,20 +28,20 @@ Your browser will automatically open `http://localhost:8501`
 
 ### Step 1: Check Configuration
 
-On first use, expand the「⚙️ System Configuration」panel and confirm:
+On first use, open the **System Settings** tab and confirm:
 
 - **LLM Configuration**: Select an AI model (e.g., Qianwen, GPT) and enter API Key
 - **Image Configuration**: Configure ComfyUI address or RunningHub API Key
 
 If not yet configured, see the [Configuration Guide](configuration.md).
 
-Click "Save Configuration" when done.
+Click **Save System Settings** when done.
 
 ---
 
 ### Step 2: Enter a Topic
 
-In the left panel's「📝 Content Input」section:
+In the **Quick Create** tab:
 
 1. Select「**AI Generate Content**」mode
 2. Enter a topic in the text box, for example:
@@ -59,7 +60,7 @@ In the left panel's「📝 Content Input」section:
 
 ### Step 3: Configure Voice and Visuals
 
-In the middle panel:
+Continue in the **Quick Create** tab:
 
 **Voice Settings**
 - Select TTS workflow (default Edge-TTS works well)
@@ -74,7 +75,7 @@ In the middle panel:
 
 ### Step 4: Generate Video
 
-Click the「🎬 Generate Video」button in the right panel!
+Click **Generate Video** at the bottom of the **Quick Create** tab.
 
 The system will show real-time progress:
 - Generate script
@@ -89,7 +90,7 @@ The system will show real-time progress:
 
 ### Step 5: Preview Video
 
-Once complete, the video will automatically play in the right panel!
+Once complete, inspect the task status and preview from the workbench; use the **History** tab to manage, download, or resume generated videos.
 
 You'll see:
 - 📹 Video preview player
@@ -112,4 +113,3 @@ Next, you can:
 - **Clone Voices** - See the [Voice Cloning with Reference Audio](../tutorials/voice-cloning.md) tutorial
 - **Use API** - See the [API Usage Guide](../user-guide/api.md)
 - **Develop Templates** - See the [Template Development Guide](../user-guide/templates.md)
-

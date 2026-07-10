@@ -70,7 +70,7 @@ async def execute_digital_human_video(
     voice: str | None,
     speed: float,
 ) -> str:
-    """Run the Streamlit digital-human workflow without any UI dependency."""
+    """Run the digital-human workflow without any UI dependency."""
     task_dir, _ = create_task_output_dir(task_id)
     kit = await core._get_or_create_comfykit()
     narration = script.strip()

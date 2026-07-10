@@ -1,4 +1,4 @@
-"""Async API replacements for Streamlit specialist generation workflows."""
+"""Async API endpoints for specialist generation workflows."""
 
 from __future__ import annotations
 

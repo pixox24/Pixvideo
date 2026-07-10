@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Build Arguments Configuration
 # You can override these by setting environment variables before running docker-compose
 #
@@ -76,4 +74,3 @@ services:
 networks:
   pixelle-network:
     driver: bridge
-

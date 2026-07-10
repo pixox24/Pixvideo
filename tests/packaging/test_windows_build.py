@@ -3,7 +3,6 @@
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BUILD_MODULE_PATH = PROJECT_ROOT / "packaging" / "windows" / "build.py"
 BUILD_CONFIG_PATH = PROJECT_ROOT / "packaging" / "windows" / "config" / "build_config.yaml"

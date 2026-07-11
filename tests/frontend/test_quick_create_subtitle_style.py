@@ -26,3 +26,36 @@ def test_quick_create_fetches_font_resources():
 
     assert 'fetchJson<any>("/api/resources/fonts")' in api
     assert "fonts: FontOption[]" in types
+
+
+def test_subtitle_preview_loads_a_selected_font_through_the_resource_api():
+    component = Path("frontend/src/components/SubtitleStylePreview.tsx").read_text(
+        encoding="utf-8"
+    )
+
+    assert "/api/resources/fonts/file?path=" in component
+    assert "new FontFace" in component
+
+
+def test_quick_create_exposes_dynamic_subtitle_mode():
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
+    types = Path("frontend/src/types.ts").read_text(encoding="utf-8")
+
+    assert "动态字幕" in component
+    assert 'value="hyperframes"' in component
+    assert 'viewMode === "pure-image"' in component
+    assert 'subtitleStyle: viewMode === "pure-image"' in component
+    assert '"hyperframes"' in types
+
+
+def test_quick_create_exposes_dynamic_highlight_controls():
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
+    types = Path("frontend/src/types.ts").read_text(encoding="utf-8")
+
+    assert "高亮词" in component
+    assert "高亮样式" in component
+    assert "高亮缩放" in component
+    assert 'value="word-pop"' in component
+    assert "highlightWords" in types
+    assert "highlightStyle" in types
+    assert "backgroundOpacity" in types

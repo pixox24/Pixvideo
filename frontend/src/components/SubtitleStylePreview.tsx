@@ -6,6 +6,7 @@ import {
   previewTextAlignment,
   scaleStyleForPreview,
   segmentPreviewText,
+  splitPreviewHighlights,
   wrapPreviewText,
 } from "../lib/subtitlePreview";
 
@@ -22,12 +23,24 @@ const SCENES: Array<{ id: PreviewScene; label: string; background: string }> = [
   { id: "complex", label: "复杂", background: "linear-gradient(120deg, #0f172a 0 21%, #0ea5e9 21% 38%, #f97316 38% 56%, #4338ca 56% 73%, #eab308 73% 100%)" },
 ];
 
+const colorWithOpacity = (color: string, opacity: number) => {
+  const normalized = color.replace("#", "");
+  if (!/^[0-9a-f]{6}$/iu.test(normalized)) return color;
+  const red = parseInt(normalized.slice(0, 2), 16);
+  const green = parseInt(normalized.slice(2, 4), 16);
+  const blue = parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${Math.min(Math.max(opacity, 0), 100) / 100})`;
+};
+
+const CUSTOM_PREVIEW_FONT_FAMILY = "PixelleSubtitlePreviewFont";
+
 export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ style }) => {
   const [scene, setScene] = useState<PreviewScene>("bright");
   const [aspect, setAspect] = useState<PreviewAspect>("landscape");
   const [isPlaying, setIsPlaying] = useState(false);
   const [segmentIndex, setSegmentIndex] = useState(0);
   const [fontAvailable, setFontAvailable] = useState(true);
+  const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null);
   const scaledStyle = useMemo(() => scaleStyleForPreview(style, aspect), [aspect, style]);
   const segments = useMemo(() => segmentPreviewText(PREVIEW_SAMPLE_TEXT, style.segmentMode, style), [style]);
   const text = isPlaying ? segments[segmentIndex] || PREVIEW_SAMPLE_TEXT : PREVIEW_SAMPLE_TEXT;
@@ -35,12 +48,36 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
   const activeScene = SCENES.find((item) => item.id === scene) || SCENES[0];
 
   useEffect(() => {
-    if (!style.fontFamily || !style.fontPath || !document.fonts) {
+    if (!style.fontPath || !document.fonts || typeof FontFace === "undefined") {
       setFontAvailable(true);
+      setPreviewFontFamily(null);
       return;
     }
-    setFontAvailable(document.fonts.check(`12px "${style.fontFamily}"`, "让每一帧"));
-  }, [style.fontFamily, style.fontPath]);
+
+    let disposed = false;
+    const font = new FontFace(
+      CUSTOM_PREVIEW_FONT_FAMILY,
+      `url("/api/resources/fonts/file?path=${encodeURIComponent(style.fontPath)}")`,
+    );
+    setFontAvailable(false);
+    setPreviewFontFamily(null);
+
+    font.load()
+      .then((loadedFont) => {
+        if (disposed) return;
+        document.fonts.add(loadedFont);
+        setPreviewFontFamily(CUSTOM_PREVIEW_FONT_FAMILY);
+        setFontAvailable(true);
+      })
+      .catch(() => {
+        if (!disposed) setFontAvailable(false);
+      });
+
+    return () => {
+      disposed = true;
+      document.fonts.delete(font);
+    };
+  }, [style.fontPath]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -55,8 +92,12 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
     setSegmentIndex(0);
     setIsPlaying(true);
   };
-  const subtitleBackground = style.preset === "caption-box" ? style.backColor : "transparent";
+  const subtitleBackground = style.preset === "caption-box" ? colorWithOpacity(style.backColor, style.backgroundOpacity ?? 72) : "transparent";
   const textShadow = `${scaledStyle.shadow}px ${scaledStyle.shadow}px ${Math.max(1, scaledStyle.shadow * 2)}px ${style.outlineColor}`;
+  const highlightStyle = style.highlightStyle || "accent";
+  const highlightScale = Math.min(Math.max(style.highlightScale || 125, 100), 180) / 100;
+  const highlightAnimated = isPlaying && style.animation === "word-pop";
+  const activeFontFamily = previewFontFamily || style.fontFamily || "system-ui, sans-serif";
 
   return (
     <section className="rounded-md border border-zinc-800 bg-[#101114] p-3 space-y-2.5" aria-label="字幕样式预览">
@@ -89,8 +130,12 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
           <div className="absolute inset-x-[8%]" style={{ bottom: `${scaledStyle.marginBottom}px`, textAlign: previewTextAlignment(style.alignment) }}>
             <div className="inline-block max-w-full rounded px-2 py-1" style={{ backgroundColor: subtitleBackground }}>
               {lines.map((line, index) => (
-                <p key={`${line}-${index}`} className={isPlaying && style.animation === "fade" ? "animate-[pulse_0.7s_ease-out]" : undefined} style={{ color: index === lines.length - 1 ? style.accentColor : style.primaryColor, fontFamily: style.fontFamily || "system-ui, sans-serif", fontSize: `${scaledStyle.fontSize}px`, fontWeight: style.preset === "short-video-bold" ? 800 : 600, lineHeight: 1.35, WebkitTextStroke: `${scaledStyle.outlineWidth}px ${style.outlineColor}`, textShadow }}>
-                  {line}
+                <p key={`${line}-${index}`} className={isPlaying && style.animation === "pop" ? "animate-[bounce_0.55s_ease-out]" : isPlaying && style.animation === "fade" ? "animate-[pulse_0.7s_ease-out]" : undefined} style={{ color: index === lines.length - 1 ? style.accentColor : style.primaryColor, fontFamily: activeFontFamily, fontSize: `${scaledStyle.fontSize}px`, fontWeight: style.preset === "short-video-bold" ? 800 : 600, lineHeight: 1.35, WebkitTextStroke: `${scaledStyle.outlineWidth}px ${style.outlineColor}`, textShadow }}>
+                  {splitPreviewHighlights(line, style.highlightWords).map((fragment, fragmentIndex) => fragment.highlighted ? (
+                    <span key={`${fragment.text}-${fragmentIndex}`} className={highlightAnimated ? "inline-block animate-[bounce_0.55s_ease-out]" : "inline-block"} style={{ color: highlightStyle === "badge" ? "#17110a" : style.accentColor, backgroundColor: highlightStyle === "badge" ? style.accentColor : "transparent", borderRadius: highlightStyle === "badge" ? "0.16em" : undefined, padding: highlightStyle === "badge" ? "0.02em 0.16em" : undefined, fontWeight: highlightStyle === "pop" ? 900 : undefined, transform: highlightAnimated ? `scale(${highlightScale})` : undefined, WebkitTextStroke: highlightStyle === "badge" ? "0" : undefined, textShadow: highlightStyle === "badge" ? "none" : undefined }}>
+                      {fragment.text}
+                    </span>
+                  ) : fragment.text)}
                 </p>
               ))}
             </div>
@@ -98,7 +143,7 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
         </div>
       </div>
 
-      {!fontAvailable && <p className="text-[10px] text-amber-300">预览使用回退字体；最终渲染仍将使用所选字体。</p>}
+      {!fontAvailable && <p className="text-[10px] text-amber-300">无法加载所选字体，预览使用回退字体。</p>}
     </section>
   );
 };

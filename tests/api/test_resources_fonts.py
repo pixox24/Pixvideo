@@ -40,6 +40,32 @@ async def test_list_fonts_includes_custom_font_folder(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_get_font_file_serves_a_discovered_custom_font(monkeypatch, tmp_path):
+    font_dir = tmp_path / "fonts"
+    font_dir.mkdir()
+    font_file = font_dir / "BrandFont.ttf"
+    font_file.write_bytes(b"fake-font")
+
+    monkeypatch.setattr(resources, "get_root_path", lambda *parts: str(tmp_path / "root" / "/".join(parts)))
+    monkeypatch.setattr(resources, "get_data_path", lambda *parts: str(tmp_path / "data" / "/".join(parts)))
+    monkeypatch.setattr(resources, "SYSTEM_FONT_DIRS", (), raising=False)
+    monkeypatch.setattr(
+        resources,
+        "config_manager",
+        SimpleNamespace(
+            get=lambda key, default=None: {"custom_font_folder": str(font_dir)}
+            if key == "subtitle"
+            else default,
+        ),
+    )
+
+    response = await resources.get_font_file(str(font_file))
+
+    assert response.path == font_file
+    assert response.media_type == "font/ttf"
+
+
+@pytest.mark.asyncio
 async def test_select_custom_font_folder_saves_confirmed_folder(tmp_path, monkeypatch):
     updates = []
     saves = []

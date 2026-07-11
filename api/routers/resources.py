@@ -20,6 +20,7 @@ import platform
 import subprocess
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from loguru import logger
 
 from api.dependencies import PixelleVideoDep
@@ -71,6 +72,37 @@ def _collect_fonts_from_dir(base: Path, source: str) -> list[FontInfo]:
                 )
             )
     return fonts
+
+
+def _font_candidates() -> list[tuple[Path, str]]:
+    """Return every directory approved for subtitle font discovery."""
+    candidates: list[tuple[Path, str]] = [
+        (Path(get_root_path("resources", "fonts")), "project"),
+        (Path(get_data_path("fonts")), "data"),
+        *[(path, "system") for path in SYSTEM_FONT_DIRS],
+    ]
+    custom_font_folder = str(config_manager.get("subtitle", {}).get("custom_font_folder") or "").strip()
+    if custom_font_folder:
+        candidates.append((Path(custom_font_folder).expanduser().resolve(), "custom-folder"))
+    return candidates
+
+
+def _approved_font_path(value: str) -> Path | None:
+    """Resolve a requested font only when it is inside a discovered font directory."""
+    try:
+        font_path = Path(value).expanduser().resolve()
+    except (OSError, RuntimeError):
+        return None
+    if not font_path.is_file() or font_path.suffix.lower() not in FONT_EXTENSIONS:
+        return None
+
+    for base, _source in _font_candidates():
+        try:
+            font_path.relative_to(base.expanduser().resolve())
+            return font_path
+        except (OSError, RuntimeError, ValueError):
+            continue
+    return None
 
 
 @router.get("/workflows/tts", response_model=WorkflowListResponse)
@@ -326,17 +358,7 @@ async def list_fonts():
     """
     try:
         font_map: dict[str, FontInfo] = {}
-        candidates: list[tuple[Path, str]] = [
-            (Path(get_root_path("resources", "fonts")), "project"),
-            (Path(get_data_path("fonts")), "data"),
-            *[(path, "system") for path in SYSTEM_FONT_DIRS],
-        ]
-
-        custom_font_folder = str(config_manager.get("subtitle", {}).get("custom_font_folder") or "").strip()
-        if custom_font_folder:
-            candidates.append((Path(custom_font_folder).expanduser().resolve(), "custom-folder"))
-
-        for base, source in candidates:
+        for base, source in _font_candidates():
             for font in _collect_fonts_from_dir(base, source):
                 font_map[font.path] = font
 
@@ -351,6 +373,21 @@ async def list_fonts():
     except Exception as e:
         logger.error(f"List fonts error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/fonts/file")
+async def get_font_file(path: str):
+    """Serve a selected, discovered font for browser-side subtitle previews."""
+    font_path = _approved_font_path(path)
+    if not font_path:
+        raise HTTPException(status_code=404, detail="字体文件不存在或不在已选择的字体目录中。")
+
+    media_types = {
+        ".ttf": "font/ttf",
+        ".otf": "font/otf",
+        ".ttc": "font/collection",
+    }
+    return FileResponse(font_path, media_type=media_types.get(font_path.suffix.lower()))
 
 
 @router.post("/fonts/select-folder")

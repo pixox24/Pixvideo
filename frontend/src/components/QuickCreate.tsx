@@ -79,6 +79,13 @@ const suggestCopyCharCount = (storyboardCount: number) =>
 const estimateNarrationSeconds = (charCount: number) =>
   Math.max(1, Math.round((charCount / 260) * 60));
 
+const parseHighlightWords = (value: string) => Array.from(new Set(
+  value
+    .split(/[，,、;；\n]/u)
+    .map((word) => word.trim())
+    .filter(Boolean),
+)).slice(0, 24);
+
 const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   mode: "ass",
   preset: "short-video-bold",
@@ -97,6 +104,10 @@ const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   maxLines: 2,
   animation: "fade",
   segmentMode: "phrase",
+  highlightWords: [],
+  highlightStyle: "accent",
+  highlightScale: 125,
+  backgroundOpacity: 72,
 };
 
 export const QuickCreate: React.FC<QuickCreateProps> = ({
@@ -278,6 +289,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const updateSubtitleStyle = (patch: Partial<SubtitleStyle>) => {
     setSubtitleStyle((current) => ({ ...current, ...patch }));
   };
+
+  const dynamicSubtitleEnabled = viewMode === "pure-image" && subtitleStyle.mode === "hyperframes";
 
   const handleSubtitleFontChange = (fontPath: string) => {
     const font = fontOptions.find((item) => item.path === fontPath);
@@ -797,7 +810,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       viewMode,
       enableMotion,
       enableSubtitles,
-      subtitleStyle,
+      subtitleStyle: viewMode === "pure-image" ? subtitleStyle : { ...subtitleStyle, mode: "ass" },
       splitType,
       scenes: renderScenes
     };
@@ -1818,6 +1831,18 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <SubtitleStylePreview style={subtitleStyle} />
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-zinc-300">字幕渲染</span>
+                  <Select
+                    value={viewMode === "pure-image" && subtitleStyle.mode === "hyperframes" ? "hyperframes" : "ass"}
+                    onChange={(e) => updateSubtitleStyle({ mode: e.target.value as SubtitleStyle["mode"] })}
+                    className="bg-[#101114] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="ass">标准字幕</option>
+                    {viewMode === "pure-image" && <option value="hyperframes">动态字幕</option>}
+                  </Select>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-zinc-300">字幕样式</span>
                   <Select
                     value={subtitleStyle.preset}
@@ -1859,7 +1884,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
                   <div>
                     <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                       字号
@@ -1912,6 +1937,19 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                     />
                   </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      阴影
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="12"
+                      value={subtitleStyle.shadow}
+                      onChange={(e) => updateSubtitleStyle({ shadow: parseInt(e.target.value || "0", 10) })}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
@@ -1935,7 +1973,57 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   ))}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {dynamicSubtitleEnabled && (
+                  <div className="border-t border-zinc-800 pt-3 space-y-3">
+                    <label className="block">
+                      <span className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">高亮词</span>
+                      <textarea
+                        value={(subtitleStyle.highlightWords || []).join("，")}
+                        onChange={(e) => updateSubtitleStyle({ highlightWords: parseHighlightWords(e.target.value) })}
+                        rows={2}
+                        className="w-full resize-y min-h-16 max-h-32 bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      />
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">高亮样式</label>
+                        <Select
+                          value={subtitleStyle.highlightStyle || "accent"}
+                          onChange={(e) => updateSubtitleStyle({ highlightStyle: e.target.value as NonNullable<SubtitleStyle["highlightStyle"]> })}
+                          className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="accent">强调色</option>
+                          <option value="pop">加粗强调</option>
+                          <option value="badge">色块徽标</option>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">高亮缩放</label>
+                        <input
+                          type="number"
+                          min="100"
+                          max="180"
+                          value={subtitleStyle.highlightScale || 125}
+                          onChange={(e) => updateSubtitleStyle({ highlightScale: parseInt(e.target.value || "125", 10) })}
+                          className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">底色透明度</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={subtitleStyle.backgroundOpacity ?? 72}
+                          onChange={(e) => updateSubtitleStyle({ backgroundOpacity: parseInt(e.target.value || "72", 10) })}
+                          className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                   <div>
                     <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                       分段方式
@@ -1968,12 +2056,28 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       动画
                     </label>
                     <Select
-                      value={subtitleStyle.animation}
+                      value={dynamicSubtitleEnabled || subtitleStyle.animation !== "word-pop" ? subtitleStyle.animation : "fade"}
                       onChange={(e) => updateSubtitleStyle({ animation: e.target.value as SubtitleStyle["animation"] })}
                       className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                     >
                       <option value="fade">淡入淡出</option>
+                      <option value="pop">整段弹跳</option>
+                      {dynamicSubtitleEnabled && <option value="word-pop">重点逐词弹入</option>}
                       <option value="none">无动画</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      对齐
+                    </label>
+                    <Select
+                      value={String(subtitleStyle.alignment)}
+                      onChange={(e) => updateSubtitleStyle({ alignment: parseInt(e.target.value, 10) })}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="1">左下</option>
+                      <option value="2">居中</option>
+                      <option value="3">右下</option>
                     </Select>
                   </div>
                 </div>

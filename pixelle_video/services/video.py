@@ -37,6 +37,7 @@ import ffmpeg
 from loguru import logger
 
 from pixelle_video.config import config_manager
+from pixelle_video.services.hyperframes_caption_renderer import HyperframesCaptionRenderer
 from pixelle_video.services.subtitle_renderer import SubtitleRenderer
 from pixelle_video.utils.os_util import get_resource_path, list_resource_files, resource_exists
 
@@ -478,6 +479,7 @@ class VideoService:
         self._ensure_ffmpeg()
         logger.info("Creating pure image video segment")
         subtitle_overlay_path: Optional[str] = None
+        subtitle_workspace: Optional[str] = None
 
         try:
             audio_duration = self._get_audio_duration(audio)
@@ -525,22 +527,57 @@ class VideoService:
                 )
 
             if subtitle_enabled and subtitle_text and str(subtitle_text).strip():
-                font_path = self._find_subtitle_font()
-                max_chars = max(8, min(22, width // 54))
-                wrapped_text = self._wrap_subtitle_text(
-                    subtitle_text,
-                    max_chars=max_chars,
-                    max_lines=2,
-                )
-                if wrapped_text:
+                renderer = SubtitleRenderer()
+                normalized_style = renderer.normalize_style(subtitle_style)
+                if normalized_style["mode"] == "hyperframes":
+                    try:
+                        subtitle_workspace = tempfile.mkdtemp(prefix="pixelle-hyperframes-")
+                        dynamic_renderer = HyperframesCaptionRenderer()
+                        caption_plan = dynamic_renderer.build_caption_plan(
+                            text=subtitle_text,
+                            duration=audio_duration,
+                            width=width,
+                            height=height,
+                            fps=fps,
+                            style=normalized_style,
+                        )
+                        subtitle_overlay_path = dynamic_renderer.render_overlay(
+                            caption_plan,
+                            subtitle_workspace,
+                        )
+                        overlay_stream = ffmpeg.input(
+                            subtitle_overlay_path,
+                            **{"c:v": "libvpx-vp9"},
+                        ).video.filter("setpts", "PTS-STARTPTS")
+                        video_stream = ffmpeg.overlay(
+                            video_stream,
+                            overlay_stream,
+                            eof_action="pass",
+                        )
+                    except (OSError, RuntimeError, ValueError) as exc:
+                        logger.warning(
+                            "Dynamic subtitle rendering failed; falling back to ASS: {}",
+                            exc,
+                        )
+                        normalized_style["mode"] = "ass"
+
+                if normalized_style["mode"] != "hyperframes":
+                    font_path = self._find_subtitle_font()
+                    max_chars = max(8, min(22, width // 54))
+                    wrapped_text = self._wrap_subtitle_text(
+                        subtitle_text,
+                        max_chars=max_chars,
+                        max_lines=2,
+                    )
+                    if not wrapped_text:
+                        wrapped_text = ""
                     font_size = max(24, min(56, width // 22))
                     bottom_margin = max(48, height // 14)
-                    normalized_style = subtitle_style or {}
                     if (
-                        normalized_style.get("mode", "ass") == "ass"
+                        wrapped_text
+                        and normalized_style["mode"] == "ass"
                         and self._ffmpeg_filter_available("subtitles")
                     ):
-                        renderer = SubtitleRenderer()
                         subtitle_overlay_path = renderer.create_ass_file(
                             text=subtitle_text,
                             duration=audio_duration,
@@ -557,10 +594,18 @@ class VideoService:
                                 Path(custom_font_path).expanduser().parent.as_posix()
                             )
                         video_stream = video_stream.filter("subtitles", **subtitle_filter_kwargs)
-                    elif self._ffmpeg_filter_available("drawtext"):
+                    elif wrapped_text and self._ffmpeg_filter_available("drawtext"):
+                        custom_font_path = Path(
+                            str(normalized_style.get("fontPath") or "")
+                        ).expanduser()
+                        drawtext_font_path = (
+                            str(custom_font_path)
+                            if custom_font_path.is_file()
+                            else font_path
+                        )
                         video_stream = video_stream.filter(
                             "drawtext",
-                            fontfile=font_path,
+                            fontfile=drawtext_font_path,
                             text=self._escape_drawtext_text(wrapped_text),
                             fontsize=font_size,
                             fontcolor="white",
@@ -570,7 +615,7 @@ class VideoService:
                             x="(w-text_w)/2",
                             y=f"h-text_h-{bottom_margin}",
                         )
-                    else:
+                    elif wrapped_text:
                         subtitle_overlay_path = self._create_subtitle_overlay_image(
                             wrapped_text,
                             width=width,
@@ -612,6 +657,8 @@ class VideoService:
         finally:
             if subtitle_overlay_path and os.path.exists(subtitle_overlay_path):
                 os.unlink(subtitle_overlay_path)
+            if subtitle_workspace and os.path.exists(subtitle_workspace):
+                shutil.rmtree(subtitle_workspace, ignore_errors=True)
 
     def has_audio_stream(self, video: str) -> bool:
         """

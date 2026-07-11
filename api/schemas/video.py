@@ -14,14 +14,15 @@
 Video generation API schemas
 """
 
-from typing import Optional, Literal, Dict, Any
+from typing import Any, Dict, Literal, Optional
+
 from pydantic import BaseModel, Field
 
 
 class SubtitleStyle(BaseModel):
     """Styled subtitle rendering options."""
 
-    mode: Literal["drawtext", "ass"] = Field("ass", description="Subtitle renderer mode")
+    mode: Literal["drawtext", "ass", "hyperframes"] = Field("ass", description="Subtitle renderer mode")
     preset: str = Field("short-video-bold", description="Subtitle visual preset")
     fontFamily: Optional[str] = Field(None, description="Font family display name")
     fontPath: Optional[str] = Field(None, description="Absolute or project-relative font path")
@@ -36,8 +37,18 @@ class SubtitleStyle(BaseModel):
     alignment: int = Field(2, ge=1, le=9, description="ASS alignment code")
     maxCharsPerLine: int = Field(14, ge=4, le=40, description="Max CJK chars per subtitle line")
     maxLines: int = Field(2, ge=1, le=4, description="Max lines per subtitle segment")
-    animation: Literal["none", "fade"] = Field("fade", description="Subtitle animation")
+    animation: Literal["none", "fade", "pop", "word-pop"] = Field(
+        "fade",
+        description="Subtitle animation",
+    )
     segmentMode: Literal["line", "sentence", "phrase"] = Field("phrase", description="Subtitle segmentation")
+    highlightWords: list[str] = Field(default_factory=list, description="Manual highlighted words")
+    highlightStyle: Literal["accent", "pop", "badge"] = Field(
+        "accent",
+        description="Highlighted phrase appearance",
+    )
+    highlightScale: int = Field(125, ge=100, le=180, description="Highlighted phrase scale percentage")
+    backgroundOpacity: int = Field(72, ge=0, le=100, description="Caption-box background opacity percentage")
 
 
 class VideoGenerateRequest(BaseModel):

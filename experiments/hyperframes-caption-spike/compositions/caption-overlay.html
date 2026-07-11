@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "PingFang SC";
+        src: local("PingFang SC");
+      }
+      @font-face {
+        font-family: "Hiragino Sans GB";
+        src: local("Hiragino Sans GB");
+      }
+      * { box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; margin: 0; overflow: hidden; background: transparent; }
+      body { font-family: "PingFang SC", "Hiragino Sans GB", sans-serif; }
+      #overlay-root { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+      .rail {
+        position: absolute; left: 72px; right: 72px; bottom: 172px; width: fit-content; max-width: 936px;
+        padding: 22px 30px; border: 1px solid rgba(255,255,255,0.16); border-radius: 18px;
+        background: rgba(0,0,0,0.52); color: #fff; font-size: 66px; font-weight: 700; line-height: 1.28;
+      }
+      .keyword-wrap { position: absolute; inset: 0; display: grid; place-items: center; padding-bottom: 80px; pointer-events: none; }
+      .keyword {
+        padding: 22px 36px 28px; color: #ffd43b; font-size: 166px; font-weight: 900;
+        line-height: 1; letter-spacing: 10px; -webkit-text-stroke: 6px #17110a;
+        text-shadow: 0 16px 0 rgba(23,17,10,0.82), 0 30px 50px rgba(0,0,0,0.42);
+      }
+    </style>
+  </head>
+  <body>
+    <main id="overlay-root" data-composition-id="caption-overlay" data-start="0" data-duration="4.8" data-width="1080" data-height="1920" data-fps="30">
+      <div id="overlay-rail-1" class="rail clip" data-start="0" data-duration="1.2" data-track-index="1">让每一帧，都更有</div>
+      <div id="overlay-keyword-stage" class="keyword-wrap clip" data-start="1.2" data-duration="1" data-track-index="2"><div id="overlay-keyword" class="keyword">表达力</div></div>
+      <div id="overlay-rail-2" class="rail clip" data-start="2.2" data-duration="2.6" data-track-index="1">让重点，在恰好的时刻出现</div>
+    </main>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo("#overlay-rail-1", { autoAlpha: 0, y: 28 }, { autoAlpha: 1, y: 0, duration: 0.22, ease: "power2.out" }, 0);
+      tl.fromTo("#overlay-keyword", { autoAlpha: 0, scale: 0.56, rotate: -4 }, { autoAlpha: 1, scale: 1.16, rotate: 0, duration: 0.18, ease: "back.out(2.8)" }, 1.2);
+      tl.to("#overlay-keyword", { scale: 1, duration: 0.24, ease: "power2.out" }, 1.38);
+      tl.fromTo("#overlay-rail-2", { autoAlpha: 0, y: 28 }, { autoAlpha: 1, y: 0, duration: 0.24, ease: "power2.out" }, 2.2);
+      window.__timelines["caption-overlay"] = tl;
+    </script>
+  </body>
+</html>

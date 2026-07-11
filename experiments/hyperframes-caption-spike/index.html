@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "PingFang SC";
+        src: local("PingFang SC");
+      }
+      @font-face {
+        font-family: "Hiragino Sans GB";
+        src: local("Hiragino Sans GB");
+      }
+      * { box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; margin: 0; overflow: hidden; background: #07090f; }
+      body { font-family: "PingFang SC", "Hiragino Sans GB", sans-serif; }
+      #root { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+      .scene {
+        position: absolute; inset: 0; overflow: hidden;
+        background:
+          linear-gradient(180deg, rgba(3, 7, 18, 0.08) 0%, rgba(3, 7, 18, 0.16) 48%, rgba(3, 7, 18, 0.86) 100%),
+          radial-gradient(circle at 74% 23%, rgba(250, 204, 21, 0.65) 0 4%, transparent 19%),
+          radial-gradient(circle at 27% 42%, rgba(14, 165, 233, 0.42) 0 13%, transparent 29%),
+          linear-gradient(135deg, #0b1025 0%, #182b57 45%, #4a152f 100%);
+      }
+      .scene::before, .scene::after {
+        content: ""; position: absolute; border-radius: 999px; filter: blur(38px); opacity: 0.72;
+      }
+      .scene::before { width: 520px; height: 520px; top: 780px; left: -150px; background: #2563eb; }
+      .scene::after { width: 460px; height: 460px; right: -120px; bottom: 180px; background: #f97316; }
+      .frame-label {
+        position: absolute; top: 96px; left: 72px; color: rgba(255,255,255,0.76);
+        font-size: 26px; letter-spacing: 3px; font-weight: 700;
+      }
+      .rail {
+        position: absolute; left: 72px; right: 72px; bottom: 172px;
+        display: inline-flex; width: fit-content; max-width: 936px;
+        padding: 22px 30px; border: 1px solid rgba(255,255,255,0.16); border-radius: 18px;
+        background: rgba(0,0,0,0.52); color: #fff; font-size: 66px; font-weight: 700;
+        line-height: 1.28; box-shadow: 0 16px 44px rgba(0,0,0,0.3);
+      }
+      #rail-2 { bottom: 172px; }
+      .keyword-wrap {
+        position: absolute; inset: 0; display: grid; place-items: center; padding-bottom: 80px;
+        pointer-events: none;
+      }
+      .keyword {
+        padding: 22px 36px 28px; color: #ffd43b; font-size: 166px; font-weight: 900;
+        line-height: 1; letter-spacing: 10px; -webkit-text-stroke: 6px #17110a;
+        text-shadow: 0 16px 0 rgba(23,17,10,0.82), 0 30px 50px rgba(0,0,0,0.42);
+      }
+      .keyword-subline { margin-top: 24px; color: rgba(255,255,255,0.76); font-size: 34px; font-weight: 700; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <main id="root" data-composition-id="caption-spike" data-start="0" data-duration="4.8" data-width="1080" data-height="1920" data-fps="30">
+      <div id="spike-scene" class="scene clip" data-start="0" data-duration="4.8" data-track-index="0"></div>
+      <div id="spike-label" class="frame-label clip" data-start="0" data-duration="4.8" data-track-index="1">HYPERFRAMES CAPTION SPIKE</div>
+      <div id="rail-1" class="rail clip" data-start="0" data-duration="1.2" data-track-index="2">让每一帧，都更有</div>
+      <div id="keyword-stage" class="keyword-wrap clip" data-start="1.2" data-duration="1" data-track-index="3">
+        <div>
+          <div id="keyword" class="keyword" data-layout-allow-occlusion>表达力</div>
+          <div class="keyword-subline" data-layout-allow-occlusion>关键词升级为独立视觉事件</div>
+        </div>
+      </div>
+      <div id="rail-2" class="rail clip" data-start="2.2" data-duration="2.6" data-track-index="2">让重点，在恰好的时刻出现</div>
+    </main>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo("#rail-1", { autoAlpha: 0, y: 28 }, { autoAlpha: 1, y: 0, duration: 0.22, ease: "power2.out" }, 0);
+      tl.fromTo("#keyword", { autoAlpha: 0, scale: 0.56, rotate: -4 }, { autoAlpha: 1, scale: 1.16, rotate: 0, duration: 0.18, ease: "back.out(2.8)" }, 1.2);
+      tl.to("#keyword", { scale: 1, duration: 0.24, ease: "power2.out" }, 1.38);
+      tl.fromTo("#rail-2", { autoAlpha: 0, y: 28 }, { autoAlpha: 1, y: 0, duration: 0.24, ease: "power2.out" }, 2.2);
+      window.__timelines["caption-spike"] = tl;
+    </script>
+  </body>
+</html>

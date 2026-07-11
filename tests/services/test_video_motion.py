@@ -175,6 +175,132 @@ def test_create_video_from_image_with_motion_passes_custom_font_dir_to_ass(monke
     assert font_dir.as_posix().replace(":", r"\\:") in captured["command"]
 
 
+def test_create_video_from_image_with_motion_uses_custom_font_for_drawtext_fallback(
+    monkeypatch, tmp_path
+):
+    captured = {}
+    image_path = tmp_path / "image.png"
+    audio_path = tmp_path / "audio.wav"
+    output_path = tmp_path / "segment.mp4"
+    font_path = tmp_path / "BrandFont.ttf"
+
+    Image.new("RGB", (640, 960), color=(80, 120, 160)).save(image_path)
+    audio_path.write_bytes(b"placeholder")
+    font_path.write_bytes(b"font")
+
+    service = VideoService()
+    monkeypatch.setattr(service, "_ensure_ffmpeg", lambda: None)
+    monkeypatch.setattr(service, "_get_audio_duration", lambda _audio: 1.0)
+    monkeypatch.setattr(service, "_ffmpeg_filter_available", lambda name: name == "drawtext")
+
+    def fake_run(self, *args, **kwargs):
+        captured["command"] = " ".join(str(arg) for arg in self.get_args())
+        output_path.write_bytes(b"video")
+        return b"", b""
+
+    monkeypatch.setattr("ffmpeg.nodes.OutputStream.run", fake_run)
+
+    service.create_video_from_image_with_motion(
+        image=str(image_path),
+        audio=str(audio_path),
+        output=str(output_path),
+        fps=24,
+        width=360,
+        height=640,
+        subtitle_text="测试自定义字体字幕",
+        subtitle_enabled=True,
+        subtitle_style={"mode": "ass", "fontPath": str(font_path)},
+        motion_enabled=True,
+    )
+
+    assert f"fontfile={font_path.as_posix()}" in captured["command"]
+
+
+def test_create_video_from_image_with_motion_uses_hyperframes_overlay(monkeypatch, tmp_path):
+    captured = {}
+    image_path = tmp_path / "image.png"
+    audio_path = tmp_path / "audio.wav"
+    output_path = tmp_path / "segment.mp4"
+    overlay_path = tmp_path / "caption-overlay.webm"
+
+    Image.new("RGB", (640, 960), color=(80, 120, 160)).save(image_path)
+    audio_path.write_bytes(b"placeholder")
+    overlay_path.write_bytes(b"webm")
+
+    service = VideoService()
+    monkeypatch.setattr(service, "_ensure_ffmpeg", lambda: None)
+    monkeypatch.setattr(service, "_get_audio_duration", lambda _audio: 1.0)
+    monkeypatch.setattr(
+        "pixelle_video.services.video.HyperframesCaptionRenderer.render_overlay",
+        lambda self, plan, output_dir: str(overlay_path),
+    )
+
+    def fake_run(self, *args, **kwargs):
+        captured["command"] = " ".join(str(arg) for arg in self.get_args())
+        output_path.write_bytes(b"video")
+        return b"", b""
+
+    monkeypatch.setattr("ffmpeg.nodes.OutputStream.run", fake_run)
+
+    service.create_video_from_image_with_motion(
+        image=str(image_path),
+        audio=str(audio_path),
+        output=str(output_path),
+        fps=24,
+        width=360,
+        height=640,
+        subtitle_text="动态字幕",
+        subtitle_enabled=True,
+        subtitle_style={"mode": "hyperframes", "animation": "pop"},
+        motion_enabled=True,
+    )
+
+    assert "libvpx-vp9" in captured["command"]
+    assert "overlay" in captured["command"]
+    assert "subtitles=" not in captured["command"]
+
+
+def test_hyperframes_failure_falls_back_to_ass(monkeypatch, tmp_path):
+    captured = {}
+    image_path = tmp_path / "image.png"
+    audio_path = tmp_path / "audio.wav"
+    output_path = tmp_path / "segment.mp4"
+
+    Image.new("RGB", (640, 960), color=(80, 120, 160)).save(image_path)
+    audio_path.write_bytes(b"placeholder")
+
+    service = VideoService()
+    monkeypatch.setattr(service, "_ensure_ffmpeg", lambda: None)
+    monkeypatch.setattr(service, "_get_audio_duration", lambda _audio: 1.0)
+    monkeypatch.setattr(service, "_ffmpeg_filter_available", lambda name: name == "subtitles")
+    monkeypatch.setattr(
+        "pixelle_video.services.video.HyperframesCaptionRenderer.render_overlay",
+        lambda self, plan, output_dir: (_ for _ in ()).throw(RuntimeError("renderer unavailable")),
+    )
+
+    def fake_run(self, *args, **kwargs):
+        captured["command"] = " ".join(str(arg) for arg in self.get_args())
+        output_path.write_bytes(b"video")
+        return b"", b""
+
+    monkeypatch.setattr("ffmpeg.nodes.OutputStream.run", fake_run)
+
+    service.create_video_from_image_with_motion(
+        image=str(image_path),
+        audio=str(audio_path),
+        output=str(output_path),
+        fps=24,
+        width=360,
+        height=640,
+        subtitle_text="动态字幕回退",
+        subtitle_enabled=True,
+        subtitle_style={"mode": "hyperframes", "animation": "pop"},
+        motion_enabled=True,
+    )
+
+    assert "subtitles=" in captured["command"]
+
+
 def test_create_video_from_image_with_motion_validates_mode(tmp_path):
     service = VideoService()
 

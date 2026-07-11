@@ -1,6 +1,10 @@
 import { SubtitleStyle } from "../types";
 
 export type PreviewAspect = "landscape" | "portrait";
+export interface PreviewHighlightFragment {
+  text: string;
+  highlighted: boolean;
+}
 
 export const PREVIEW_SAMPLE_TEXT = "让每一帧，都更有表达力。";
 
@@ -36,6 +40,31 @@ export const segmentPreviewText = (text: string, mode: SubtitleStyle["segmentMod
   }
 
   return Array.from(text.matchAll(/.{1,6}/gu), (match) => match[0]);
+};
+
+export const splitPreviewHighlights = (
+  text: string,
+  highlightWords: string[] = [],
+): PreviewHighlightFragment[] => {
+  const words = Array.from(new Set(
+    highlightWords
+      .map((word) => word.trim())
+      .filter(Boolean)
+      .sort((left, right) => right.length - left.length),
+  ));
+  if (!words.length) return text ? [{ text, highlighted: false }] : [];
+
+  const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matcher = new RegExp(`(${words.map(escapePattern).join("|")})`, "giu");
+  const highlightKeys = new Set(words.map((word) => word.toLocaleLowerCase()));
+
+  return text
+    .split(matcher)
+    .filter(Boolean)
+    .map((fragment) => ({
+      text: fragment,
+      highlighted: highlightKeys.has(fragment.toLocaleLowerCase()),
+    }));
 };
 
 export const scaleStyleForPreview = (style: SubtitleStyle, aspect: PreviewAspect) => {

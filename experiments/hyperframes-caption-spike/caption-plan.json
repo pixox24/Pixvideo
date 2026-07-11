@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "canvas": { "width": 1080, "height": 1920, "fps": 30 },
+  "durationMs": 4800,
+  "styles": {
+    "rail": {
+      "fontFamily": "PingFang SC, Hiragino Sans GB, sans-serif",
+      "fontSize": 66,
+      "fontWeight": 700,
+      "color": "#FFFFFF",
+      "background": "rgba(0, 0, 0, 0.52)"
+    },
+    "keyword-punch": {
+      "fontFamily": "PingFang SC, Hiragino Sans GB, sans-serif",
+      "fontSize": 166,
+      "fontWeight": 900,
+      "color": "#FFD43B",
+      "stroke": "#17110A",
+      "animation": "pop"
+    }
+  },
+  "captions": [
+    { "id": "rail-1", "text": "让每一帧，都更有", "startMs": 0, "endMs": 1200, "role": "rail" },
+    { "id": "keyword-1", "text": "表达力", "startMs": 1200, "endMs": 2200, "role": "embed", "style": "keyword-punch" },
+    { "id": "rail-2", "text": "让重点，在恰好的时刻出现", "startMs": 2200, "endMs": 4800, "role": "rail" }
+  ]
+}

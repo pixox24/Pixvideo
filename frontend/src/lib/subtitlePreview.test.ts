@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { segmentPreviewText, scaleStyleForPreview, wrapPreviewText } from "./subtitlePreview";
+import { segmentPreviewText, scaleStyleForPreview, splitPreviewHighlights, wrapPreviewText } from "./subtitlePreview";
 import { SubtitleStyle } from "../types";
 
 const style: SubtitleStyle = {
@@ -21,4 +21,16 @@ test("portrait preview preserves a usable subtitle size", () => {
   const scaled = scaleStyleForPreview(style, "portrait");
   assert.ok(scaled.fontSize >= 12);
   assert.ok(scaled.marginBottom > 0);
+});
+
+test("splitPreviewHighlights keeps manual phrases intact and ignores empty values", () => {
+  assert.deepEqual(
+    splitPreviewHighlights("让表达力成为重点", ["", "表达力", "重点"]),
+    [
+      { text: "让", highlighted: false },
+      { text: "表达力", highlighted: true },
+      { text: "成为", highlighted: false },
+      { text: "重点", highlighted: true },
+    ],
+  );
 });

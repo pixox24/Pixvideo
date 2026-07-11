@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-
 SUBTITLE_STYLE_DEFAULTS: dict[str, Any] = {
     "mode": "ass",
     "preset": "short-video-bold",
@@ -24,6 +23,10 @@ SUBTITLE_STYLE_DEFAULTS: dict[str, Any] = {
     "maxLines": 2,
     "animation": "fade",
     "segmentMode": "phrase",
+    "highlightWords": [],
+    "highlightStyle": "accent",
+    "highlightScale": 125,
+    "backgroundOpacity": 72,
 }
 
 
@@ -44,9 +47,51 @@ class SubtitleRenderer:
             40,
         )
         normalized["maxLines"] = self._coerce_int(normalized.get("maxLines"), 2, 1, 4)
-        normalized["animation"] = "fade" if normalized.get("animation") == "fade" else "none"
+        if normalized.get("mode") not in {"drawtext", "ass", "hyperframes"}:
+            normalized["mode"] = "ass"
+        raw_animation = normalized.get("animation")
+        if normalized["mode"] == "hyperframes" and raw_animation in {
+            "fade",
+            "pop",
+            "word-pop",
+        }:
+            normalized["animation"] = raw_animation
+        else:
+            normalized["animation"] = (
+                "fade" if raw_animation in {"fade", "pop", "word-pop"} else "none"
+            )
         if normalized.get("segmentMode") not in {"line", "sentence", "phrase"}:
             normalized["segmentMode"] = "phrase"
+        raw_words = normalized.get("highlightWords")
+        if isinstance(raw_words, str):
+            raw_words = [raw_words]
+        if not isinstance(raw_words, (list, tuple, set)):
+            raw_words = []
+        highlight_words: list[str] = []
+        seen_words: set[str] = set()
+        for raw_word in raw_words:
+            word = " ".join(str(raw_word or "").split())[:40]
+            key = word.casefold()
+            if word and key not in seen_words:
+                highlight_words.append(word)
+                seen_words.add(key)
+            if len(highlight_words) == 24:
+                break
+        normalized["highlightWords"] = highlight_words
+        if normalized.get("highlightStyle") not in {"accent", "pop", "badge"}:
+            normalized["highlightStyle"] = "accent"
+        normalized["highlightScale"] = self._coerce_int(
+            normalized.get("highlightScale"),
+            125,
+            100,
+            180,
+        )
+        normalized["backgroundOpacity"] = self._coerce_int(
+            normalized.get("backgroundOpacity"),
+            72,
+            0,
+            100,
+        )
         return normalized
 
     def _coerce_int(self, value: Any, default: int, minimum: int, maximum: int) -> int:

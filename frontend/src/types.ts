@@ -117,7 +117,7 @@ export interface BgmOption {
 }
 
 export interface SubtitleStyle {
-  mode: "drawtext" | "ass";
+  mode: "drawtext" | "ass" | "hyperframes";
   preset: "clean-white" | "short-video-bold" | "cinema-soft" | "caption-box";
   fontFamily?: string;
   fontPath?: string;
@@ -132,8 +132,12 @@ export interface SubtitleStyle {
   alignment: number;
   maxCharsPerLine: number;
   maxLines: number;
-  animation: "none" | "fade";
+  animation: "none" | "fade" | "pop" | "word-pop";
   segmentMode: "line" | "sentence" | "phrase";
+  highlightWords?: string[];
+  highlightStyle?: "accent" | "pop" | "badge";
+  highlightScale?: number;
+  backgroundOpacity?: number;
 }
 
 export interface FontOption {

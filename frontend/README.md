@@ -1,20 +1,30 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Pixvideo React Workbench
 
-# Run and deploy your AI Studio app
+This directory contains the React/Vite workbench. A production bundle is served by FastAPI at `http://localhost:8000` when `frontend/dist` exists.
 
-This contains everything you need to run your app locally.
+## Requirements
 
-View your app in AI Studio: https://ai.studio/apps/8dd02df1-d504-4c0b-b6eb-849a2cb0f043
+- Node.js 22+
+- The Pixvideo FastAPI backend for API-backed workflows
 
-## Run Locally
+## Commands
 
-**Prerequisites:**  Node.js
+```bash
+# Install locked dependencies
+npm ci
 
+# Run the Vite development server at http://localhost:5173
+npm run dev
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+# Type-check the frontend
+npm run lint
+
+# Build frontend/dist for FastAPI, Docker, or the Windows package
+npm run build
+```
+
+To serve the production bundle locally, run the build command above and then start the backend from the project root:
+
+```bash
+uv run python api/app.py --host 127.0.0.1 --port 8000
+```

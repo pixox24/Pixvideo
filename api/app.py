@@ -34,33 +34,34 @@ if str(_project_root) not in sys.path:
 
 import argparse
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from api.config import api_config
-from api.tasks import task_manager
 from api.dependencies import shutdown_pixelle_video
 
 # Import routers
 from api.routers import (
-    health_router,
-    llm_router,
-    tts_router,
-    image_router,
-    content_router,
-    video_router,
-    tasks_router,
-    files_router,
-    resources_router,
-    frame_router,
     configuration_router,
+    content_router,
+    files_router,
+    frame_router,
+    health_router,
     history_router,
-    workbench_router,
-    uploads_router,
+    image_router,
+    llm_router,
+    resources_router,
     specialist_router,
+    tasks_router,
+    tts_router,
+    uploads_router,
+    video_router,
+    workbench_router,
 )
+from api.tasks import task_manager
 
 
 @asynccontextmanager

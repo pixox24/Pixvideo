@@ -21,16 +21,16 @@ set "PYTHONPATH=%PROJECT_ROOT%"
 :: Set PIXELLE_VIDEO_ROOT environment variable for reliable path resolution
 set "PIXELLE_VIDEO_ROOT=%PROJECT_ROOT%"
 
-:: Start Web UI
-echo [Starting] Launching Pixelle-Video Web UI...
-echo Browser will open automatically.
+:: Start FastAPI with the bundled React workbench
+echo [Starting] Launching Pixelle-Video...
+echo Open http://127.0.0.1:8000 in your browser.
 echo.
-echo Note: Configure API keys and settings in the Web UI.
+echo Note: Configure API keys and settings in the React workbench.
 echo Press Ctrl+C to stop the server
 echo ========================================
 echo.
 
-"%PYTHON_HOME%\python.exe" -m streamlit run web\app.py
+"%PYTHON_HOME%\python.exe" api\app.py --host 127.0.0.1 --port 8000
 
 if errorlevel 1 (
     echo.
@@ -40,4 +40,3 @@ if errorlevel 1 (
     echo.
     pause
 )
-

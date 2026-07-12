@@ -67,5 +67,3 @@ config.example.yaml
 # Misc
 *.bak
 restart_web.sh
-start_web.sh
-

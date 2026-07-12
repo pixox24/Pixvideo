@@ -1,4 +1,4 @@
-"""Request schemas for Streamlit specialist workflow replacements."""
+"""Request schemas for specialist generation workflows."""
 
 from typing import Literal
 

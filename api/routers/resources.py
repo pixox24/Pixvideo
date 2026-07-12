@@ -19,23 +19,24 @@ Provides endpoints to discover available workflows, templates, and BGM.
 import platform
 import subprocess
 from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from loguru import logger
 
 from api.dependencies import PixelleVideoDep
 from api.schemas.resources import (
-    WorkflowInfo,
-    WorkflowListResponse,
-    TemplateInfo,
-    TemplateListResponse,
     BGMInfo,
     BGMListResponse,
     FontInfo,
     FontListResponse,
+    TemplateInfo,
+    TemplateListResponse,
+    WorkflowInfo,
+    WorkflowListResponse,
 )
 from pixelle_video.config import config_manager
-from pixelle_video.utils.os_util import list_resource_files, get_root_path, get_data_path
+from pixelle_video.utils.os_util import get_data_path, get_root_path
 from pixelle_video.utils.template_util import get_all_templates_with_info
 
 router = APIRouter(prefix="/resources", tags=["Resources"])

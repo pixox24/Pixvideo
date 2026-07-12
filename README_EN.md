@@ -13,6 +13,7 @@ Pixvideo is an AI short-video generation tool. It can connect script generation,
 ## Requirements
 
 - Python 3.11+
+- Node.js 22+
 - uv
 - ffmpeg
 
@@ -29,13 +30,14 @@ git clone <your-repo-url>
 cd Pixvideo
 uv sync
 cp config.example.yaml config.yaml
-uv run streamlit run web/app.py
+cd frontend && npm ci && npm run build && cd ..
+uv run python api/app.py --host 127.0.0.1 --port 8000
 ```
 
 Then open:
 
 ```text
-http://localhost:8501
+http://localhost:8000
 ```
 
 You can also use the launch script:
@@ -69,8 +71,12 @@ Common settings include:
 ## Useful Commands
 
 ```bash
-# Start the Web UI
-uv run streamlit run web/app.py
+# Build and start the Web UI and API
+cd frontend && npm run build && cd ..
+uv run python api/app.py --host 127.0.0.1 --port 8000
+
+# Frontend development server with hot reload (port 5173)
+cd frontend && npm run dev
 
 # Run the example generator
 uv run python generate_video.py
@@ -86,7 +92,7 @@ uv run --extra dev ruff check .
 
 ```text
 api/             FastAPI API
-web/             Streamlit Web workbench
+frontend/        React Web workbench
 pixelle_video/   Core generation logic and services
 templates/       Video frame templates
 resources/       Example assets and static files

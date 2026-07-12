@@ -5,8 +5,8 @@
 输出到 ~/Desktop/视频/
 """
 import asyncio
-import sys
 import os
+import sys
 from pathlib import Path
 
 os.chdir(Path(__file__).parent)
@@ -62,7 +62,7 @@ async def main():
 
     print(f"📝 脚本: {len(script.split(chr(10)))} 句")
     print(f"📤 输出到: {output_path}")
-    print(f"🎬 开始生成视频...\n")
+    print("🎬 开始生成视频...\n")
 
     try:
         result = await pixelle_video.generate_video(
@@ -70,7 +70,7 @@ async def main():
             **params
         )
 
-        print(f"\n✅ 视频生成成功!")
+        print("\n✅ 视频生成成功!")
         print(f"   📍 路径: {result.video_path}")
         print(f"   ⏱  时长: {result.duration:.2f}s")
         size_mb = result.file_size / (1024 * 1024)

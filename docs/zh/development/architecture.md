@@ -8,7 +8,8 @@ Pixelle-Video 的技术架构概览。
 
 Pixelle-Video 采用分层架构设计：
 
-- **Web 层**: Streamlit Web 界面
+- **Web 层**: 由 FastAPI 托管的 React/Vite 工作台
+- **API 层**: 为工作台和外部客户端提供的 FastAPI 路由
 - **服务层**: 核心业务逻辑
 - **ComfyUI 层**: 图像和TTS生成
 
@@ -40,8 +41,8 @@ Pixelle-Video 采用分层架构设计：
 
 ## 技术栈
 
-- **后端**: Python 3.10+, AsyncIO
-- **Web**: Streamlit
+- **后端**: Python 3.11+, FastAPI, AsyncIO
+- **Web**: React、Vite、FastAPI 静态文件托管
 - **AI**: OpenAI API, ComfyUI
 - **配置**: YAML
 - **工具**: uv (包管理)
@@ -51,4 +52,3 @@ Pixelle-Video 采用分层架构设计：
 ## 更多信息
 
 详细的架构文档即将推出。
-

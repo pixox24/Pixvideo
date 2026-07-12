@@ -8,7 +8,8 @@
 
 ### 必需条件
 
-- **Python**: 3.10 或更高版本
+- **Python**: 3.11 或更高版本
+- **Node.js**: 22 或更高版本（用于构建 React 工作台）
 - **操作系统**: Windows、macOS 或 Linux
 - **包管理器**: uv（推荐）或 pip
 
@@ -27,8 +28,8 @@
 
 1. 访问 [GitHub Releases](https://github.com/AIDC-AI/Pixelle-Video/releases/latest) 下载最新版本
 2. 下载最新的 Windows 一键整合包并解压到任意目录
-3. 双击运行 `start.bat` 启动 Web 界面
-4. 浏览器会自动打开 `http://localhost:8501`
+3. 双击运行 `start.bat` 启动 React 工作台
+4. 在浏览器中打开 `http://localhost:8000`
 
 !!! success "安装完成！"
     整合包已包含所有依赖，无需手动安装任何环境。首次使用只需在「⚙️ 系统配置」中配置 API 密钥即可开始使用。
@@ -85,14 +86,22 @@ pip install -e .
 运行以下命令验证安装是否成功：
 
 ```bash
+# 构建 React 工作台
+cd frontend
+npm ci
+npm run build
+cd ..
+
 # 使用 uv
-uv run streamlit run web/app.py
+uv run python api/app.py --host 127.0.0.1 --port 8000
 
 # 或使用 pip（需先激活虚拟环境）
-streamlit run web/app.py
+python api/app.py --host 127.0.0.1 --port 8000
 ```
 
-浏览器应该会自动打开 `http://localhost:8501`，显示 Pixelle-Video 的 Web 界面。
+在浏览器中打开 `http://localhost:8000`，即可使用 Pixelle-Video React 工作台。API 文档位于 `http://localhost:8000/docs`。
+
+如需迭代前端开发，可在 `frontend/` 中执行 `npm run dev`；Vite 开发服务器使用 5173 端口。
 
 !!! success "安装成功！"
     如果能看到 Web 界面，说明安装成功了！接下来请查看 [配置说明](configuration.md) 来设置服务。
@@ -131,4 +140,3 @@ ComfyUI 默认运行在 `http://127.0.0.1:8188`
 
 - [配置服务](configuration.md) - 配置 LLM 和图像生成服务
 - [快速开始](quick-start.md) - 生成第一个视频
-

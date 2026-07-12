@@ -45,9 +45,7 @@ dist/windows/
 │   ├── Pixvideo/                       # Project files
 │   ├── data/                           # User data (empty)
 │   ├── output/                         # Output (empty)
-│   ├── start.bat                       # Main launcher
-│   ├── start_api.bat                   # API launcher
-│   ├── start_web.bat                   # Web launcher
+│   ├── start.bat                       # FastAPI and React workbench launcher
 │   └── README.txt                      # User guide
 ├── Pixvideo-v*-win64.zip               # ZIP package (version number varies)
 └── Pixvideo-v*-win64.zip.sha256        # Checksum (version number varies)
@@ -88,9 +86,7 @@ The builder performs these steps:
 
 Launcher script templates in `templates/`:
 
-- `start.bat` - Main Web UI launcher
-- `start_api.bat` - API server launcher  
-- `start_web.bat` - Web UI only launcher
+- `start.bat` - FastAPI server and React workbench launcher
 - `README.txt` - User documentation
 
 Templates support placeholders:

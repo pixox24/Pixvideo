@@ -50,10 +50,12 @@ def test_quick_create_uses_real_minimax_defaults_and_models():
     assert "minimax-emotion-db1" not in component
 
 
-def test_digital_human_uses_real_minimax_voice_and_model():
+def test_digital_human_uses_local_edge_tts_contract():
     component = Path("frontend/src/components/DigitalHuman.tsx").read_text(encoding="utf-8")
+    api_client = Path("frontend/src/lib/api.ts").read_text(encoding="utf-8")
 
-    assert 'useState("male-qn-qingse")' in component
-    assert 'minimaxModel: "speech-2.8-turbo"' in component
-    assert "VOICE_OPTIONS.minimax.map" in component
-    assert "minimax-emotion-db1" not in component
+    assert 'useState("zh-CN-XiaoxiaoNeural")' in component
+    assert '<option value="zh-CN-XiaoxiaoNeural">晓晓</option>' in component
+    assert '<option value="zh-CN-YunxiNeural">云希</option>' in component
+    assert 'tts_inference_mode: "local"' in api_client
+    assert "voice: input.voice" in api_client

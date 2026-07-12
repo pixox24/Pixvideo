@@ -4,22 +4,23 @@
 
 ---
 
-## 启动 Web 界面
+## 启动 React 工作台
 
 ### Windows 一键整合包用户
 
 如果你使用的是 Windows 一键整合包，只需：
 1. 双击运行 `start.bat`
-2. 浏览器会自动打开 `http://localhost:8501`
+2. 在浏览器中打开 `http://localhost:8000`
 
 ### 从源码安装用户
 
 ```bash
-# 使用 uv 运行
-uv run streamlit run web/app.py
+# 构建工作台并启动 FastAPI
+cd frontend && npm ci && npm run build && cd ..
+uv run python api/app.py --host 127.0.0.1 --port 8000
 ```
 
-浏览器会自动打开 `http://localhost:8501`
+在浏览器中打开 `http://localhost:8000` 即可加载工作台。
 
 ---
 
@@ -27,20 +28,20 @@ uv run streamlit run web/app.py
 
 ### 步骤一：检查配置
 
-首次使用时，展开「⚙️ 系统配置」面板，确认已配置：
+首次使用时，打开「系统设置 Settings」标签页，确认已配置：
 
 - **LLM 配置**: 选择 AI 模型（如通义千问、GPT 等）并填入 API Key
 - **图像配置**: 配置 ComfyUI 地址或 RunningHub API Key
 
 如果还没有配置，请查看 [配置说明](configuration.md)。
 
-配置好后点击「保存配置」。
+配置好后点击「保存系统设置」。
 
 ---
 
 ### 步骤二：输入主题
 
-在左侧栏的「📝 内容输入」区域：
+在「快捷创作 Quick Create」标签页中：
 
 1. 选择「**AI 生成内容**」模式
 2. 在文本框中输入一个主题，例如：
@@ -59,7 +60,7 @@ uv run streamlit run web/app.py
 
 ### 步骤三：配置语音和视觉
 
-在中间栏：
+继续在「快捷创作 Quick Create」标签页中：
 
 **语音设置**
 - 选择 TTS 工作流（默认 Edge-TTS 即可）
@@ -74,7 +75,7 @@ uv run streamlit run web/app.py
 
 ### 步骤四：生成视频
 
-点击右侧栏的「🎬 生成视频」按钮！
+点击「快捷创作 Quick Create」标签页底部的「生成视频 Generate Video」按钮！
 
 系统会显示实时进度：
 - 生成文案
@@ -89,7 +90,7 @@ uv run streamlit run web/app.py
 
 ### 步骤五：预览视频
 
-生成完成后，视频会自动在右侧栏播放！
+生成完成后，可在工作台中查看任务状态和预览；通过「历史记录 History」标签页管理、下载或恢复已生成的视频。
 
 你可以看到：
 - 📹 视频预览播放器
@@ -112,4 +113,3 @@ uv run streamlit run web/app.py
 - **克隆声音** - 查看 [使用参考音频克隆声音](../tutorials/voice-cloning.md) 教程
 - **使用 API** - 查看 [API 使用指南](../user-guide/api.md)
 - **开发模板** - 查看 [模板开发指南](../user-guide/templates.md)
-

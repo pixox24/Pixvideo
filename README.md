@@ -13,6 +13,7 @@ Pixvideo 是一个 AI 短视频生成工具。输入主题、脚本或素材后�
 ## 环境要求
 
 - Python 3.11+
+- Node.js 22+
 - uv
 - ffmpeg
 
@@ -29,13 +30,14 @@ git clone <your-repo-url>
 cd Pixvideo
 uv sync
 cp config.example.yaml config.yaml
-uv run streamlit run web/app.py
+cd frontend && npm ci && npm run build && cd ..
+uv run python api/app.py --host 127.0.0.1 --port 8000
 ```
 
 启动后打开：
 
 ```text
-http://localhost:8501
+http://localhost:8000
 ```
 
 也可以直接运行启动脚本：
@@ -69,8 +71,12 @@ cp config.example.yaml config.yaml
 ## 常用命令
 
 ```bash
-# 启动 Web 界面
-uv run streamlit run web/app.py
+# 构建并启动 Web 界面与 API
+cd frontend && npm run build && cd ..
+uv run python api/app.py --host 127.0.0.1 --port 8000
+
+# 前端热更新开发服务器（端口 5173）
+cd frontend && npm run dev
 
 # 运行示例生成脚本
 uv run python generate_video.py
@@ -86,7 +92,7 @@ uv run --extra dev ruff check .
 
 ```text
 api/             FastAPI 接口
-web/             Streamlit Web 工作台
+frontend/        React Web 工作台
 pixelle_video/   核心生成逻辑与服务模块
 templates/       视频画面模板
 resources/       示例资源与静态文件

@@ -29,9 +29,16 @@ Usage:
     if config_manager.validate():
         print("Config is valid!")
 """
-from .schema import PixelleVideoConfig, LLMConfig, ComfyUIConfig, TTSSubConfig, ImageSubConfig, VideoSubConfig
-from .manager import ConfigManager
 from .loader import load_config_dict, save_config_dict
+from .manager import ConfigManager
+from .schema import (
+    ComfyUIConfig,
+    ImageSubConfig,
+    LLMConfig,
+    PixelleVideoConfig,
+    TTSSubConfig,
+    VideoSubConfig,
+)
 
 # Global singleton instance
 config_manager = ConfigManager()

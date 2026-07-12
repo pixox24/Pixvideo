@@ -1,13 +1,13 @@
 #!/bin/bash
 set -u
 
-# macOS Finder shortcut for launching the Pixelle-Video Web UI.
+# macOS Finder shortcut for launching the Pixelle-Video React workbench.
 cd "$(dirname "$0")"
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 clear
-echo "Starting Pixelle-Video Web UI..."
+echo "Starting Pixelle-Video..."
 echo "Project folder: $(pwd)"
 echo
 
@@ -25,10 +25,25 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   echo
 fi
 
-echo "Opening http://localhost:8501 ..."
-(sleep 3 && open "http://localhost:8501") >/dev/null 2>&1 &
+if ! command -v npm >/dev/null 2>&1; then
+  echo "[ERROR] npm was not found. Install Node.js 22+ first."
+  echo
+  read -r -p "Press Enter to close this window..."
+  exit 1
+fi
 
-uv run streamlit run web/app.py
+if [ ! -d frontend/node_modules ]; then
+  echo "Installing frontend dependencies..."
+  (cd frontend && npm ci)
+fi
+
+echo "Building React workbench..."
+(cd frontend && npm run build)
+
+echo "Opening http://localhost:8000 ..."
+(sleep 3 && open "http://localhost:8000") >/dev/null 2>&1 &
+
+uv run python api/app.py --host 127.0.0.1 --port 8000
 
 status=$?
 echo

@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-
 SUBTITLE_STYLE_DEFAULTS: dict[str, Any] = {
     "mode": "ass",
     "preset": "short-video-bold",

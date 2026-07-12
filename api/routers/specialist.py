@@ -7,12 +7,21 @@ from fastapi import APIRouter, Request
 from api.dependencies import PixelleVideoDep
 from api.routers.uploads import resolve_uploaded_file_keys
 from api.routers.video import path_to_url
-from api.schemas.specialist import ActionTransferGenerateRequest, CustomMediaGenerateRequest, DigitalHumanGenerateRequest, ImageToVideoGenerateRequest
+from api.schemas.specialist import (
+    ActionTransferGenerateRequest,
+    CustomMediaGenerateRequest,
+    DigitalHumanGenerateRequest,
+    ImageToVideoGenerateRequest,
+)
 from api.schemas.uploads import UploadPurpose
 from api.schemas.video import VideoGenerateAsyncResponse
 from api.tasks import TaskType, task_manager
 from pixelle_video.pipelines.asset_based import AssetBasedPipeline
-from pixelle_video.services.specialist_video import execute_digital_human_video, execute_video_workflow, persist_specialist_video
+from pixelle_video.services.specialist_video import (
+    execute_digital_human_video,
+    execute_video_workflow,
+    persist_specialist_video,
+)
 
 router = APIRouter(prefix="/specialist", tags=["Specialist Generation"])
 

@@ -4,7 +4,12 @@ import pytest
 from starlette.requests import Request
 
 from api.routers import specialist
-from api.schemas.specialist import ActionTransferGenerateRequest, CustomMediaGenerateRequest, DigitalHumanGenerateRequest, ImageToVideoGenerateRequest
+from api.schemas.specialist import (
+    ActionTransferGenerateRequest,
+    CustomMediaGenerateRequest,
+    DigitalHumanGenerateRequest,
+    ImageToVideoGenerateRequest,
+)
 
 
 @pytest.mark.asyncio

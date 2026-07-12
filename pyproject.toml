@@ -47,6 +47,10 @@ target-version = "py311"
 select = ["E", "F", "I"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+"api/app.py" = ["E402"]
+"generate_video.py" = ["E402"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

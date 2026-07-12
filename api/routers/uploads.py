@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import shutil
 import json
-from pathlib import Path
-from pathlib import PurePosixPath
+import shutil
+from pathlib import Path, PurePosixPath
 from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
-from api.schemas.uploads import UploadPurpose, UploadResponse, UploadedFile
+from api.schemas.uploads import UploadedFile, UploadPurpose, UploadResponse
 from pixelle_video.utils.os_util import get_data_path
 
 router = APIRouter(prefix="/uploads", tags=["Uploads"])

@@ -43,8 +43,8 @@ Usage:
     print(pixelle_video.pipelines.keys())  # dict_keys(['standard', 'custom'])
 """
 
-from pixelle_video.service import PixelleVideoCore, pixelle_video
 from pixelle_video.config import config_manager
+from pixelle_video.service import PixelleVideoCore, pixelle_video
 
 __version__ = "0.1.0"
 

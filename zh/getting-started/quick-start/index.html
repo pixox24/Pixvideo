@@ -662,15 +662,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#web" class="md-nav__link">
+  <a href="#react" class="md-nav__link">
     <span class="md-ellipsis">
       
-        启动 Web 界面
+        启动 React 工作台
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="启动 Web 界面">
+    <nav class="md-nav" aria-label="启动 React 工作台">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1487,15 +1487,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#web" class="md-nav__link">
+  <a href="#react" class="md-nav__link">
     <span class="md-ellipsis">
       
-        启动 Web 界面
+        启动 React 工作台
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="启动 Web 界面">
+    <nav class="md-nav" aria-label="启动 React 工作台">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1631,29 +1631,30 @@
 <h1 id="_1">快速开始<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
 <p>已经完成安装和配置？让我们生成第一个视频吧！</p>
 <hr />
-<h2 id="web">启动 Web 界面<a class="headerlink" href="#web" title="Permanent link">&para;</a></h2>
+<h2 id="react">启动 React 工作台<a class="headerlink" href="#react" title="Permanent link">&para;</a></h2>
 <h3 id="windows">Windows 一键整合包用户<a class="headerlink" href="#windows" title="Permanent link">&para;</a></h3>
 <p>如果你使用的是 Windows 一键整合包，只需：
 1. 双击运行 <code>start.bat</code>
-2. 浏览器会自动打开 <code>http://localhost:8501</code></p>
+2. 在浏览器中打开 <code>http://localhost:8000</code></p>
 <h3 id="_2">从源码安装用户<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># 使用 uv 运行</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>uv<span class="w"> </span>run<span class="w"> </span>streamlit<span class="w"> </span>run<span class="w"> </span>web/app.py
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># 构建工作台并启动 FastAPI</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>frontend<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>npm<span class="w"> </span>ci<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>npm<span class="w"> </span>run<span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>..
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>api/app.py<span class="w"> </span>--host<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
 </span></code></pre></div>
-<p>浏览器会自动打开 <code>http://localhost:8501</code></p>
+<p>在浏览器中打开 <code>http://localhost:8000</code> 即可加载工作台。</p>
 <hr />
 <h2 id="_3">生成你的第一个视频<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
 <h3 id="_4">步骤一：检查配置<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
-<p>首次使用时，展开「⚙️ 系统配置」面板，确认已配置：</p>
+<p>首次使用时，打开「系统设置 Settings」标签页，确认已配置：</p>
 <ul>
 <li><strong>LLM 配置</strong>: 选择 AI 模型（如通义千问、GPT 等）并填入 API Key</li>
 <li><strong>图像配置</strong>: 配置 ComfyUI 地址或 RunningHub API Key</li>
 </ul>
 <p>如果还没有配置，请查看 <a href="../configuration/">配置说明</a>。</p>
-<p>配置好后点击「保存配置」。</p>
+<p>配置好后点击「保存系统设置」。</p>
 <hr />
 <h3 id="_5">步骤二：输入主题<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
-<p>在左侧栏的「📝 内容输入」区域：</p>
+<p>在「快捷创作 Quick Create」标签页中：</p>
 <ol>
 <li>选择「<strong>AI 生成内容</strong>」模式</li>
 <li>在文本框中输入一个主题，例如：
@@ -1672,7 +1673,7 @@
 </div>
 <hr />
 <h3 id="_6">步骤三：配置语音和视觉<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
-<p>在中间栏：</p>
+<p>继续在「快捷创作 Quick Create」标签页中：</p>
 <p><strong>语音设置</strong>
 - 选择 TTS 工作流（默认 Edge-TTS 即可）
 - 如需声音克隆，可上传参考音频</p>
@@ -1682,7 +1683,7 @@
 - 选择视频模板（推荐竖屏 1080x1920）</p>
 <hr />
 <h3 id="_7">步骤四：生成视频<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h3>
-<p>点击右侧栏的「🎬 生成视频」按钮！</p>
+<p>点击「快捷创作 Quick Create」标签页底部的「生成视频 Generate Video」按钮！</p>
 <p>系统会显示实时进度：
 - 生成文案
 - 生成配图（每个分镜）
@@ -1694,7 +1695,7 @@
 </div>
 <hr />
 <h3 id="_8">步骤五：预览视频<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h3>
-<p>生成完成后，视频会自动在右侧栏播放！</p>
+<p>生成完成后，可在工作台中查看任务状态和预览；通过「历史记录 History」标签页管理、下载或恢复已生成的视频。</p>
 <p>你可以看到：
 - 📹 视频预览播放器
 - ⏱️ 视频时长
@@ -1734,7 +1735,7 @@
     <span class="md-icon" title="最后更新">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="2026年6月23日 01:39:56 UTC">2026年6月23日 01:39:56</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="2026年7月10日 15:14:48 UTC">2026年7月10日 15:14:48</span>
   </span>
 
     

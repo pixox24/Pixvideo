@@ -1780,7 +1780,8 @@
 <h2 id="_2">系统要求<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
 <h3 id="_3">必需条件<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Python</strong>: 3.10 或更高版本</li>
+<li><strong>Python</strong>: 3.11 或更高版本</li>
+<li><strong>Node.js</strong>: 22 或更高版本（用于构建 React 工作台）</li>
 <li><strong>操作系统</strong>: Windows、macOS 或 Linux</li>
 <li><strong>包管理器</strong>: uv（推荐）或 pip</li>
 </ul>
@@ -1796,8 +1797,8 @@
 <ol>
 <li>访问 <a href="https://github.com/AIDC-AI/Pixelle-Video/releases/latest">GitHub Releases</a> 下载最新版本</li>
 <li>下载最新的 Windows 一键整合包并解压到任意目录</li>
-<li>双击运行 <code>start.bat</code> 启动 Web 界面</li>
-<li>浏览器会自动打开 <code>http://localhost:8501</code></li>
+<li>双击运行 <code>start.bat</code> 启动 React 工作台</li>
+<li>在浏览器中打开 <code>http://localhost:8000</code></li>
 </ol>
 <div class="admonition success">
 <p class="admonition-title">安装完成！</p>
@@ -1841,13 +1842,20 @@
 <hr />
 <h2 id="_8">验证安装<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h2>
 <p>运行以下命令验证安装是否成功：</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># 使用 uv</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>uv<span class="w"> </span>run<span class="w"> </span>streamlit<span class="w"> </span>run<span class="w"> </span>web/app.py
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># 或使用 pip（需先激活虚拟环境）</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>streamlit<span class="w"> </span>run<span class="w"> </span>web/app.py
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># 构建 React 工作台</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">cd</span><span class="w"> </span>frontend
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>npm<span class="w"> </span>ci
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>npm<span class="w"> </span>run<span class="w"> </span>build
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nb">cd</span><span class="w"> </span>..
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># 使用 uv</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>api/app.py<span class="w"> </span>--host<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># 或使用 pip（需先激活虚拟环境）</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>python<span class="w"> </span>api/app.py<span class="w"> </span>--host<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
 </span></code></pre></div>
-<p>浏览器应该会自动打开 <code>http://localhost:8501</code>，显示 Pixelle-Video 的 Web 界面。</p>
+<p>在浏览器中打开 <code>http://localhost:8000</code>，即可使用 Pixelle-Video React 工作台。API 文档位于 <code>http://localhost:8000/docs</code>。</p>
+<p>如需迭代前端开发，可在 <code>frontend/</code> 中执行 <code>npm run dev</code>；Vite 开发服务器使用 5173 端口。</p>
 <div class="admonition success">
 <p class="admonition-title">安装成功！</p>
 <p>如果能看到 Web 界面，说明安装成功了！接下来请查看 <a href="../configuration/">配置说明</a> 来设置服务。</p>
@@ -1899,7 +1907,7 @@
     <span class="md-icon" title="最后更新">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="2026年6月23日 01:39:56 UTC">2026年6月23日 01:39:56</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="2026年7月10日 15:14:48 UTC">2026年7月10日 15:14:48</span>
   </span>
 
     

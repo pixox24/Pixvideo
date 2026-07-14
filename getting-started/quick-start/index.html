@@ -662,15 +662,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#start-the-web-interface" class="md-nav__link">
+  <a href="#start-the-react-workbench" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Start the Web Interface
+        Start the React Workbench
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Start the Web Interface">
+    <nav class="md-nav" aria-label="Start the React Workbench">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1487,15 +1487,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#start-the-web-interface" class="md-nav__link">
+  <a href="#start-the-react-workbench" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Start the Web Interface
+        Start the React Workbench
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Start the Web Interface">
+    <nav class="md-nav" aria-label="Start the React Workbench">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1631,29 +1631,30 @@
 <h1 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h1>
 <p>Already installed and configured? Let's create your first video!</p>
 <hr />
-<h2 id="start-the-web-interface">Start the Web Interface<a class="headerlink" href="#start-the-web-interface" title="Permanent link">&para;</a></h2>
+<h2 id="start-the-react-workbench">Start the React Workbench<a class="headerlink" href="#start-the-react-workbench" title="Permanent link">&para;</a></h2>
 <h3 id="windows-all-in-one-package-users">Windows All-in-One Package Users<a class="headerlink" href="#windows-all-in-one-package-users" title="Permanent link">&para;</a></h3>
 <p>If you're using the Windows All-in-One Package, simply:
 1. Double-click <code>start.bat</code>
-2. Your browser will automatically open <code>http://localhost:8501</code></p>
+2. Open <code>http://localhost:8000</code> in your browser</p>
 <h3 id="install-from-source-users">Install from Source Users<a class="headerlink" href="#install-from-source-users" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Using uv</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>uv<span class="w"> </span>run<span class="w"> </span>streamlit<span class="w"> </span>run<span class="w"> </span>web/app.py
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Build the workbench, then start FastAPI</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>frontend<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>npm<span class="w"> </span>ci<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>npm<span class="w"> </span>run<span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>..
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>api/app.py<span class="w"> </span>--host<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
 </span></code></pre></div>
-<p>Your browser will automatically open <code>http://localhost:8501</code></p>
+<p>Open <code>http://localhost:8000</code> to load the workbench.</p>
 <hr />
 <h2 id="create-your-first-video">Create Your First Video<a class="headerlink" href="#create-your-first-video" title="Permanent link">&para;</a></h2>
 <h3 id="step-1-check-configuration">Step 1: Check Configuration<a class="headerlink" href="#step-1-check-configuration" title="Permanent link">&para;</a></h3>
-<p>On first use, expand the「⚙️ System Configuration」panel and confirm:</p>
+<p>On first use, open the <strong>System Settings</strong> tab and confirm:</p>
 <ul>
 <li><strong>LLM Configuration</strong>: Select an AI model (e.g., Qianwen, GPT) and enter API Key</li>
 <li><strong>Image Configuration</strong>: Configure ComfyUI address or RunningHub API Key</li>
 </ul>
 <p>If not yet configured, see the <a href="../configuration/">Configuration Guide</a>.</p>
-<p>Click "Save Configuration" when done.</p>
+<p>Click <strong>Save System Settings</strong> when done.</p>
 <hr />
 <h3 id="step-2-enter-a-topic">Step 2: Enter a Topic<a class="headerlink" href="#step-2-enter-a-topic" title="Permanent link">&para;</a></h3>
-<p>In the left panel's「📝 Content Input」section:</p>
+<p>In the <strong>Quick Create</strong> tab:</p>
 <ol>
 <li>Select「<strong>AI Generate Content</strong>」mode</li>
 <li>Enter a topic in the text box, for example:
@@ -1672,7 +1673,7 @@
 </div>
 <hr />
 <h3 id="step-3-configure-voice-and-visuals">Step 3: Configure Voice and Visuals<a class="headerlink" href="#step-3-configure-voice-and-visuals" title="Permanent link">&para;</a></h3>
-<p>In the middle panel:</p>
+<p>Continue in the <strong>Quick Create</strong> tab:</p>
 <p><strong>Voice Settings</strong>
 - Select TTS workflow (default Edge-TTS works well)
 - For voice cloning, upload a reference audio file</p>
@@ -1682,7 +1683,7 @@
 - Choose video template (recommend portrait 1080x1920)</p>
 <hr />
 <h3 id="step-4-generate-video">Step 4: Generate Video<a class="headerlink" href="#step-4-generate-video" title="Permanent link">&para;</a></h3>
-<p>Click the「🎬 Generate Video」button in the right panel!</p>
+<p>Click <strong>Generate Video</strong> at the bottom of the <strong>Quick Create</strong> tab.</p>
 <p>The system will show real-time progress:
 - Generate script
 - Generate images (for each scene)
@@ -1694,7 +1695,7 @@
 </div>
 <hr />
 <h3 id="step-5-preview-video">Step 5: Preview Video<a class="headerlink" href="#step-5-preview-video" title="Permanent link">&para;</a></h3>
-<p>Once complete, the video will automatically play in the right panel!</p>
+<p>Once complete, inspect the task status and preview from the workbench; use the <strong>History</strong> tab to manage, download, or resume generated videos.</p>
 <p>You'll see:
 - 📹 Video preview player
 - ⏱️ Video duration
@@ -1734,7 +1735,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="June 23, 2026 01:39:56 UTC">June 23, 2026 01:39:56</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="July 10, 2026 15:14:48 UTC">July 10, 2026 15:14:48</span>
   </span>
 
     

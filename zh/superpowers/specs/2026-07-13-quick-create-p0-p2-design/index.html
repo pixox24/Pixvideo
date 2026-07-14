@@ -12,35 +12,31 @@
         <meta name="author" content="Pixelle.AI">
       
       
-        <link rel="canonical" href="https://AIDC-AI.github.io/Pixelle-Video/zh/development/architecture/">
+        <link rel="canonical" href="https://AIDC-AI.github.io/Pixelle-Video/zh/superpowers/specs/2026-07-13-quick-create-p0-p2-design/">
       
       
-        <link rel="prev" href="../../reference/config-schema/">
-      
-      
-        <link rel="next" href="../contributing/">
       
       
         
-          <link rel="alternate" href="../../../development/architecture/" hreflang="en">
+          <link rel="alternate" href="../../../../superpowers/specs/2026-07-13-quick-create-p0-p2-design/" hreflang="en">
         
           <link rel="alternate" href="./" hreflang="zh">
         
       
       
-      <link rel="icon" href="../../../assets/images/favicon.png">
+      <link rel="icon" href="../../../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>架构设计 - Pixelle-Video</title>
+        <title>快捷创作 P0–P2 生产级优化设计 - Pixelle-Video</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -59,9 +55,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -86,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#_1" class="md-skip">
+        <a href="#p0p2" class="md-skip">
           跳转至
         </a>
       
@@ -102,7 +98,7 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="页眉">
-    <a href="../../" title="Pixelle-Video" class="md-header__button md-logo" aria-label="Pixelle-Video" data-md-component="logo">
+    <a href="../../../" title="Pixelle-Video" class="md-header__button md-logo" aria-label="Pixelle-Video" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -122,7 +118,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              架构设计
+              快捷创作 P0–P2 生产级优化设计
             
           </span>
         </div>
@@ -169,7 +165,7 @@
       <ul class="md-select__list">
         
           <li class="md-select__item">
-            <a href="../../../development/architecture/" hreflang="en" class="md-select__link">
+            <a href="../../../../superpowers/specs/2026-07-13-quick-create-p0-p2-design/" hreflang="en" class="md-select__link">
               English
             </a>
           </li>
@@ -260,7 +256,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../" class="md-tabs__link">
+      <a href="../../../" class="md-tabs__link">
         
   
   
@@ -281,7 +277,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../getting-started/installation/" class="md-tabs__link">
+        <a href="../../../getting-started/installation/" class="md-tabs__link">
           
   
   
@@ -301,7 +297,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../user-guide/web-ui/" class="md-tabs__link">
+        <a href="../../../user-guide/web-ui/" class="md-tabs__link">
           
   
   
@@ -319,7 +315,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../gallery/" class="md-tabs__link">
+      <a href="../../../gallery/" class="md-tabs__link">
         
   
   
@@ -340,7 +336,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../tutorials/your-first-video/" class="md-tabs__link">
+        <a href="../../../tutorials/your-first-video/" class="md-tabs__link">
           
   
   
@@ -360,7 +356,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../reference/api-overview/" class="md-tabs__link">
+        <a href="../../../reference/api-overview/" class="md-tabs__link">
           
   
   
@@ -376,13 +372,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="./" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../../development/architecture/" class="md-tabs__link">
           
   
   
@@ -400,7 +394,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../faq/" class="md-tabs__link">
+      <a href="../../../faq/" class="md-tabs__link">
         
   
   
@@ -419,7 +413,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../troubleshooting/" class="md-tabs__link">
+      <a href="../../../troubleshooting/" class="md-tabs__link">
         
   
   
@@ -460,7 +454,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="导航栏" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../" title="Pixelle-Video" class="md-nav__button md-logo" aria-label="Pixelle-Video" data-md-component="logo">
+    <a href="../../../" title="Pixelle-Video" class="md-nav__button md-logo" aria-label="Pixelle-Video" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -490,7 +484,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../" class="md-nav__link">
+      <a href="../../../" class="md-nav__link">
         
   
   
@@ -571,7 +565,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/installation/" class="md-nav__link">
+      <a href="../../../getting-started/installation/" class="md-nav__link">
         
   
   
@@ -599,7 +593,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/quick-start/" class="md-nav__link">
+      <a href="../../../getting-started/quick-start/" class="md-nav__link">
         
   
   
@@ -627,7 +621,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/configuration/" class="md-nav__link">
+      <a href="../../../getting-started/configuration/" class="md-nav__link">
         
   
   
@@ -716,7 +710,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/web-ui/" class="md-nav__link">
+      <a href="../../../user-guide/web-ui/" class="md-nav__link">
         
   
   
@@ -744,7 +738,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/api/" class="md-nav__link">
+      <a href="../../../user-guide/api/" class="md-nav__link">
         
   
   
@@ -772,7 +766,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/workflows/" class="md-nav__link">
+      <a href="../../../user-guide/workflows/" class="md-nav__link">
         
   
   
@@ -800,7 +794,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/templates/" class="md-nav__link">
+      <a href="../../../user-guide/templates/" class="md-nav__link">
         
   
   
@@ -835,7 +829,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../gallery/" class="md-nav__link">
+      <a href="../../../gallery/" class="md-nav__link">
         
   
   
@@ -916,7 +910,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tutorials/your-first-video/" class="md-nav__link">
+      <a href="../../../tutorials/your-first-video/" class="md-nav__link">
         
   
   
@@ -944,7 +938,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tutorials/custom-style/" class="md-nav__link">
+      <a href="../../../tutorials/custom-style/" class="md-nav__link">
         
   
   
@@ -972,7 +966,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tutorials/voice-cloning/" class="md-nav__link">
+      <a href="../../../tutorials/voice-cloning/" class="md-nav__link">
         
   
   
@@ -1061,7 +1055,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/api-overview/" class="md-nav__link">
+      <a href="../../../reference/api-overview/" class="md-nav__link">
         
   
   
@@ -1089,7 +1083,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/config-schema/" class="md-nav__link">
+      <a href="../../../reference/config-schema/" class="md-nav__link">
         
   
   
@@ -1121,31 +1115,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
         
           
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
             
   
   
@@ -1163,7 +1154,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1178,37 +1169,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    架构设计
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../../development/architecture/" class="md-nav__link">
         
   
   
@@ -1224,131 +1188,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="目录">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      目录
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        核心架构
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        主要组件
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="主要组件">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#pixellevideocore" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PixelleVideoCore
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#llm-service" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        LLM Service
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#image-service" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Image Service
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tts-service" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        TTS Service
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#video-generator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Video Generator
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        技术栈
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        更多信息
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1361,7 +1200,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../contributing/" class="md-nav__link">
+      <a href="../../../development/contributing/" class="md-nav__link">
         
   
   
@@ -1396,7 +1235,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../faq/" class="md-nav__link">
+      <a href="../../../faq/" class="md-nav__link">
         
   
   
@@ -1423,7 +1262,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../troubleshooting/" class="md-nav__link">
+      <a href="../../../troubleshooting/" class="md-nav__link">
         
   
   
@@ -1470,10 +1309,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        核心架构
+        背景与目标
       
     </span>
   </a>
@@ -1481,22 +1320,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        主要组件
+        方案比较
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="主要组件">
+    <nav class="md-nav" aria-label="方案比较">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#pixellevideocore" class="md-nav__link">
+  <a href="#a" class="md-nav__link">
     <span class="md-ellipsis">
       
-        PixelleVideoCore
+        方案 A：局部界面修补
       
     </span>
   </a>
@@ -1504,10 +1343,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#llm-service" class="md-nav__link">
+  <a href="#b" class="md-nav__link">
     <span class="md-ellipsis">
       
-        LLM Service
+        方案 B：统一任务域模型并渐进重构（采用）
       
     </span>
   </a>
@@ -1515,32 +1354,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#image-service" class="md-nav__link">
+  <a href="#c" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Image Service
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tts-service" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        TTS Service
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#video-generator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Video Generator
+        方案 C：新建队列服务和全新向导
       
     </span>
   </a>
@@ -1553,10 +1370,132 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        后端架构
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="后端架构">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        技术栈
+        唯一任务身份
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        逐分镜输入
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        历史列表
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        前端数据流
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="前端数据流">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        单任务与批量任务
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        提交安全
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        工作台流程
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        草稿与预设
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        错误处理
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        响应式与可访问性
       
     </span>
   </a>
@@ -1564,10 +1503,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_5" class="md-nav__link">
+  <a href="#_14" class="md-nav__link">
     <span class="md-ellipsis">
       
-        更多信息
+        测试策略
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        明确不做
       
     </span>
   </a>
@@ -1594,41 +1544,66 @@
   
 
 
-<h1 id="_1">架构设计<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>Pixelle-Video 的技术架构概览。</p>
-<hr />
-<h2 id="_2">核心架构<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
-<p>Pixelle-Video 采用分层架构设计：</p>
+<h1 id="p0p2">快捷创作 P0–P2 生产级优化设计<a class="headerlink" href="#p0p2" title="Permanent link">&para;</a></h1>
+<h2 id="_1">背景与目标<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h2>
+<p>快捷创作已经覆盖文案、分镜、配音、画面、字幕、工作流、提交和历史，但审计确认存在四类生产风险：用户输入未进入最终生成、一个业务任务拥有两个 ID、取消/历史状态不一致、长表单缺少提交保护和移动端布局。目标是在保留现有 React + FastAPI + StandardPipeline 架构的前提下，使流程达到“配置可信、提交可控、状态一致、可恢复、可在窄屏完成”的标准。</p>
+<h2 id="_2">方案比较<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
+<h3 id="a">方案 A：局部界面修补<a class="headerlink" href="#a" title="Permanent link">&para;</a></h3>
+<p>只增加确认框、禁用按钮和响应式样式。改动最小，但无法解决逐分镜提示丢失、批量语义和双任务 ID，因此不采用。</p>
+<h3 id="b">方案 B：统一任务域模型并渐进重构（采用）<a class="headerlink" href="#b" title="Permanent link">&para;</a></h3>
+<p>让 API Task ID 成为流水线、输出目录和历史记录的唯一 ID；扩展标准视频请求支持逐分镜输入；前端把单视频与批量视频都转换为同一个 <code>VideoTaskInput</code>；在现有工作台上增加阶段导航、草稿恢复、核对摘要、提交锁、取消和响应式抽屉。该方案能够覆盖 P0–P2，同时不重写媒体/TTS/字幕流水线。</p>
+<h3 id="c">方案 C：新建队列服务和全新向导<a class="headerlink" href="#c" title="Permanent link">&para;</a></h3>
+<p>引入数据库、队列 worker、批次表和完全重写的多路由 UI。长期扩展性最好，但超出本轮范围，也会放大迁移和部署风险，因此不采用。</p>
+<h2 id="_3">后端架构<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
+<h3 id="_4">唯一任务身份<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
+<p><code>TaskManager.create_task()</code> 生成的 UUID 是唯一任务 ID。异步视频路由把该 ID 作为内部 <code>task_id</code> 参数传入 StandardPipeline；StandardPipeline 使用它创建输出目录并保存 metadata/storyboard。<code>/api/tasks/{id}</code>、<code>/api/history/{id}</code> 与 <code>/output/{id}</code> 始终引用同一实体。</p>
+<p>取消流程为：DELETE task → cancel future → LinearPipeline 捕获 <code>CancelledError</code> → StandardPipeline 持久化 <code>cancelled</code> → TaskManager 标记 <code>cancelled</code> → history 返回同一状态。取消是正常终态，不再映射为失败。</p>
+<h3 id="_5">逐分镜输入<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<p><code>VideoGenerateRequest</code> 新增可选 <code>scenes</code>：</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">[{</span><span class="nt">&quot;narration&quot;</span><span class="p">:</span><span class="s2">&quot;旁白&quot;</span><span class="p">,</span><span class="nt">&quot;visual_prompt&quot;</span><span class="p">:</span><span class="s2">&quot;画面提示&quot;</span><span class="p">}]</span>
+</span></code></pre></div>
+<p>当 scenes 存在时，StandardPipeline 直接使用 narration；非空 visual prompt 进入对应帧，空 prompt 才调用 LLM 补齐。全局 prompt prefix 仍统一应用。旧的 <code>text + split_mode</code> 保持兼容。</p>
+<h3 id="_6">历史列表<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
+<p>历史摘要继续保持轻量，但前端直接读取 <code>n_frames</code>。新增/使用详情接口补齐参数和 storyboard，不再从摘要猜测 TTS、工作流、BGM。取消态在类型、筛选、控制台和历史中独立展示。</p>
+<h2 id="_7">前端数据流<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h2>
+<h3 id="_8">单任务与批量任务<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h3>
+<p>快捷创作先生成一个或多个 <code>VideoTaskInput</code>：</p>
 <ul>
-<li><strong>Web 层</strong>: 由 FastAPI 托管的 React/Vite 工作台</li>
-<li><strong>API 层</strong>: 为工作台和外部客户端提供的 FastAPI 路由</li>
-<li><strong>服务层</strong>: 核心业务逻辑</li>
-<li><strong>ComfyUI 层</strong>: 图像和TTS生成</li>
+<li>AI/手动：一个输入，对应一个视频。</li>
+<li>批量：每个非空主题生成一个输入，每项只有自己的场景和标题；并发提交，但每项拥有独立任务、取消、失败和重试状态。</li>
 </ul>
-<hr />
-<h2 id="_3">主要组件<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
-<h3 id="pixellevideocore">PixelleVideoCore<a class="headerlink" href="#pixellevideocore" title="Permanent link">&para;</a></h3>
-<p>核心服务类，协调各个子服务。</p>
-<h3 id="llm-service">LLM Service<a class="headerlink" href="#llm-service" title="Permanent link">&para;</a></h3>
-<p>负责调用大语言模型生成文案。</p>
-<h3 id="image-service">Image Service<a class="headerlink" href="#image-service" title="Permanent link">&para;</a></h3>
-<p>负责调用 ComfyUI 生成图像。</p>
-<h3 id="tts-service">TTS Service<a class="headerlink" href="#tts-service" title="Permanent link">&para;</a></h3>
-<p>负责调用 ComfyUI 生成语音。</p>
-<h3 id="video-generator">Video Generator<a class="headerlink" href="#video-generator" title="Permanent link">&para;</a></h3>
-<p>负责合成最终视频。</p>
-<hr />
-<h2 id="_4">技术栈<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h2>
+<p>批量界面明确显示“将创建 N 个视频”，不再把主题数量描述为分镜数量。</p>
+<h3 id="_9">提交安全<a class="headerlink" href="#_9" title="Permanent link">&para;</a></h3>
+<p>提交前展示核对区：标题/视频数/分镜数、TTS、工作流、画布尺寸、字幕、BGM、预计旁白时长。核对区包含确认复选框。提交期间 CTA 锁定并显示状态；同一次提交使用稳定 client request key，防止双击重复创建。</p>
+<h3 id="_10">工作台流程<a class="headerlink" href="#_10" title="Permanent link">&para;</a></h3>
+<p>采用五阶段模型：内容、分镜、声音与画面、核对并生成、进度与结果。前四阶段在快捷创作页用阶段导航和锚点表达，当前阶段、完成度和错误数可见；第五阶段由可收起任务抽屉与历史页承载。保留用户熟悉的现有配置卡，避免大规模视觉重写。</p>
+<h3 id="_11">草稿与预设<a class="headerlink" href="#_11" title="Permanent link">&para;</a></h3>
+<p>标题、模式、主题、文案、分镜、批量输入和关键输出设置保存到版本化 localStorage 草稿。重新打开时恢复，成功提交后保留配置但记录最近提交时间。预设载入先通过共享规范化函数校验，字幕值不会在 API 边界静默变化；非法值在 UI 中立即规范化并给出说明。</p>
+<h3 id="_12">错误处理<a class="headerlink" href="#_12" title="Permanent link">&para;</a></h3>
+<p>所有 API 请求复用公开的 <code>requestJson()</code> 与 <code>formatApiErrorValue()</code>。Toast、任务 errorMsg 和可展开技术详情只接收字符串。FastAPI <code>detail[]</code> 显示为字段路径加消息，未知对象使用安全 JSON 文本，绝不显示 <code>[object Object]</code>。</p>
+<h2 id="_13">响应式与可访问性<a class="headerlink" href="#_13" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>后端</strong>: Python 3.11+, FastAPI, AsyncIO</li>
-<li><strong>Web</strong>: React、Vite、FastAPI 静态文件托管</li>
-<li><strong>AI</strong>: OpenAI API, ComfyUI</li>
-<li><strong>配置</strong>: YAML</li>
-<li><strong>工具</strong>: uv (包管理)</li>
+<li>小于 <code>lg</code>：侧栏默认隐藏，通过头部菜单打开；Console 变为右侧抽屉；主创作区占满宽度。</li>
+<li><code>lg</code> 以上：保留桌面三栏，但 Console 可折叠。</li>
+<li>Tab 切换时主内容滚动归零。</li>
+<li>所有新控件具备可访问名称、键盘焦点、<code>aria-current</code>/<code>aria-expanded</code>/<code>aria-live</code>；删除、取消不依赖 hover。</li>
+<li>状态来自真实 <code>serviceStatus</code> 和当前 provider/model；不再硬编码绿色 Ready。暂不实现完整英文翻译，移除无效语言开关，避免虚假能力。</li>
 </ul>
-<hr />
-<h2 id="_5">更多信息<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h2>
-<p>详细的架构文档即将推出。</p>
+<h2 id="_14">测试策略<a class="headerlink" href="#_14" title="Permanent link">&para;</a></h2>
+<ol>
+<li>后端：scene schema/转发、固定场景 prompt、统一任务 ID、取消持久化、TaskManager 取消终态。</li>
+<li>前端 API：错误对象格式化、scene payload、history 摘要、cancelled 状态、字幕规范化。</li>
+<li>前端行为契约：批量一主题一任务、提交锁/确认、草稿恢复、取消按钮、真实状态标签、响应式类和滚动复位。</li>
+<li>回归：完整 pytest、TypeScript、Node tests、Vite build、Compose config。</li>
+<li>浏览器：桌面与 390px 窄屏验证，不触发付费生成；用请求拦截或只读页面状态验证提交摘要与布局。</li>
+</ol>
+<h2 id="_15">明确不做<a class="headerlink" href="#_15" title="Permanent link">&para;</a></h2>
+<ul>
+<li>不引入 Redis/Celery/数据库队列。</li>
+<li>不实现完整多语言翻译系统。</li>
+<li>不把试听音频或测试图直接注入成片；本轮先明确“仅预览”，避免误导。</li>
+<li>不重写现有模板、字幕渲染、TTS 或媒体供应商实现。</li>
+</ul>
 
 
 
@@ -1651,7 +1626,7 @@
     <span class="md-icon" title="最后更新">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="2026年7月10日 15:14:48 UTC">2026年7月10日 15:14:48</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="July 13, 2026 13:51:37 UTC">July 13, 2026 13:51:37</span>
   </span>
 
     
@@ -1661,7 +1636,7 @@
     <span class="md-icon" title="创建日期">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="2026年6月23日 01:39:56 UTC">2026年6月23日 01:39:56</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="July 13, 2026 13:51:37 UTC">July 13, 2026 13:51:37</span>
   </span>
 
     
@@ -1693,44 +1668,6 @@
       
         <footer class="md-footer">
   
-    
-      
-      <nav class="md-footer__inner md-grid" aria-label="页脚" >
-        
-          
-          <a href="../../reference/config-schema/" class="md-footer__link md-footer__link--prev" aria-label="上一页: 配置文件详解">
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
-            </div>
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                上一页
-              </span>
-              <div class="md-ellipsis">
-                配置文件详解
-              </div>
-            </div>
-          </a>
-        
-        
-          
-          <a href="../contributing/" class="md-footer__link md-footer__link--next" aria-label="下一页: 贡献指南">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                下一页
-              </span>
-              <div class="md-ellipsis">
-                贡献指南
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
-            </div>
-          </a>
-        
-      </nav>
     
   
   <div class="md-footer-meta md-typeset">
@@ -1775,10 +1712,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>

@@ -30,14 +30,58 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.detail || data.error || data.message || `Request failed: ${response.status}`);
+    throw new Error(getApiErrorMessage(data, response.status));
   }
   return data as T;
 }
 
+export function formatApiErrorValue(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) return value;
+
+  if (Array.isArray(value)) {
+    const messages = value
+      .map((item) => {
+        if (item && typeof item === "object") {
+          const detail = item as { loc?: unknown; msg?: unknown };
+          if (typeof detail.msg === "string") {
+            const location = Array.isArray(detail.loc)
+              ? detail.loc.filter((part) => part !== "body").join(".")
+              : "";
+            return location ? `${location}: ${detail.msg}` : detail.msg;
+          }
+        }
+        return formatApiErrorValue(item);
+      })
+      .filter((message): message is string => Boolean(message));
+    return messages.length > 0 ? messages.join("; ") : undefined;
+  }
+
+  if (value && typeof value === "object") {
+    const nested = value as { detail?: unknown; error?: unknown; message?: unknown };
+    const nestedMessage = (
+      formatApiErrorValue(nested.detail) ||
+      formatApiErrorValue(nested.error) ||
+      formatApiErrorValue(nested.message)
+    );
+    if (nestedMessage) return nestedMessage;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "未知错误";
+    }
+  }
+
+  return undefined;
+}
+
+function getApiErrorMessage(data: unknown, status: number): string {
+  return formatApiErrorValue(data) || `Request failed: ${status}`;
+}
+
 function normalizeStatus(status?: string): Task["status"] {
   if (status === "completed") return "completed";
-  if (status === "failed" || status === "cancelled") return "failed";
+  if (status === "cancelled") return "cancelled";
+  if (status === "failed") return "failed";
   if (status === "pending" || status === "running" || status === "generating") return "generating";
   return "ready";
 }
@@ -185,6 +229,12 @@ function buildVideoPayload(input: any) {
   const ttsMode = input.ttsMode === "minimax" ? "minimax" : input.ttsMode === "comfyui" ? "comfyui" : "local";
   const bgmPath = input.bgm && input.bgm !== "bgm-none" ? input.bgm : undefined;
   const bgmVolume = input.bgmVolume > 1 ? input.bgmVolume / 100 : input.bgmVolume;
+  const subtitleStyle = input.subtitleStyle
+    ? {
+        ...input.subtitleStyle,
+        fontSize: Math.min(120, Math.max(12, Number(input.subtitleStyle.fontSize) || 52)),
+      }
+    : undefined;
 
   return {
     pipeline: "standard",
@@ -193,13 +243,18 @@ function buildVideoPayload(input: any) {
     mode: "fixed",
     split_mode: scenes.length > 0 ? "paragraph" : input.splitType || "line",
     n_scenes: scenes.length || 1,
+    scenes: scenes.map((scene: any) => ({
+      narration: String(scene.ttsText || "").trim(),
+      visual_prompt: String(scene.visualPrompt || "").trim(),
+    })),
+    client_request_key: input.clientRequestKey || undefined,
     media_workflow: input.workflowId || undefined,
     prompt_prefix: input.promptPrefix || undefined,
     frame_template: input.templateId || undefined,
     composition_mode: input.viewMode === "pure-image" ? "plain_image" : "template",
     image_motion_enabled: Boolean(input.enableMotion),
     subtitle_enabled: input.enableSubtitles !== false,
-    subtitle_style: input.subtitleStyle || undefined,
+    subtitle_style: subtitleStyle,
     tts_inference_mode: ttsMode,
     tts_voice: input.voice || undefined,
     tts_speed: input.speed,
@@ -298,6 +353,10 @@ export async function fetchTask(taskId: string): Promise<any> {
   return fetchJson<any>(`/api/tasks/${taskId}`);
 }
 
+export async function cancelTask(taskId: string): Promise<void> {
+  await fetchJson(`/api/tasks/${taskId}`, { method: "DELETE" });
+}
+
 export function mapApiTask(apiTask: any, fallback: Task): Task {
   const status = normalizeStatus(apiTask.status);
   const result = apiTask.result || {};
@@ -326,7 +385,7 @@ export async function fetchHistoryTasks(): Promise<any[]> {
 
 export function mapHistoryTask(task: any): Task {
   const metadata = task.metadata || task;
-  const params = metadata.params || metadata.request_params || {};
+  const params = metadata.input || metadata.params || metadata.request_params || task.request_params || {};
   const storyboard = task.storyboard || metadata.storyboard || {};
   const frames = storyboard.frames || metadata.frames || [];
 
@@ -337,7 +396,7 @@ export function mapHistoryTask(task: any): Task {
     status: normalizeStatus(metadata.status || task.status),
     progress: metadata.status === "completed" || task.status === "completed" ? 100 : 0,
     currentStep: metadata.status || task.status || "历史记录",
-    sceneCount: frames.length || params.n_scenes || 1,
+    sceneCount: frames.length || task.n_frames || metadata.n_frames || params.n_scenes || 1,
     createdTime: formatDate(metadata.created_at || task.created_at),
     duration: metadata.duration,
     videoUrl: task.video_url || metadata.video_url,

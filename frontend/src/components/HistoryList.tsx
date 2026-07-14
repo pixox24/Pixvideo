@@ -22,6 +22,7 @@ interface HistoryListProps {
   tasks: Task[];
   onDeleteTask: (id: string) => void;
   onResumeTask: (task: Task) => void;
+  onCancelTask: (task: Task) => void;
   addToast: (text: string, type: "success" | "error" | "info") => void;
 }
 
@@ -29,6 +30,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   tasks,
   onDeleteTask,
   onResumeTask,
+  onCancelTask,
   addToast,
 }) => {
   const [filter, setFilter] = useState<string>("all");
@@ -94,7 +96,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[#101114] border border-zinc-900 px-3 py-2 rounded-md">
         <div className="flex items-center gap-1">
           <span className="text-[10px] uppercase text-zinc-500 tracking-wider mr-2 font-mono">状态筛选:</span>
-          {["all", "completed", "generating", "failed"].map((status) => (
+          {["all", "completed", "generating", "failed", "cancelled"].map((status) => (
             <button
               key={status}
               onClick={() => setFilter(status)}
@@ -108,6 +110,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
               {status === "completed" && "已完成"}
               {status === "generating" && "生成中"}
               {status === "failed" && "生成失败"}
+              {status === "cancelled" && "已取消"}
             </button>
           ))}
         </div>
@@ -166,6 +169,11 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                       {task.status === "generating" && (
                         <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20">
                           <RefreshCw className="w-4 h-4 animate-spin" />
+                        </div>
+                      )}
+                      {task.status === "cancelled" && (
+                        <div className="w-8 h-8 rounded-full bg-zinc-500/10 flex items-center justify-center text-zinc-400 border border-zinc-500/20">
+                          <XCircle className="w-4 h-4" />
                         </div>
                       )}
                     </div>
@@ -228,13 +236,26 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                       </button>
                     )}
 
-                    <button
-                      onClick={() => onDeleteTask(task.id)}
-                      className="p-1.5 hover:bg-rose-950/25 text-zinc-500 hover:text-rose-400 rounded border border-transparent hover:border-rose-950 transition-all"
-                      title="删除任务"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {task.status === "generating" && (
+                      <button
+                        onClick={() => onCancelTask(task)}
+                        className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white rounded flex items-center gap-1 text-xs"
+                        aria-label={`取消任务 ${task.title}`}
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span className="text-[10px]">取消任务</span>
+                      </button>
+                    )}
+
+                    {task.status !== "generating" && (
+                      <button
+                        onClick={() => onDeleteTask(task.id)}
+                        className="p-1.5 hover:bg-rose-950/25 text-zinc-500 hover:text-rose-400 rounded border border-transparent hover:border-rose-950 transition-all"
+                        title="删除任务"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 

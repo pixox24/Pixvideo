@@ -159,6 +159,31 @@ def test_quick_create_config_from_preset_includes_subtitle_style():
     assert config["subtitle_style"]["fontPath"] == "/tmp/fonts/BrandFont.ttf"
 
 
+def test_quick_create_preset_normalizes_subtitle_values_at_storage_boundary():
+    payload = _preset_payload()
+    payload["subtitleStyle"].update(
+        {
+            "fontSize": 300,
+            "outlineWidth": -3,
+            "marginV": 900,
+            "maxCharsPerLine": 2,
+            "maxLines": 9,
+            "highlightScale": 250,
+            "backgroundOpacity": -10,
+        }
+    )
+
+    preset = workbench._normalize_preset(payload)
+
+    assert preset["subtitleStyle"]["fontSize"] == 120
+    assert preset["subtitleStyle"]["outlineWidth"] == 0
+    assert preset["subtitleStyle"]["marginV"] == 600
+    assert preset["subtitleStyle"]["maxCharsPerLine"] == 4
+    assert preset["subtitleStyle"]["maxLines"] == 4
+    assert preset["subtitleStyle"]["highlightScale"] == 180
+    assert preset["subtitleStyle"]["backgroundOpacity"] == 0
+
+
 @pytest.mark.asyncio
 async def test_prompt_prefix_save_updates_selected_quick_create_preset(monkeypatch, tmp_path):
     preset_path = tmp_path / "quick_create_presets.json"

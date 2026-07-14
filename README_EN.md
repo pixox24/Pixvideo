@@ -8,6 +8,7 @@ Pixvideo is an AI short-video generation tool. It can connect script generation,
 - Custom script mode for turning existing text into narrated videos.
 - Multiple pipelines, including standard videos, image-to-video, digital human, and motion transfer.
 - Browser-based workbench for configuration, task creation, previews, and history.
+- Production-safe Quick Create with per-scene prompts, independent batch jobs, preflight review, draft recovery, idempotent submission, cancellation, and consistent history state.
 - Configurable LLM, TTS, ComfyUI/RunningHub workflows, templates, and video settings.
 
 ## Requirements

@@ -38,3 +38,7 @@ body {
   font-family: var(--font-sans);
 }
 
+:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}

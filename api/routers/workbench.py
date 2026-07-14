@@ -257,6 +257,24 @@ def _coerce_float(value: Any, default: float, minimum: float, maximum: float) ->
     return min(max(number, minimum), maximum)
 
 
+def _normalize_subtitle_style(value: Any) -> dict[str, Any]:
+    style = {**SUBTITLE_STYLE_DEFAULTS, **(value if isinstance(value, dict) else {})}
+    integer_ranges = {
+        "fontSize": (52, 12, 120),
+        "outlineWidth": (3, 0, 12),
+        "shadow": (0, 0, 12),
+        "marginV": (120, 0, 600),
+        "alignment": (2, 1, 9),
+        "maxCharsPerLine": (14, 4, 40),
+        "maxLines": (2, 1, 4),
+        "highlightScale": (125, 100, 180),
+        "backgroundOpacity": (72, 0, 100),
+    }
+    for key, (default, minimum, maximum) in integer_ranges.items():
+        style[key] = _coerce_int(style.get(key), default, minimum, maximum)
+    return style
+
+
 def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = None) -> dict[str, Any]:
     now = _now_iso()
     base = {**PRESET_DEFAULTS, **(existing or {}), **preset}
@@ -282,10 +300,7 @@ def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = 
 
     normalized["enableMotion"] = bool(normalized.get("enableMotion", True))
     normalized["enableSubtitles"] = bool(normalized.get("enableSubtitles", True))
-    subtitle_style = normalized.get("subtitleStyle")
-    if not isinstance(subtitle_style, dict):
-        subtitle_style = {}
-    normalized["subtitleStyle"] = {**SUBTITLE_STYLE_DEFAULTS, **subtitle_style}
+    normalized["subtitleStyle"] = _normalize_subtitle_style(normalized.get("subtitleStyle"))
 
     for key in ["voice", "workflow", "bgm", "promptPrefix", "template", "minimaxModel", "emotion", "imageAspectRatio"]:
         normalized[key] = str(normalized.get(key) or "")

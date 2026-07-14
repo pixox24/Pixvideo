@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from loguru import logger
 
@@ -25,6 +27,23 @@ def _add_video_url(request: Request, task: dict) -> dict:
     if video_path:
         task["video_url"] = path_to_url(request, video_path)
     return task
+
+
+async def _enrich_history_task(pixelle_video, task: dict) -> dict:
+    """Attach persisted request parameters needed by the history summary UI."""
+    enriched = dict(task)
+    task_id = enriched.get("task_id")
+    if not task_id:
+        return enriched
+    try:
+        detail = await pixelle_video.history.get_task_detail(task_id)
+    except Exception as exc:
+        logger.warning(f"Could not enrich history task {task_id}: {exc}")
+        return enriched
+    metadata = (detail or {}).get("metadata") or {}
+    enriched["request_params"] = metadata.get("input") or {}
+    enriched["error"] = metadata.get("error")
+    return enriched
 
 
 @router.get("")
@@ -46,7 +65,11 @@ async def list_history(
             sort_by=sort_by,
             sort_order=sort_order,
         )
-        result["tasks"] = [_add_video_url(request, task) for task in result.get("tasks", [])]
+        enriched_tasks = await asyncio.gather(*[
+            _enrich_history_task(pixelle_video, task)
+            for task in result.get("tasks", [])
+        ])
+        result["tasks"] = [_add_video_url(request, task) for task in enriched_tasks]
         result["success"] = True
         return result
     except Exception as exc:
@@ -131,4 +154,3 @@ async def resume_history_task(task_id: str, pixelle_video: PixelleVideoDep):
     except Exception as exc:
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-

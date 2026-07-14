@@ -18,6 +18,7 @@ It introduces `PipelineContext` for state management and `LinearVideoPipeline` f
 process orchestration.
 """
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
@@ -115,6 +116,9 @@ class LinearVideoPipeline(BasePipeline):
             # === Phase 6: Finalization ===
             return await self.finalize(ctx)
             
+        except asyncio.CancelledError:
+            await self.handle_cancellation(ctx)
+            raise
         except Exception as e:
             await self.handle_exception(ctx, e)
             raise
@@ -156,3 +160,7 @@ class LinearVideoPipeline(BasePipeline):
     async def handle_exception(self, ctx: PipelineContext, error: Exception):
         """Handle exceptions during pipeline execution."""
         logger.error(f"Pipeline execution failed: {error}")
+
+    async def handle_cancellation(self, ctx: PipelineContext):
+        """Handle cooperative task cancellation."""
+        logger.info("Pipeline execution cancelled")

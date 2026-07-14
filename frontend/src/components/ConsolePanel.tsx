@@ -7,7 +7,10 @@ interface ConsolePanelProps {
   activeTask: Task | null;
   recentTasks: Task[];
   onSelectTask: (task: Task) => void;
+  onCancelTask: (task: Task) => void;
   addToast: (text: string, type: "success" | "error" | "info") => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 type ProgressStageKey =
@@ -68,6 +71,7 @@ function getProgressStageKey(task: Task): ProgressStageKey {
 }
 
 function getProgressStageLabel(task: Task): string {
+  if (task.status === "cancelled") return "任务已取消";
   if (task.progressEventType === "splitting_script") return "拆分固定文案";
   if (task.progressEventType === "generating_narrations") return "生成旁白文案";
   if (task.progressEventType === "generating_title") return "生成视频标题";
@@ -103,6 +107,11 @@ function getStepStatus(task: Task, idx: number) {
     if (idx === activeStepIdx) return "failed";
     return "pending";
   }
+  if (task.status === "cancelled") {
+    if (idx < activeStepIdx) return "completed";
+    if (idx === activeStepIdx) return "cancelled";
+    return "pending";
+  }
 
   if (idx < activeStepIdx) return "completed";
   if (idx === activeStepIdx) return "current";
@@ -113,10 +122,13 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
   activeTask,
   recentTasks,
   onSelectTask,
+  onCancelTask,
   addToast,
+  isOpen,
+  onClose,
 }) => {
   return (
-    <div className="bg-[#101114] border-l border-zinc-900 w-full lg:w-96 xl:w-[400px] flex-shrink-0 flex flex-col h-full overflow-y-auto">
+    <aside className={`${isOpen ? "flex" : "hidden"} fixed inset-y-0 right-0 z-40 bg-[#101114] border-l border-zinc-900 w-[min(400px,100vw)] lg:static lg:w-96 xl:w-[400px] flex-shrink-0 flex-col h-full overflow-y-auto`} aria-label="任务运行面板">
       {/* 1. Header Title */}
       <div className="p-3 border-b border-zinc-900 bg-[#0c0d10] flex items-center justify-between">
         <span className="text-xs font-semibold text-zinc-300 font-mono tracking-wider uppercase">
@@ -126,6 +138,9 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
           <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
         </span>
+        <button type="button" onClick={onClose} className="ml-2 p-1 text-zinc-500 hover:text-zinc-200" aria-label="关闭任务面板">
+          <XCircle className="w-4 h-4" />
+        </button>
       </div>
 
       {/* 2. Active Run Monitor or Config Summary */}
@@ -135,7 +150,7 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[10px] text-amber-500 font-mono uppercase tracking-wider block font-bold">
-                  ●正在生成视频...
+                  {activeTask.status === "completed" ? "●成片已就绪" : activeTask.status === "cancelled" ? "●任务已取消" : activeTask.status === "failed" ? "●任务失败" : "●正在生成视频..."}
                 </span>
                 <h4 className="text-sm font-semibold text-zinc-100 mt-1 line-clamp-1">{activeTask.title}</h4>
               </div>
@@ -155,6 +170,17 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
               <span className="text-amber-300">{formatLiveProgressLabel(activeTask)}</span>
             </div>
 
+            {activeTask.status === "generating" && (
+              <button
+                type="button"
+                onClick={() => onCancelTask(activeTask)}
+                className="w-full py-1.5 border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white rounded text-xs font-medium flex items-center justify-center gap-1.5"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                取消任务
+              </button>
+            )}
+
             {/* Multi-step list indicator */}
             <div className="space-y-2 pt-1">
               <span className="text-[10px] text-zinc-500 font-mono uppercase block">时序生成进度:</span>
@@ -171,6 +197,8 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
                           ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold animate-pulse"
                           : status === "failed"
                           ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold"
+                          : status === "cancelled"
+                          ? "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 font-bold"
                           : "bg-zinc-900/60 text-zinc-550 border border-transparent"
                       }`}
                     >
@@ -178,6 +206,7 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
                       {status === "completed" && <span className="text-[8px] uppercase">OK</span>}
                       {status === "current" && <span className="text-[8px] uppercase">RUN</span>}
                       {status === "failed" && <span className="text-[8px] uppercase">ERR</span>}
+                      {status === "cancelled" && <span className="text-[8px] uppercase">STOP</span>}
                     </div>
                   );
                 })}
@@ -264,12 +293,17 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
                     渲染中
                   </span>
                 )}
+                {t.status === "cancelled" && (
+                  <span className="text-[9px] bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 px-1 py-0.5 rounded font-mono">
+                    已取消
+                  </span>
+                )}
                 <ChevronRight className="w-3 h-3 text-zinc-650" />
               </div>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </aside>
   );
 };

@@ -100,7 +100,7 @@ class StandardPipeline(LinearVideoPipeline):
             return
         
         # Create isolated task directory
-        task_dir, task_id = create_task_output_dir()
+        task_dir, task_id = create_task_output_dir(ctx.params.get("task_id"))
         ctx.task_id = task_id
         ctx.task_dir = task_dir
         
@@ -133,7 +133,16 @@ class StandardPipeline(LinearVideoPipeline):
         min_words = ctx.params.get("min_narration_words", 5)
         max_words = ctx.params.get("max_narration_words", 20)
         
-        if mode == "generate":
+        explicit_scenes = ctx.params.get("scenes") or []
+        if explicit_scenes:
+            self._report_progress(ctx.progress_callback, "loading_scenes", 0.05)
+            ctx.narrations = [
+                str(scene.get("narration", "")).strip()
+                for scene in explicit_scenes
+                if str(scene.get("narration", "")).strip()
+            ]
+            logger.info(f"✅ Loaded {len(ctx.narrations)} explicit scene narrations")
+        elif mode == "generate":
             self._report_progress(ctx.progress_callback, "generating_narrations", 0.05)
             ctx.narrations = await generate_narrations_from_topic(
                 self.llm,
@@ -232,14 +241,33 @@ class StandardPipeline(LinearVideoPipeline):
                         extra_info=message
                     )
                 
-                # Generate base image prompts
-                base_image_prompts = await generate_image_prompts(
-                    self.llm,
-                    narrations=ctx.narrations,
-                    min_words=min_words,
-                    max_words=max_words,
-                    progress_callback=image_prompt_progress
-                )
+                explicit_scenes = ctx.params.get("scenes") or []
+                provided_prompts = [
+                    str(scene.get("visual_prompt") or "").strip()
+                    for scene in explicit_scenes
+                ]
+                if len(provided_prompts) < len(ctx.narrations):
+                    provided_prompts.extend([""] * (len(ctx.narrations) - len(provided_prompts)))
+
+                missing_indices = [
+                    index for index, prompt in enumerate(provided_prompts[: len(ctx.narrations)])
+                    if not prompt
+                ]
+                generated_prompts = []
+                if missing_indices:
+                    generated_prompts = await generate_image_prompts(
+                        self.llm,
+                        narrations=[ctx.narrations[index] for index in missing_indices],
+                        min_words=min_words,
+                        max_words=max_words,
+                        progress_callback=image_prompt_progress,
+                    )
+
+                generated_by_index = dict(zip(missing_indices, generated_prompts))
+                base_image_prompts = [
+                    provided_prompts[index] or generated_by_index[index]
+                    for index in range(len(ctx.narrations))
+                ]
                 
                 # Apply prompt prefix
                 image_config = self.core.config.get("comfyui", {}).get("image", {})
@@ -545,7 +573,11 @@ class StandardPipeline(LinearVideoPipeline):
         error: str | None = None,
     ) -> dict[str, Any]:
         storyboard = ctx.storyboard
-        task_id = ctx.task_id or (storyboard.config.task_id if storyboard else None)
+        task_id = (
+            ctx.task_id
+            or (storyboard.config.task_id if storyboard else None)
+            or ctx.params.get("task_id")
+        )
         created_at = (
             storyboard.created_at.isoformat()
             if storyboard and storyboard.created_at
@@ -580,7 +612,11 @@ class StandardPipeline(LinearVideoPipeline):
         return metadata
 
     async def _persist_running_task_data(self, ctx: PipelineContext):
-        task_id = ctx.task_id or (ctx.storyboard.config.task_id if ctx.storyboard else None)
+        task_id = (
+            ctx.task_id
+            or (ctx.storyboard.config.task_id if ctx.storyboard else None)
+            or ctx.params.get("task_id")
+        )
         if not task_id:
             return
         try:
@@ -593,7 +629,11 @@ class StandardPipeline(LinearVideoPipeline):
 
     async def handle_exception(self, ctx: PipelineContext, error: Exception):
         logger.error(f"Pipeline execution failed: {error}")
-        task_id = ctx.task_id or (ctx.storyboard.config.task_id if ctx.storyboard else None)
+        task_id = (
+            ctx.task_id
+            or (ctx.storyboard.config.task_id if ctx.storyboard else None)
+            or ctx.params.get("task_id")
+        )
         if not task_id:
             return
         try:
@@ -603,6 +643,23 @@ class StandardPipeline(LinearVideoPipeline):
             await self.core.persistence.save_task_metadata(task_id, metadata)
         except Exception as persistence_error:
             logger.error(f"Failed to persist failed task data: {persistence_error}")
+
+    async def handle_cancellation(self, ctx: PipelineContext):
+        """Persist cancellation as its own terminal state."""
+        task_id = (
+            ctx.task_id
+            or (ctx.storyboard.config.task_id if ctx.storyboard else None)
+            or ctx.params.get("task_id")
+        )
+        if not task_id:
+            return
+        try:
+            if ctx.storyboard:
+                await self.core.persistence.save_storyboard(task_id, ctx.storyboard)
+            metadata = self._task_metadata(ctx, "cancelled")
+            await self.core.persistence.save_task_metadata(task_id, metadata)
+        except Exception as persistence_error:
+            logger.error(f"Failed to persist cancelled task data: {persistence_error}")
 
     async def _persist_task_data(self, ctx: PipelineContext):
         """

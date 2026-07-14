@@ -6,12 +6,9 @@ Detailed introduction to the Pixelle-Video Web interface features.
 
 ## Interface Layout
 
-The Web interface uses a three-column layout:
+On desktop, the interface contains navigation, the creation workspace, and a collapsible task panel. On narrow screens, navigation and tasks become drawers so the workspace keeps the full viewport width. Service badges reflect backend configuration and detection; “not checked” is not presented as ready.
 
-- **Left Panel**: Content input and audio settings
-- **Middle Panel**: Voice and visual settings  
-- **Right Panel**: Video generation and preview
-- **Sidebar**: System configuration and FAQ
+Quick Create is organized into five stages: Content, Storyboard, Voice & Visuals, Review & Generate, and Progress & Results. The current browser automatically saves an editable draft and restores it after a refresh.
 
 ---
 
@@ -26,7 +23,8 @@ First-time use requires configuring LLM and image generation services. See [Conf
 ### Generation Mode
 
 - **AI Generate Content**: Enter a topic, AI creates script automatically
-- **Fixed Script Content**: Enter complete script directly
+- **Manual Storyboard**: Edit narration and visual prompt for every scene
+- **Batch Generation**: Enter one topic per line; every topic creates an independent video task
 
 ### Fixed Script Split Mode
 
@@ -77,6 +75,8 @@ When using fixed script mode, you can choose how to split the content:
 
 ## Generate Video
 
+Before submission, review the video count, scene count, voice, workflow, canvas, subtitles, BGM, and estimated narration duration. The action locks while submitting and uses an idempotency key to prevent duplicate jobs.
+
 After clicking "Generate Video", the system will:
 
 1. Generate video script
@@ -85,6 +85,11 @@ After clicking "Generate Video", the system will:
 4. Compose final video
 
 Automatically previews when complete.
+
+Running jobs can be cancelled from the task panel. Cancelled, failed, and completed are distinct terminal states and stay consistent with History. Batch jobs can be cancelled or retried individually.
+
+!!! note "Preview assets"
+    TTS previews, “synthesize current copy,” and test images are configuration previews only. They are not reused by the final render, which produces assets from the reviewed settings.
 
 ---
 
@@ -95,4 +100,3 @@ The sidebar includes built-in FAQ for quick reference:
 - Common configuration issues
 - Generation failure solutions
 - Performance optimization tips
-

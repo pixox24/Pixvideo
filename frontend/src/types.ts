@@ -40,7 +40,7 @@ export interface Task {
   id: string;
   title: string;
   tabType: ActiveTab;
-  status: "ready" | "generating" | "completed" | "failed";
+  status: "ready" | "generating" | "completed" | "failed" | "cancelled";
   progress: number;
   currentStep: string;
   progressEventType?: string;

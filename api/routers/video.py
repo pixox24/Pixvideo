@@ -117,6 +117,9 @@ def _build_video_params(request_body: VideoGenerateRequest, progress_callback=No
         "split_mode": request_body.split_mode,
         "title": request_body.title,
         "n_scenes": request_body.n_scenes,
+        "scenes": [scene.model_dump() for scene in request_body.scenes]
+        if request_body.scenes
+        else None,
         "min_narration_words": request_body.min_narration_words,
         "max_narration_words": request_body.max_narration_words,
         "min_image_prompt_words": request_body.min_image_prompt_words,
@@ -233,7 +236,8 @@ async def generate_video_async(
         # Create task
         task = task_manager.create_task(
             task_type=TaskType.VIDEO_GENERATION,
-            request_params=request_body.model_dump()
+            request_params=request_body.model_dump(),
+            request_key=request_body.client_request_key,
         )
         
         # Define async execution function
@@ -270,6 +274,7 @@ async def generate_video_async(
                 request_body,
                 progress_callback=progress_callback,
             )
+            video_params["task_id"] = task.task_id
             result = await pixelle_video.generate_video(**video_params)
             
             # Get file size

@@ -16,7 +16,7 @@ Video generation API schemas
 
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SubtitleStyle(BaseModel):
@@ -51,6 +51,21 @@ class SubtitleStyle(BaseModel):
     backgroundOpacity: int = Field(72, ge=0, le=100, description="Caption-box background opacity percentage")
 
 
+class VideoSceneInput(BaseModel):
+    """One explicit storyboard scene supplied by a client."""
+
+    narration: str = Field(..., min_length=1, description="Narration for this scene")
+    visual_prompt: Optional[str] = Field(None, description="Optional media prompt for this scene")
+
+    @field_validator("narration")
+    @classmethod
+    def validate_narration(cls, value: str) -> str:
+        narration = value.strip()
+        if not narration:
+            raise ValueError("Scene narration cannot be blank")
+        return narration
+
+
 class VideoGenerateRequest(BaseModel):
     """Video generation request"""
 
@@ -59,6 +74,18 @@ class VideoGenerateRequest(BaseModel):
     
     # === Input ===
     text: str = Field(..., description="Source text for video generation")
+    scenes: Optional[list[VideoSceneInput]] = Field(
+        None,
+        min_length=1,
+        max_length=30,
+        description="Explicit storyboard scenes. When present, narration splitting is skipped.",
+    )
+    client_request_key: Optional[str] = Field(
+        None,
+        min_length=8,
+        max_length=120,
+        description="Client-generated idempotency key for async submission",
+    )
     
     # === Processing Mode ===
     mode: Literal["generate", "fixed"] = Field(

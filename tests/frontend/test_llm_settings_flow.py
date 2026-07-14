@@ -12,4 +12,6 @@ def test_script_generation_shows_backend_error_detail():
     component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "resData.detail" in component
-    assert 'resData.detail || resData.error || "脚本构思异常，请检查 LLM 设置。"' in component
+    assert "formatApiErrorValue(resData.detail)" in component
+    assert "formatApiErrorValue(resData.error)" in component
+    assert '"脚本构思异常，请检查 LLM 设置。"' in component

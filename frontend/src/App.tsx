@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Select } from "./components/Select";
 import {
   Sparkles,
@@ -13,10 +13,13 @@ import {
   HelpCircle,
   Sliders,
   Play,
-  Languages,
   Activity,
   Workflow,
   Download,
+  Menu,
+  PanelRightOpen,
+  PanelRightClose,
+  X,
 } from "lucide-react";
 import { ActiveTab, Preset, Task, SystemSettings } from "./types";
 import { Toast, ToastMessage } from "./components/Toast";
@@ -30,11 +33,13 @@ import { SystemSettingsTab } from "./components/SystemSettingsTab";
 import { ConsolePanel } from "./components/ConsolePanel";
 import {
   buildConfigPayload,
+  cancelTask,
   deleteHistoryTask,
   EMPTY_WORKBENCH_RESOURCES,
   fetchHistoryTasks,
   fetchQuickCreateResources,
   fetchTask,
+  formatApiErrorValue,
   mapApiTask,
   mapBackendConfigToSettings,
   mapHistoryTask,
@@ -47,6 +52,10 @@ import {
   submitVideoTask,
 } from "./lib/api";
 
+const PENDING_TASK_ID_PREFIX = "pending-";
+
+const isPendingTaskId = (taskId: string) => taskId.startsWith(PENDING_TASK_ID_PREFIX);
+
 export default function App() {
   // Global States
   const [activeTab, setActiveTab] = useState<ActiveTab>("quick-create");
@@ -55,7 +64,6 @@ export default function App() {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [activePreset, setActivePreset] = useState<Preset | null>(null);
   const [defaultPresetId, setDefaultPresetId] = useState<string | null>(null);
-  const [lang, setLang] = useState<"zh" | "en">("zh");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [resources, setResources] = useState(EMPTY_WORKBENCH_RESOURCES);
   const [serviceStatus, setServiceStatus] = useState({
@@ -66,6 +74,17 @@ export default function App() {
     bizyair: false,
     minimax: false,
   });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [consoleOpen, setConsoleOpen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 1024 : true,
+  );
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingCancellationIdsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    setSidebarOpen(false);
+  }, [activeTab]);
 
   // Default system settings state
   const [settings, setSettings] = useState<SystemSettings>({
@@ -94,9 +113,10 @@ export default function App() {
   });
 
   // Toaster helper
-  const addToast = (text: string, type: "success" | "error" | "info" = "info") => {
+  const addToast = (text: unknown, type: "success" | "error" | "info" = "info") => {
     const id = `toast-${Date.now()}`;
-    setToasts((prev) => [...prev, { id, text, type }]);
+    const safeText = formatApiErrorValue(text) || "未知错误";
+    setToasts((prev) => [...prev, { id, text: safeText, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4500);
@@ -110,11 +130,13 @@ export default function App() {
     const history = await fetchHistoryTasks();
     const persistedTasks = history.map(mapHistoryTask);
     setTasks((prev) => {
-      const runningTasks = prev.filter((task) => task.status === "generating");
-      const runningIds = new Set(runningTasks.map((task) => task.id));
+      const persistedIds = new Set(persistedTasks.map((task) => task.id));
+      const localOnlyTasks = prev.filter(
+        (task) => isPendingTaskId(task.id) || (task.status === "generating" && !persistedIds.has(task.id)),
+      );
       return [
-        ...runningTasks,
-        ...persistedTasks.filter((task) => !runningIds.has(task.id)),
+        ...localOnlyTasks,
+        ...persistedTasks,
       ];
     });
   };
@@ -256,7 +278,11 @@ export default function App() {
     });
     const data = await response.json();
     if (!response.ok || !data.success) {
-      throw new Error(data.detail || data.error || "保存提示词失败");
+      throw new Error(
+        formatApiErrorValue(data.detail) ||
+        formatApiErrorValue(data.error) ||
+        "保存提示词失败",
+      );
     }
 
     const savedPreset = data.preset;
@@ -284,6 +310,13 @@ export default function App() {
 
   // Delete task handler
   const handleDeleteTask = async (id: string) => {
+    if (isPendingTaskId(id)) {
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+      setActiveTask((prev) => (prev?.id === id ? null : prev));
+      addToast("本地临时任务已移除，后端尚未创建对应历史记录。", "info");
+      return;
+    }
+
     try {
       await deleteHistoryTask(id);
       addToast("任务已成功从后端历史记录删除", "info");
@@ -292,12 +325,55 @@ export default function App() {
     }
 
     setTasks((prev) => prev.filter((t) => t.id !== id));
-    if (activeTask && activeTask.id === id) {
-      setActiveTask(null);
+    setActiveTask((prev) => (prev?.id === id ? null : prev));
+  };
+
+  const handleCancelTask = async (task: Task) => {
+    if (isPendingTaskId(task.id)) {
+      pendingCancellationIdsRef.current.add(task.id);
+      const cancellingTask = { ...task, currentStep: "等待后端确认后取消" };
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? cancellingTask : item)));
+      setActiveTask((prev) => (prev?.id === task.id ? cancellingTask : prev));
+      addToast("已记录取消请求，后端任务创建后将立即取消。", "info");
+      return;
+    }
+
+    try {
+      await cancelTask(task.id);
+      const cancelledTask: Task = {
+        ...task,
+        status: "cancelled",
+        currentStep: "任务已取消",
+      };
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? cancelledTask : item)));
+      setActiveTask((prev) => (prev?.id === task.id ? cancelledTask : prev));
+      addToast(`任务已取消: ${task.title}`, "info");
+    } catch (err: any) {
+      addToast(err.message || "取消任务失败。", "error");
+      return;
+    }
+
+    try {
+      await refreshHistory();
+    } catch (err) {
+      console.warn("Task was cancelled, but history refresh failed.", err);
     }
   };
 
   const pollBackendTask = async (taskId: string, fallback: Task) => {
+    if (isPendingTaskId(taskId)) {
+      const failedTask: Task = {
+        ...fallback,
+        status: "failed",
+        currentStep: "任务尚未提交到后端",
+        errorMsg: "本地临时任务尚未拿到后端任务 ID，无法读取生成状态。",
+      };
+      setTasks((prev) => prev.map((task) => (task.id === taskId ? failedTask : task)));
+      setActiveTask((prev) => (prev?.id === taskId ? failedTask : prev));
+      addToast("任务还没有后端 ID，已停止状态轮询。", "error");
+      return;
+    }
+
     try {
       const apiTask = await fetchTask(taskId);
       const mappedTask = mapApiTask(apiTask, fallback);
@@ -315,6 +391,12 @@ export default function App() {
 
       if (mappedTask.status === "failed") {
         addToast(mappedTask.errorMsg || "视频生成失败，请查看控制台错误信息。", "error");
+        await refreshHistory();
+        return;
+      }
+
+      if (mappedTask.status === "cancelled") {
+        addToast("视频生成任务已取消。", "info");
         await refreshHistory();
         return;
       }
@@ -337,7 +419,7 @@ export default function App() {
 
   // Launch new video generation task
   const handleGenerateTask = async (taskInput: any) => {
-    const tempTaskId = `pending-${Date.now()}`;
+    const tempTaskId = `${PENDING_TASK_ID_PREFIX}${crypto.randomUUID()}`;
     const optimisticTask = optimisticTaskFromInput(taskInput, tempTaskId);
 
     setTasks((prev) => [optimisticTask, ...prev]);
@@ -360,8 +442,35 @@ export default function App() {
       );
       setActiveTask(backendTask);
       addToast(`后端任务已创建: ${response.task_id}`, "success");
+
+      if (pendingCancellationIdsRef.current.delete(tempTaskId)) {
+        try {
+          await cancelTask(response.task_id);
+          const cancelledTask: Task = {
+            ...backendTask,
+            status: "cancelled",
+            currentStep: "任务已取消",
+          };
+          setTasks((prev) =>
+            prev.map((task) => (task.id === response.task_id ? cancelledTask : task))
+          );
+          setActiveTask(cancelledTask);
+          addToast(`任务已取消: ${taskInput.title}`, "info");
+          try {
+            await refreshHistory();
+          } catch (err) {
+            console.warn("Task was cancelled, but history refresh failed.", err);
+          }
+          return true;
+        } catch (err: any) {
+          addToast(err.message || "自动取消失败，任务将继续运行。", "error");
+        }
+      }
+
       await pollBackendTask(response.task_id, backendTask);
+      return true;
     } catch (err: any) {
+      pendingCancellationIdsRef.current.delete(tempTaskId);
       const failedTask: Task = {
         ...optimisticTask,
         status: "failed",
@@ -373,11 +482,25 @@ export default function App() {
       );
       setActiveTask(failedTask);
       addToast(err.message || "任务提交失败，请检查后端服务。", "error");
+      return false;
     }
   };
 
   // Resume or Retry failed task
   const handleResumeTask = async (task: Task) => {
+    if (isPendingTaskId(task.id)) {
+      const failedTask = {
+        ...task,
+        status: "failed" as const,
+        currentStep: "任务尚未提交到后端",
+        errorMsg: "该任务只存在于本地，后端没有可恢复的历史记录。请重新点击生成视频。",
+      };
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? failedTask : item)));
+      setActiveTask(failedTask);
+      addToast("这个任务还没有后端 ID，无法从历史记录恢复。请重新生成。", "error");
+      return;
+    }
+
     const updatedTask = {
       ...task,
       status: "generating" as const,
@@ -414,7 +537,11 @@ export default function App() {
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.detail || data.error || "保存配置失败");
+        throw new Error(
+          formatApiErrorValue(data.detail) ||
+          formatApiErrorValue(data.error) ||
+          "保存配置失败",
+        );
       }
       setSettings((current) => mapBackendConfigToSettings(data, { ...current, ...nextSettings }));
       if (data.service_status) setServiceStatus(data.service_status);
@@ -436,14 +563,31 @@ export default function App() {
       {/* Toast Notification Container */}
       <Toast toasts={toasts} onClose={removeToast} />
 
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="关闭导航遮罩"
+        />
+      )}
+
       {/* 1. LEFT SIDEBAR NAVIGATION */}
-      <aside className="w-64 bg-[#101114] border-r border-zinc-900 flex flex-col justify-between flex-shrink-0 h-full">
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#101114] border-r border-zinc-900 flex flex-col justify-between flex-shrink-0 h-full transition-transform lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex flex-col min-h-0 flex-1">
           {/* Brand header */}
           <div className="p-4 border-b border-zinc-900 flex items-center gap-2.5 bg-[#0c0d10]">
             <div className="w-7 h-7 rounded bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/10">
               <Tv className="w-4 h-4 text-black stroke-[2.5]" />
             </div>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="ml-auto p-1 text-zinc-400 lg:hidden"
+              aria-label="关闭导航"
+            >
+              <X className="w-4 h-4" />
+            </button>
             <div>
               <h1 className="text-sm font-black font-display text-zinc-100 tracking-wider">
                 PIXELLE-VIDEO
@@ -563,11 +707,11 @@ export default function App() {
             <div className="flex items-center justify-between">
               <span className="text-zinc-500 flex items-center gap-1">
                 <Cpu className="w-3.5 h-3.5 text-zinc-600" />
-                Gemini LLM
+                {settings.llm.provider.toUpperCase()} · {settings.llm.model}
               </span>
-              <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-semibold bg-emerald-500/5 px-1 rounded">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                已就绪
+              <span className={`flex items-center gap-1 text-[10px] font-semibold px-1 rounded ${serviceStatus.llm ? "text-emerald-400 bg-emerald-500/5" : "text-amber-400 bg-amber-500/5"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${serviceStatus.llm ? "bg-emerald-500" : "bg-amber-500"}`}></span>
+                {serviceStatus.llm ? "已连接" : "未检测"}
               </span>
             </div>
 
@@ -617,9 +761,20 @@ export default function App() {
                 <Cpu className="w-3.5 h-3.5 text-zinc-600" />
                 BizyAir Cloud
               </span>
-              <span className="flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/5 px-1 rounded font-semibold">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                云托管
+              <span className={`flex items-center gap-1 text-[10px] px-1 rounded font-semibold ${serviceStatus.bizyair ? "text-emerald-400 bg-emerald-500/5" : "text-amber-400 bg-amber-500/5"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${serviceStatus.bizyair ? "bg-emerald-500" : "bg-amber-500"}`}></span>
+                {serviceStatus.bizyair ? "已连接" : "未检测"}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-500 flex items-center gap-1">
+                <Cpu className="w-3.5 h-3.5 text-zinc-600" />
+                MiniMax TTS
+              </span>
+              <span className={`flex items-center gap-1 text-[10px] px-1 rounded font-semibold ${serviceStatus.minimax ? "text-emerald-400 bg-emerald-500/5" : hasMiniMax ? "text-amber-400 bg-amber-500/5" : "text-zinc-500 bg-zinc-800"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${serviceStatus.minimax ? "bg-emerald-500" : hasMiniMax ? "bg-amber-500" : "bg-zinc-600"}`}></span>
+                {serviceStatus.minimax ? "已连接" : hasMiniMax ? "已配置" : "未配置"}
               </span>
             </div>
           </div>
@@ -656,6 +811,14 @@ export default function App() {
         {/* TOP STATUS BAR */}
         <header className="h-12 bg-[#101114] border-b border-zinc-900 px-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="p-1.5 text-zinc-400 hover:text-zinc-100 lg:hidden"
+              aria-label="打开导航"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
             <span className="text-sm font-semibold text-zinc-200 font-display">
               {activeTab === "quick-create" && "快捷创作工作室 / Quick Create Studio"}
               {activeTab === "custom-media" && "自定义素材混剪 / Custom Media Stitching"}
@@ -670,32 +833,31 @@ export default function App() {
           <div className="flex items-center gap-3">
             {/* Quick monitor indicators */}
             <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-zinc-500 bg-zinc-900/80 px-2.5 py-1 rounded border border-zinc-850">
-              <span className="flex items-center gap-1 text-emerald-400">
-                <span className="h-1 w-1 bg-emerald-500 rounded-full"></span> LLM Connected
+              <span className={`flex items-center gap-1 ${serviceStatus.llm ? "text-emerald-400" : "text-amber-400"}`}>
+                <span className={`h-1 w-1 rounded-full ${serviceStatus.llm ? "bg-emerald-500" : "bg-amber-500"}`}></span>
+                {settings.llm.provider} {serviceStatus.llm ? "已连接" : "未检测"}
               </span>
               <span className="text-zinc-700">|</span>
-              <span className="flex items-center gap-1 text-emerald-400">
-                <span className="h-1 w-1 bg-emerald-500 rounded-full"></span> BizyAir Ready
+              <span className={`flex items-center gap-1 ${serviceStatus.bizyair ? "text-emerald-400" : "text-amber-400"}`}>
+                <span className={`h-1 w-1 rounded-full ${serviceStatus.bizyair ? "bg-emerald-500" : "bg-amber-500"}`}></span>
+                BizyAir {serviceStatus.bizyair ? "已连接" : "未检测"}
               </span>
             </div>
 
-            {/* Language Selector */}
             <button
-              onClick={() => {
-                setLang(lang === "zh" ? "en" : "zh");
-                addToast(lang === "zh" ? "Switched to English tags" : "已切换为中文标签", "info");
-              }}
+              type="button"
+              onClick={() => setConsoleOpen((open) => !open)}
               className="p-1.5 bg-[#17181c] border border-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1 text-xs"
-              title="切换语言 Language"
+              aria-label={consoleOpen ? "关闭任务面板" : "打开任务面板"}
             >
-              <Languages className="w-3.5 h-3.5" />
-              <span className="font-mono text-[10px] uppercase font-semibold">{lang}</span>
+              {consoleOpen ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRightOpen className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline text-[10px]">任务</span>
             </button>
           </div>
         </header>
 
         {/* MAIN BODY AREA */}
-        <div className="flex-1 overflow-y-auto p-5 xl:p-6">
+        <div ref={mainScrollRef} className="flex-1 overflow-y-auto p-3 sm:p-5 xl:p-6">
           {activeTab === "quick-create" && (
             <QuickCreate
               onGenerateTask={handleGenerateTask}
@@ -735,6 +897,7 @@ export default function App() {
               tasks={tasks}
               onDeleteTask={handleDeleteTask}
               onResumeTask={handleResumeTask}
+              onCancelTask={handleCancelTask}
               addToast={addToast}
             />
           )}
@@ -751,9 +914,13 @@ export default function App() {
       </main>
 
       {/* 3. RIGHT RUNNING PANEL (THE CONSOLE) */}
+      {consoleOpen && <button type="button" className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setConsoleOpen(false)} aria-label="关闭任务面板遮罩" />}
       <ConsolePanel
         activeTask={activeTask}
         recentTasks={tasks}
+        isOpen={consoleOpen}
+        onClose={() => setConsoleOpen(false)}
+        onCancelTask={handleCancelTask}
         onSelectTask={(t) => {
           // Open details by switching tab to History or showing popup
           setActiveTab("history");

@@ -41,6 +41,7 @@ class TaskManager:
     def __init__(self):
         self._tasks: Dict[str, Task] = {}
         self._task_futures: Dict[str, asyncio.Task] = {}
+        self._request_keys: Dict[str, str] = {}
         self._cleanup_task: Optional[asyncio.Task] = None
         self._running = False
     
@@ -74,12 +75,14 @@ class TaskManager:
         
         self._tasks.clear()
         self._task_futures.clear()
+        self._request_keys.clear()
         logger.info("✅ Task manager stopped")
     
     def create_task(
         self,
         task_type: TaskType,
-        request_params: Optional[dict] = None
+        request_params: Optional[dict] = None,
+        request_key: Optional[str] = None,
     ) -> Task:
         """
         Create a new task
@@ -91,6 +94,13 @@ class TaskManager:
         Returns:
             Created task
         """
+        if request_key:
+            existing_task_id = self._request_keys.get(request_key)
+            existing_task = self._tasks.get(existing_task_id) if existing_task_id else None
+            if existing_task:
+                logger.info(f"Reusing task {existing_task.task_id} for idempotency key")
+                return existing_task
+
         task_id = str(uuid.uuid4())
         task = Task(
             task_id=task_id,
@@ -100,6 +110,8 @@ class TaskManager:
         )
         
         self._tasks[task_id] = task
+        if request_key:
+            self._request_keys[request_key] = task_id
         logger.info(f"Created task {task_id} ({task_type})")
         return task
     
@@ -123,6 +135,13 @@ class TaskManager:
         if not task:
             logger.error(f"Task {task_id} not found")
             return
+        existing_future = self._task_futures.get(task_id)
+        if existing_future and not existing_future.done():
+            logger.info(f"Task {task_id} is already executing; duplicate start ignored")
+            return
+        if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+            logger.info(f"Task {task_id} is already terminal; duplicate start ignored")
+            return
         
         # Create async task
         async def _execute():
@@ -140,6 +159,11 @@ class TaskManager:
                 task.completed_at = datetime.now()
                 logger.info(f"Task {task_id} completed")
                 
+            except asyncio.CancelledError:
+                task.status = TaskStatus.CANCELLED
+                task.completed_at = datetime.now()
+                logger.info(f"Task {task_id} cancelled during execution")
+                raise
             except Exception as e:
                 task.status = TaskStatus.FAILED
                 task.error = str(e)
@@ -225,7 +249,7 @@ class TaskManager:
             extra_info=extra_info,
         )
     
-    def cancel_task(self, task_id: str) -> bool:
+    async def cancel_task(self, task_id: str) -> bool:
         """
         Cancel a running task
         
@@ -247,6 +271,10 @@ class TaskManager:
         future = self._task_futures.get(task_id)
         if future and not future.done():
             future.cancel()
+            try:
+                await future
+            except asyncio.CancelledError:
+                pass
         
         # Update task status
         task.status = TaskStatus.CANCELLED
@@ -279,6 +307,13 @@ class TaskManager:
             del self._tasks[task_id]
             if task_id in self._task_futures:
                 del self._task_futures[task_id]
+        if tasks_to_remove:
+            removed_ids = set(tasks_to_remove)
+            self._request_keys = {
+                key: task_id
+                for key, task_id in self._request_keys.items()
+                if task_id not in removed_ids
+            }
         
         if tasks_to_remove:
             logger.info(f"Cleaned up {len(tasks_to_remove)} old tasks")

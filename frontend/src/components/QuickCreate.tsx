@@ -27,9 +27,10 @@ import {
 } from "lucide-react";
 import { Preset, SubtitleStyle, WorkbenchResources } from "../types";
 import { VOICE_OPTIONS } from "../data";
+import { formatApiErrorValue } from "../lib/api";
 
 interface QuickCreateProps {
-  onGenerateTask: (taskInput: any) => void;
+  onGenerateTask: (taskInput: any) => Promise<boolean>;
   presets: Preset[];
   activePreset: Preset | null;
   defaultPresetId: string | null;
@@ -45,6 +46,15 @@ interface QuickCreateProps {
 }
 
 const DEFAULT_PREVIEW_TTS_TEXT = "这是一段 TTS 试听文案，用来检查音色、语速和发音效果。";
+const QUICK_CREATE_DRAFT_KEY = "pixvideo.quick-create.draft.v1";
+
+const QUICK_CREATE_STAGES = [
+  { id: "content", label: "内容", anchor: "stage-content" },
+  { id: "storyboard", label: "分镜", anchor: "stage-storyboard" },
+  { id: "production", label: "声音与画面", anchor: "stage-production" },
+  { id: "review", label: "核对并生成", anchor: "stage-review" },
+  { id: "progress", label: "进度与结果", anchor: "" },
+] as const;
 
 const extractPreviewSentenceFromCopyDraft = (rawDraftText: string) => {
   const draftText = rawDraftText
@@ -79,12 +89,35 @@ const suggestCopyCharCount = (storyboardCount: number) =>
 const estimateNarrationSeconds = (charCount: number) =>
   Math.max(1, Math.round((charCount / 260) * 60));
 
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+) {
+  const queue = [...items];
+  const workers = Array.from(
+    { length: Math.min(Math.max(1, concurrency), queue.length) },
+    async () => {
+      while (queue.length > 0) {
+        const item = queue.shift();
+        if (item) await worker(item);
+      }
+    },
+  );
+  await Promise.all(workers);
+}
+
 const parseHighlightWords = (value: string) => Array.from(new Set(
   value
     .split(/[，,、;；\n]/u)
     .map((word) => word.trim())
     .filter(Boolean),
 )).slice(0, 24);
+
+const clampNumber = (value: unknown, fallback: number, min: number, max: number) => {
+  const parsed = Number(value);
+  return Math.min(max, Math.max(min, Number.isFinite(parsed) ? parsed : fallback));
+};
 
 const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   mode: "ass",
@@ -195,6 +228,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [savingPromptPrefix, setSavingPromptPrefix] = useState(false);
   const [presetNameDraft, setPresetNameDraft] = useState("");
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [activeStage, setActiveStage] = useState<(typeof QUICK_CREATE_STAGES)[number]["id"]>("content");
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const draftReadyRef = React.useRef(false);
+  const draftRecoveredRef = React.useRef(false);
+  const reviewReadyRef = React.useRef(false);
+  const submissionLockRef = React.useRef(false);
 
   const bgmOptions = resources.bgm;
   const templateOptions = resources.templates;
@@ -202,6 +243,133 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const fontOptions = resources.fonts || [];
   const selectedBgm = bgmOptions.find((item) => item.id === bgm);
   const lastAppliedPresetId = React.useRef<string | null>(null);
+
+  const normalizeSubtitleStyle = (value?: Partial<SubtitleStyle>): SubtitleStyle => ({
+    ...DEFAULT_SUBTITLE_STYLE,
+    ...(value || {}),
+    fontSize: clampNumber(value?.fontSize, 52, 12, 120),
+    outlineWidth: clampNumber(value?.outlineWidth, 3, 0, 12),
+    shadow: clampNumber(value?.shadow, 0, 0, 12),
+    marginV: clampNumber(value?.marginV, 120, 0, 600),
+    alignment: clampNumber(value?.alignment, 2, 1, 9),
+    maxCharsPerLine: clampNumber(value?.maxCharsPerLine, 14, 4, 40),
+    maxLines: clampNumber(value?.maxLines, 2, 1, 4),
+    highlightScale: clampNumber(value?.highlightScale, 125, 100, 180),
+    backgroundOpacity: clampNumber(value?.backgroundOpacity, 72, 0, 100),
+  });
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(QUICK_CREATE_DRAFT_KEY);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft?.version === 1) {
+          draftRecoveredRef.current = true;
+          if (["ai", "manual", "batch"].includes(draft.mode)) setMode(draft.mode);
+          if (typeof draft.title === "string") setTitle(draft.title);
+          if (typeof draft.aiTopic === "string") setAiTopic(draft.aiTopic);
+          if (typeof draft.copyDraft === "string") setCopyDraft(draft.copyDraft);
+          if (typeof draft.batchInput === "string") {
+            setBatchInput(draft.batchInput);
+            setBatchCount(draft.batchInput.split("\n").filter((line: string) => line.trim()).length);
+          }
+          if (
+            Array.isArray(draft.scenes) &&
+            draft.scenes.every(
+              (scene: unknown) =>
+                Boolean(scene) &&
+                typeof scene === "object" &&
+                typeof (scene as { id?: unknown }).id === "number" &&
+                typeof (scene as { ttsText?: unknown }).ttsText === "string" &&
+                typeof (scene as { visualPrompt?: unknown }).visualPrompt === "string",
+            )
+          ) {
+            setScenes(draft.scenes);
+          }
+          if (typeof draft.aiSceneCount === "number") setAiSceneCount(draft.aiSceneCount);
+          if (["full", "segmented"].includes(draft.copyDraftMode)) setCopyDraftMode(draft.copyDraftMode);
+          if (typeof draft.copyCharCount === "number") {
+            setCopyCharCount(draft.copyCharCount);
+            setCopyCharCountTouched(true);
+          }
+          if (["around", "within"].includes(draft.copyCharCountMode)) setCopyCharCountMode(draft.copyCharCountMode);
+          if (["paragraph", "line", "sentence"].includes(draft.splitType)) setSplitType(draft.splitType);
+          if (typeof draft.workflowId === "string") setWorkflowId(draft.workflowId);
+          if (["edge", "comfyui", "minimax"].includes(draft.ttsMode)) setTtsMode(draft.ttsMode);
+          if (typeof draft.voice === "string") setVoice(draft.voice);
+          if (typeof draft.speed === "number") setSpeed(draft.speed);
+          if (typeof draft.minimaxModel === "string") setMinimaxModel(draft.minimaxModel);
+          if (typeof draft.emotion === "string") setEmotion(draft.emotion);
+          if (typeof draft.bgm === "string") setBgm(draft.bgm);
+          if (typeof draft.volume === "number") setVolume(draft.volume);
+          if (typeof draft.promptPrefix === "string") setPromptPrefix(draft.promptPrefix);
+          if (typeof draft.selectedTemplate === "string") setSelectedTemplate(draft.selectedTemplate);
+          if (["template", "pure-image"].includes(draft.viewMode)) setViewMode(draft.viewMode);
+          if (typeof draft.enableMotion === "boolean") setEnableMotion(draft.enableMotion);
+          if (typeof draft.enableSubtitles === "boolean") setEnableSubtitles(draft.enableSubtitles);
+          if (typeof draft.imageAspectRatio === "string") setImageAspectRatio(draft.imageAspectRatio);
+          if (typeof draft.imageWidth === "number") setImageWidth(draft.imageWidth);
+          if (typeof draft.imageHeight === "number") setImageHeight(draft.imageHeight);
+          if (draft.subtitleStyle) setSubtitleStyle(normalizeSubtitleStyle(draft.subtitleStyle));
+          setDraftSavedAt(typeof draft.savedAt === "string" ? draft.savedAt : null);
+        }
+      }
+    } catch {
+      localStorage.removeItem(QUICK_CREATE_DRAFT_KEY);
+    } finally {
+      draftReadyRef.current = true;
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!draftReadyRef.current) return;
+    const timeoutId = window.setTimeout(() => {
+      const savedAt = new Date().toISOString();
+      localStorage.setItem(QUICK_CREATE_DRAFT_KEY, JSON.stringify({
+        version: 1,
+        savedAt,
+        mode,
+        title,
+        aiTopic,
+        aiSceneCount,
+        copyDraft,
+        copyDraftMode,
+        copyCharCount,
+        copyCharCountMode,
+        splitType,
+        batchInput,
+        scenes,
+        workflowId,
+        ttsMode,
+        voice,
+        speed,
+        minimaxModel,
+        emotion,
+        bgm,
+        volume,
+        promptPrefix,
+        selectedTemplate,
+        viewMode,
+        enableMotion,
+        enableSubtitles,
+        imageAspectRatio,
+        imageWidth,
+        imageHeight,
+        subtitleStyle: normalizeSubtitleStyle(subtitleStyle),
+      }));
+      setDraftSavedAt(savedAt);
+    }, 500);
+    return () => window.clearTimeout(timeoutId);
+  }, [mode, title, aiTopic, aiSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, voice, speed, minimaxModel, emotion, bgm, volume, promptPrefix, selectedTemplate, viewMode, enableMotion, enableSubtitles, imageAspectRatio, imageWidth, imageHeight, subtitleStyle]);
+
+  // Invalidate the review whenever a submitted production setting changes.
+  React.useEffect(() => {
+    if (!reviewReadyRef.current) {
+      reviewReadyRef.current = true;
+      return;
+    }
+    setReviewConfirmed(false);
+  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, splitType, batchInput, scenes, workflowId, ttsMode, voice, speed, minimaxModel, emotion, bgm, volume, promptPrefix, selectedTemplate, viewMode, enableMotion, enableSubtitles, imageWidth, imageHeight, subtitleStyle]);
 
   React.useEffect(() => {
     if (!copyCharCountTouched) {
@@ -305,7 +473,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       const response = await fetch("/api/resources/bgm/select-folder", { method: "POST" });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.detail || data.error || "无法选择自定义音乐文件夹。");
+        throw new Error(
+          formatApiErrorValue(data.detail) ||
+          formatApiErrorValue(data.error) ||
+          "无法选择自定义音乐文件夹。",
+        );
       }
       await onRefreshResources();
       addToast("已保存自定义音乐文件夹，音乐列表已刷新。", "success");
@@ -319,7 +491,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       const response = await fetch("/api/resources/fonts/select-folder", { method: "POST" });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.detail || data.error || "无法选择自定义字体文件夹。");
+        throw new Error(
+          formatApiErrorValue(data.detail) ||
+          formatApiErrorValue(data.error) ||
+          "无法选择自定义字体文件夹。",
+        );
       }
       await onRefreshResources();
       addToast("已保存自定义字体文件夹，字体列表已刷新。", "success");
@@ -376,7 +552,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.detail || data.error || "测试出图失败，请检查图像生成服务配置。");
+        throw new Error(formatApiErrorValue(data.detail) || formatApiErrorValue(data.error) || "测试出图失败，请检查图像生成服务配置。");
       }
       setTestImageUrl(mediaPathToUrl(data.image_path));
       addToast("测试图已生成。", "success");
@@ -431,7 +607,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.detail || data.error || `${previewServiceName} TTS 试听生成失败。`);
+        throw new Error(formatApiErrorValue(data.detail) || formatApiErrorValue(data.error) || `${previewServiceName} TTS 试听生成失败。`);
       }
       const audioUrl = audioPathToUrl(data.audio_path);
       setPreviewTtsAudioUrl(audioUrl);
@@ -511,7 +687,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.detail || data.error || `${copyServiceName} 当前文案合成失败。`);
+        throw new Error(formatApiErrorValue(data.detail) || formatApiErrorValue(data.error) || `${copyServiceName} 当前文案合成失败。`);
       }
 
       setCopyTtsAudioUrl(audioPathToUrl(data.audio_path));
@@ -527,10 +703,15 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   // Apply Preset
   React.useEffect(() => {
     if (activePreset) {
+      if (draftRecoveredRef.current && lastAppliedPresetId.current === null) {
+        lastAppliedPresetId.current = activePreset.id;
+        setPresetNameDraft(activePreset.name);
+        return;
+      }
       if (lastAppliedPresetId.current === activePreset.id) {
         setPromptPrefix(activePreset.promptPrefix);
         setPresetNameDraft(activePreset.name);
-        setSubtitleStyle({ ...DEFAULT_SUBTITLE_STYLE, ...(activePreset.subtitleStyle || {}) });
+        setSubtitleStyle(normalizeSubtitleStyle(activePreset.subtitleStyle));
         return;
       }
 
@@ -548,7 +729,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       if (activePreset.viewMode) setViewMode(activePreset.viewMode);
       if (activePreset.enableMotion !== undefined) setEnableMotion(activePreset.enableMotion);
       if (activePreset.enableSubtitles !== undefined) setEnableSubtitles(activePreset.enableSubtitles);
-      setSubtitleStyle({ ...DEFAULT_SUBTITLE_STYLE, ...(activePreset.subtitleStyle || {}) });
+      setSubtitleStyle(normalizeSubtitleStyle(activePreset.subtitleStyle));
       setMinimaxModel(activePreset.minimaxModel || "speech-2.8-turbo");
       setEmotion(activePreset.emotion || "");
       if (activePreset.sceneCount) setAiSceneCount(activePreset.sceneCount);
@@ -616,7 +797,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         maybeSyncCopyDraftToPreviewTts(draftText);
         addToast("AI 文案草稿已生成，你可以先预览或编辑。", "success");
       } else {
-        addToast(resData.detail || resData.error || "文案草稿生成异常，请检查 LLM 设置。", "error");
+        addToast(formatApiErrorValue(resData.detail) || formatApiErrorValue(resData.error) || "文案草稿生成异常，请检查 LLM 设置。", "error");
       }
     } catch (err: any) {
       addToast("连接服务器超时，请确保 dev 服务器就绪。", "error");
@@ -662,7 +843,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         setMode("manual"); // switch to manual scene editor so user can review and edit
         addToast(`AI 分镜脚本生成就绪！已帮您切分成 ${generated.length} 个分镜，您可直接在下方编辑或点击渲染。`, "success");
       } else {
-        addToast(resData.detail || resData.error || "脚本构思异常，请检查 LLM 设置。", "error");
+        addToast(formatApiErrorValue(resData.detail) || formatApiErrorValue(resData.error) || "脚本构思异常，请检查 LLM 设置。", "error");
       }
     } catch (err: any) {
       addToast("连接服务器超时，请确保 dev 服务器就绪。", "error");
@@ -728,7 +909,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     const trimmed = text.trim();
     if (!trimmed) return [];
 
-    const units = trimmed.match(/[^。！？.!?\n]+[。！？.!?]?/g)?.map((segment) => segment.trim()).filter(Boolean) || [trimmed];
+    const units = splitDraftByCurrentRule(text);
     return rebalanceDraftSegments(units, aiSceneCount);
   };
 
@@ -768,8 +949,28 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       }));
   };
 
+  const buildBatchTaskInputs = (
+    baseTaskInput: any,
+    renderScenes: ReturnType<typeof buildScenesForRender>,
+    requestGroupKey: string,
+  ) =>
+    renderScenes.map((scene, index) => {
+      const topicLabel = scene.ttsText.replace(/^主题\s*[一二三四五六七八九十\d]+\s*[:：]\s*/u, "").trim();
+      return {
+        ...baseTaskInput,
+        title: `${title.trim()} · ${topicLabel.slice(0, 28) || `主题 ${index + 1}`}`,
+        scenes: [{ ...scene, id: 1 }],
+        batchIndex: index + 1,
+        batchSize: renderScenes.length,
+        clientRequestKey: `${requestGroupKey}-${index + 1}`,
+      };
+    });
+
   // Trigger main generator callback
-  const handleTriggerRender = () => {
+  const handleTriggerRender = async () => {
+    if (submissionLockRef.current) return;
+    submissionLockRef.current = true;
+    try {
     if (!title.trim()) {
       addToast("请先指定视频生产任务标题！", "error");
       return;
@@ -789,6 +990,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
     if (renderScenes.length === 0) {
       addToast("没有可用于生成视频的文案内容。", "error");
+      return;
+    }
+
+    if (!reviewConfirmed) {
+      addToast("请先核对生成摘要并确认配置。", "error");
       return;
     }
 
@@ -815,7 +1021,36 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       scenes: renderScenes
     };
 
-    onGenerateTask(taskInput);
+    const requestGroupKey = crypto.randomUUID();
+    setIsSubmitting(true);
+    try {
+      if (mode === "batch") {
+        const taskInputs = buildBatchTaskInputs(taskInput, renderScenes, requestGroupKey);
+        let successfulSubmissions = 0;
+        await runWithConcurrency(taskInputs, 3, async (item) => {
+          if (await onGenerateTask(item)) successfulSubmissions += 1;
+        });
+        const failedSubmissions = taskInputs.length - successfulSubmissions;
+        if (failedSubmissions > 0) {
+          addToast(
+            `批量提交完成：成功 ${successfulSubmissions} 个，失败 ${failedSubmissions} 个。请查看任务面板中的失败原因。`,
+            "error",
+          );
+        } else {
+          addToast(`已提交 ${successfulSubmissions} 个独立视频任务。`, "success");
+        }
+        if (successfulSubmissions === 0) return;
+      } else {
+        const submitted = await onGenerateTask({ ...taskInput, clientRequestKey: requestGroupKey });
+        if (!submitted) return;
+      }
+      setReviewConfirmed(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+    } finally {
+      submissionLockRef.current = false;
+    }
   };
 
   const buildWorkbenchPreset = (name: string): Omit<Preset, "id"> => ({
@@ -880,6 +1115,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   };
 
   const currentWorkflow = workflowOptions.find((w) => w.id === workflowId);
+  const reviewScenes = buildScenesForRender();
+  const reviewVideoCount = mode === "batch" ? reviewScenes.length : reviewScenes.length > 0 ? 1 : 0;
+  const reviewSceneCount = mode === "batch" ? reviewScenes.length : reviewScenes.length;
+  const reviewNarrationSeconds = estimateNarrationSeconds(
+    reviewScenes.reduce((total, scene) => total + scene.ttsText.length, 0),
+  );
   const selectedTemplateOption = templateOptions.find((template) => template.id === selectedTemplate);
   const averageCopyCharsPerStoryboard = Math.max(1, Math.round(copyCharCount / Math.max(aiSceneCount, 1)));
   const estimatedCopySeconds = estimateNarrationSeconds(copyCharCount);
@@ -888,14 +1129,54 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
   return (
     <div className="space-y-6 animate-fade-in w-full max-w-[1240px] mx-auto pb-10">
+      <nav className="sticky top-0 z-20 -mx-1 p-1 bg-[#07080a]/95 backdrop-blur border border-zinc-900 rounded-lg" aria-label="快捷创作阶段">
+        <ol className="grid grid-cols-5 gap-1">
+          {QUICK_CREATE_STAGES.map((stage, index) => {
+            const completed =
+              stage.id === "content" ? Boolean(title.trim()) :
+              stage.id === "storyboard" ? buildScenesForRender().length > 0 :
+              stage.id === "production" ? Boolean(workflowId && voice) :
+              stage.id === "review" ? reviewConfirmed : false;
+            return (
+              <li key={stage.id}>
+                <button
+                  type="button"
+                  aria-current={activeStage === stage.id ? "step" : undefined}
+                  onClick={() => {
+                    setActiveStage(stage.id);
+                    if (stage.anchor) {
+                      document.getElementById(stage.anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    } else {
+                      addToast("任务提交后可在任务面板或历史记录查看进度与结果。", "info");
+                    }
+                  }}
+                  className={`w-full min-h-11 px-1.5 py-1.5 rounded text-[10px] sm:text-xs flex items-center justify-center gap-1 border transition-colors ${
+                    activeStage === stage.id
+                      ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                      : "bg-[#101114] text-zinc-400 border-zinc-900 hover:text-zinc-200"
+                  }`}
+                >
+                  <span className="font-mono">{completed ? "✓" : index + 1}</span>
+                  <span>{stage.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+        <p className="px-2 pt-1 text-[10px] text-zinc-500" aria-live="polite">
+          {draftSavedAt ? `草稿已自动保存 · ${new Date(draftSavedAt).toLocaleTimeString()}` : "草稿将在编辑后自动保存"}
+        </p>
+      </nav>
+
       {/* Task Header Title */}
-      <div className="bg-[#101114] border border-zinc-900 rounded-md p-3.5 space-y-3">
+      <div id="stage-content" className="bg-[#101114] border border-zinc-900 rounded-md p-3.5 space-y-3 scroll-mt-24">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex-1">
-          <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-0.5">
+          <label htmlFor="quick-create-title" className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-0.5">
             当前生产项目名称 / Project Title
           </label>
           <input
+            id="quick-create-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -1035,7 +1316,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       </div>
 
       {/* 2. Content Input panel */}
-      <div className="bg-[#101114] border border-zinc-900 rounded-lg p-4 space-y-4">
+      <div id="stage-storyboard" className="bg-[#101114] border border-zinc-900 rounded-lg p-4 space-y-4 scroll-mt-24">
         {mode === "ai" && (
           <div className="space-y-4">
             <div>
@@ -1223,10 +1504,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      <label htmlFor={`scene-narration-${scene.id}`} className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                         分镜配音旁白 (TTS Text)
                       </label>
                       <textarea
+                        id={`scene-narration-${scene.id}`}
                         placeholder="请输入本分镜念出来的配音旁白文案..."
                         value={scene.ttsText}
                         onChange={(e) => updateScene(scene.id, "ttsText", e.target.value)}
@@ -1235,10 +1517,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      <label htmlFor={`scene-visual-${scene.id}`} className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                         画面视觉绘图 Prompt (英文最佳)
                       </label>
                       <textarea
+                        id={`scene-visual-${scene.id}`}
                         placeholder="请输入本分镜的画面提示词，留空将沿用主题..."
                         value={scene.visualPrompt}
                         onChange={(e) => updateScene(scene.id, "visualPrompt", e.target.value)}
@@ -1250,8 +1533,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
                   <button
                     onClick={() => removeScene(scene.id)}
-                    className="p-1.5 hover:bg-rose-950/20 text-zinc-650 hover:text-rose-400 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="p-1.5 hover:bg-rose-950/20 text-zinc-500 hover:text-rose-400 rounded transition-colors"
                     title="删除此分镜"
+                    aria-label={`删除分镜 ${idx + 1}`}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -1282,7 +1566,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             <div className="bg-amber-550/5 border border-amber-500/10 p-3 rounded text-xs text-zinc-400 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4 text-amber-500" />
-                系统检测到 <strong>{batchCount}</strong> 个合法待渲染主题。
+                系统检测到 <strong>{batchCount}</strong> 个合法主题，将创建 <strong>{batchCount}</strong> 个独立视频。
               </span>
               <span className="text-[10px] font-mono uppercase tracking-wider bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
                 批量生成并发
@@ -1293,13 +1577,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       </div>
 
       {/* 3. TTS Voice Synthesis & BGM Mixing */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div id="stage-production" className="grid grid-cols-1 md:grid-cols-2 gap-4 scroll-mt-24">
         {/* TTS Panel */}
         <div className="bg-[#101114] border border-zinc-900 p-4 rounded-lg space-y-4">
           <h3 className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
             <Mic2 className="w-4 h-4 text-amber-500" />
             配音合成 TTS 引擎
           </h3>
+          <p className="text-[10px] text-amber-400/80">试听与“合成当前文案”仅供预览，不会复用到最终成片。</p>
 
           <div className="grid grid-cols-3 gap-1 p-0.5 bg-[#17181c] border border-zinc-850 rounded">
             {(["edge", "comfyui", "minimax"] as const).map((opt) => (
@@ -1647,6 +1932,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   使用图片运动生成比例 · {currentWorkflow?.name || "Default workflow"} · {imageWidth}x{imageHeight}
                 </span>
               </div>
+              <p className="text-[10px] text-amber-400/80">测试图仅供预览，不会复用到最终成片。</p>
               <textarea
                 value={testImagePrompt}
                 onChange={(e) => setTestImagePrompt(e.target.value)}
@@ -2140,14 +2426,53 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         )}
       </div>
 
+      <section id="stage-review" className="bg-[#101114] border border-amber-500/20 rounded-lg p-4 space-y-3 scroll-mt-24" aria-labelledby="generation-review-title">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 id="generation-review-title" className="text-sm font-semibold text-zinc-200">生成前核对</h3>
+            <p className="text-xs text-zinc-400 mt-1">确认任务数量和关键生产参数，提交后仍可在任务面板取消。</p>
+          </div>
+          <span className="text-[10px] font-mono text-amber-400 border border-amber-500/20 rounded px-2 py-1">
+            {mode === "batch" ? "批量视频" : "单视频"}
+          </span>
+        </div>
+        <dl className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          {[
+            ["视频数量", `${reviewVideoCount}`],
+            ["分镜总数", `${reviewSceneCount}`],
+            ["配音", `${ttsMode} · ${voice}`],
+            ["工作流", currentWorkflow?.name || workflowId || "未选择"],
+            ["画布", `${imageWidth} × ${imageHeight}`],
+            ["字幕", enableSubtitles ? `${subtitleStyle.fontSize}px · ${subtitleStyle.fontFamily || "自动中文字体"}` : "关闭"],
+            ["背景音乐", selectedBgm?.name || "无背景音乐"],
+            ["预计旁白", `约 ${Math.ceil(reviewNarrationSeconds / 60)} 分钟`],
+          ].map(([label, value]) => (
+            <div key={label} className="bg-[#17181c] border border-zinc-900 rounded p-2 min-w-0">
+              <dt className="text-zinc-500 mb-1">{label}</dt>
+              <dd className="text-zinc-200 truncate" title={value}>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <label className="flex items-start gap-2 text-xs text-zinc-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={reviewConfirmed}
+            onChange={(event) => setReviewConfirmed(event.target.checked)}
+            className="mt-0.5 accent-amber-500"
+          />
+          <span>我已核对以上配置，确认开始创建 {reviewVideoCount} 个视频任务。</span>
+        </label>
+      </section>
+
       {/* Primary Action Button */}
       <div className="flex justify-end pt-2">
         <button
           onClick={handleTriggerRender}
-          className="px-6 py-2.5 bg-amber-500 text-black font-semibold text-xs rounded hover:bg-amber-400 shadow-xl shadow-amber-500/10 flex items-center gap-2 transition-transform active:scale-[0.99]"
+          disabled={isSubmitting || !reviewConfirmed}
+          className="px-6 py-2.5 bg-amber-500 text-black font-semibold text-xs rounded hover:bg-amber-400 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed shadow-xl shadow-amber-500/10 flex items-center gap-2 transition-transform active:scale-[0.99]"
         >
-          <Sparkles className="w-4 h-4 text-black" />
-          立即开始生成视频 Generate Video
+          {isSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-black" />}
+          {isSubmitting ? "正在提交任务…" : mode === "batch" ? `提交 ${reviewVideoCount} 个视频任务` : "立即开始生成视频 Generate Video"}
         </button>
       </div>
     </div>

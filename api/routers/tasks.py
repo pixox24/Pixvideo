@@ -88,7 +88,7 @@ async def cancel_task(task_id: str):
     Returns success status.
     """
     try:
-        success = task_manager.cancel_task(task_id)
+        success = await task_manager.cancel_task(task_id)
         
         if not success:
             raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
@@ -103,4 +103,3 @@ async def cancel_task(task_id: str):
     except Exception as e:
         logger.error(f"Cancel task error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

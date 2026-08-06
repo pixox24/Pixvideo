@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Select } from "./Select";
+import { FontSelect } from "./FontSelect";
 import { SubtitleStylePreview } from "./SubtitleStylePreview";
 import {
   Sparkles,
@@ -27,10 +28,11 @@ import {
 } from "lucide-react";
 import { Preset, SubtitleStyle, WorkbenchResources } from "../types";
 import { VOICE_OPTIONS } from "../data";
-import { formatApiErrorValue } from "../lib/api";
+import { extractHighlightKeywords, formatApiErrorValue } from "../lib/api";
 
 interface QuickCreateProps {
-  onGenerateTask: (taskInput: any) => Promise<boolean>;
+  onGenerateTask: (taskInput: any) => Promise<string | null>;
+  latestCompletedTaskId?: string | null;
   presets: Preset[];
   activePreset: Preset | null;
   defaultPresetId: string | null;
@@ -136,15 +138,19 @@ const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   maxCharsPerLine: 14,
   maxLines: 2,
   animation: "fade",
-  segmentMode: "phrase",
+  segmentMode: "sentence",
   highlightWords: [],
+  keywordColors: {},
   highlightStyle: "accent",
   highlightScale: 125,
   backgroundOpacity: 72,
+  fadeInMs: 120,
+  fadeOutMs: 120,
 };
 
 export const QuickCreate: React.FC<QuickCreateProps> = ({
   onGenerateTask,
+  latestCompletedTaskId,
   presets,
   activePreset,
   defaultPresetId,
@@ -207,12 +213,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [copyTtsDuration, setCopyTtsDuration] = useState<number | null>(null);
   const [copyTtsSourceLabel, setCopyTtsSourceLabel] = useState("");
 
-  // Layout Template states
-  const [viewMode, setViewMode] = useState<"template" | "pure-image">("pure-image");
-  const [selectedTemplate, setSelectedTemplate] = useState("");
+  // Image motion composition states
   const [enableMotion, setEnableMotion] = useState(true);
   const [enableSubtitles, setEnableSubtitles] = useState(true);
   const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(DEFAULT_SUBTITLE_STYLE);
+  const [keywordLoading, setKeywordLoading] = useState(false);
   const [imageAspectRatio, setImageAspectRatio] = useState("1024x1536");
   const [imageWidth, setImageWidth] = useState(1024);
   const [imageHeight, setImageHeight] = useState(1536);
@@ -232,16 +237,17 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [activeStage, setActiveStage] = useState<(typeof QUICK_CREATE_STAGES)[number]["id"]>("content");
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [reuseSourceTaskId, setReuseSourceTaskId] = useState<string | null>(null);
   const draftReadyRef = React.useRef(false);
   const draftRecoveredRef = React.useRef(false);
   const reviewReadyRef = React.useRef(false);
   const submissionLockRef = React.useRef(false);
 
   const bgmOptions = resources.bgm;
-  const templateOptions = resources.templates;
   const workflowOptions = resources.workflows;
   const fontOptions = resources.fonts || [];
   const selectedBgm = bgmOptions.find((item) => item.id === bgm);
+  const effectiveReuseSourceTaskId = reuseSourceTaskId || latestCompletedTaskId || null;
   const lastAppliedPresetId = React.useRef<string | null>(null);
 
   const normalizeSubtitleStyle = (value?: Partial<SubtitleStyle>): SubtitleStyle => ({
@@ -256,6 +262,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     maxLines: clampNumber(value?.maxLines, 2, 1, 4),
     highlightScale: clampNumber(value?.highlightScale, 125, 100, 180),
     backgroundOpacity: clampNumber(value?.backgroundOpacity, 72, 0, 100),
+    fadeInMs: clampNumber(value?.fadeInMs, 120, 0, 1000),
+    fadeOutMs: clampNumber(value?.fadeOutMs, 120, 0, 1000),
+    segmentMode: value?.segmentMode && ["line", "sentence", "phrase"].includes(value.segmentMode)
+      ? value.segmentMode
+      : "sentence",
+    keywordColors: value?.keywordColors && typeof value.keywordColors === "object"
+      ? value.keywordColors
+      : {},
   });
 
   React.useEffect(() => {
@@ -303,13 +317,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           if (typeof draft.bgm === "string") setBgm(draft.bgm);
           if (typeof draft.volume === "number") setVolume(draft.volume);
           if (typeof draft.promptPrefix === "string") setPromptPrefix(draft.promptPrefix);
-          if (typeof draft.selectedTemplate === "string") setSelectedTemplate(draft.selectedTemplate);
-          if (["template", "pure-image"].includes(draft.viewMode)) setViewMode(draft.viewMode);
           if (typeof draft.enableMotion === "boolean") setEnableMotion(draft.enableMotion);
           if (typeof draft.enableSubtitles === "boolean") setEnableSubtitles(draft.enableSubtitles);
           if (typeof draft.imageAspectRatio === "string") setImageAspectRatio(draft.imageAspectRatio);
           if (typeof draft.imageWidth === "number") setImageWidth(draft.imageWidth);
           if (typeof draft.imageHeight === "number") setImageHeight(draft.imageHeight);
+          if (typeof draft.reuseSourceTaskId === "string") setReuseSourceTaskId(draft.reuseSourceTaskId);
           if (draft.subtitleStyle) setSubtitleStyle(normalizeSubtitleStyle(draft.subtitleStyle));
           setDraftSavedAt(typeof draft.savedAt === "string" ? draft.savedAt : null);
         }
@@ -348,19 +361,18 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         bgm,
         volume,
         promptPrefix,
-        selectedTemplate,
-        viewMode,
         enableMotion,
         enableSubtitles,
         imageAspectRatio,
         imageWidth,
         imageHeight,
+        reuseSourceTaskId,
         subtitleStyle: normalizeSubtitleStyle(subtitleStyle),
       }));
       setDraftSavedAt(savedAt);
     }, 500);
     return () => window.clearTimeout(timeoutId);
-  }, [mode, title, aiTopic, aiSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, voice, speed, minimaxModel, emotion, bgm, volume, promptPrefix, selectedTemplate, viewMode, enableMotion, enableSubtitles, imageAspectRatio, imageWidth, imageHeight, subtitleStyle]);
+  }, [mode, title, aiTopic, aiSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, voice, speed, minimaxModel, emotion, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId]);
 
   // Invalidate the review whenever a submitted production setting changes.
   React.useEffect(() => {
@@ -369,7 +381,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       return;
     }
     setReviewConfirmed(false);
-  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, splitType, batchInput, scenes, workflowId, ttsMode, voice, speed, minimaxModel, emotion, bgm, volume, promptPrefix, selectedTemplate, viewMode, enableMotion, enableSubtitles, imageWidth, imageHeight, subtitleStyle]);
+  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, splitType, batchInput, scenes, workflowId, ttsMode, voice, speed, minimaxModel, emotion, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageWidth, imageHeight, subtitleStyle]);
 
   React.useEffect(() => {
     if (!copyCharCountTouched) {
@@ -383,16 +395,6 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setWorkflowId(workflowOptions[0].id);
     }
   }, [workflowOptions, workflowId]);
-
-  React.useEffect(() => {
-    if (templateOptions.length === 0) return;
-    const preferredTemplate =
-      templateOptions.find((template) => template.id === "1080x1920/image_default.html") ||
-      templateOptions[0];
-    if (!selectedTemplate || !templateOptions.some((template) => template.id === selectedTemplate)) {
-      setSelectedTemplate(preferredTemplate.id);
-    }
-  }, [templateOptions, selectedTemplate]);
 
   React.useEffect(() => {
     if (bgmOptions.length === 0) return;
@@ -458,7 +460,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setSubtitleStyle((current) => ({ ...current, ...patch }));
   };
 
-  const dynamicSubtitleEnabled = viewMode === "pure-image" && subtitleStyle.mode === "hyperframes";
+  const dynamicSubtitleEnabled = subtitleStyle.mode === "hyperframes";
 
   const handleSubtitleFontChange = (fontPath: string) => {
     const font = fontOptions.find((item) => item.path === fontPath);
@@ -466,6 +468,65 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       fontPath,
       fontFamily: font?.name || "",
     });
+  };
+
+  const keywordSourceText = () => {
+    if (mode === "batch") {
+      return batchInput
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, 8)
+        .join("\n");
+    }
+    if (copyDraft.trim()) return copyDraft.trim();
+    if (scenes.length) {
+      return scenes.map((scene) => scene.ttsText || "").filter(Boolean).join("\n");
+    }
+    return aiTopic.trim() || title.trim();
+  };
+
+  const applyHighlightKeywords = (
+    words: string[],
+    colors?: Record<string, string>,
+  ) => {
+    const nextWords = Array.from(new Set(words.map((w) => w.trim()).filter(Boolean))).slice(0, 24);
+    const nextColors: Record<string, string> = {};
+    for (const word of nextWords) {
+      nextColors[word] =
+        colors?.[word] ||
+        subtitleStyle.keywordColors?.[word] ||
+        subtitleStyle.accentColor ||
+        "#FFD43B";
+    }
+    updateSubtitleStyle({ highlightWords: nextWords, keywordColors: nextColors });
+  };
+
+  const handleExtractKeywords = async () => {
+    const text = keywordSourceText();
+    if (!text) {
+      addToast("请先填写旁白或主题，再提取高亮词。", "error");
+      return;
+    }
+    setKeywordLoading(true);
+    try {
+      const keywords = await extractHighlightKeywords(text, 8);
+      if (!keywords.length) {
+        addToast("未提取到可用高亮词，请手动填写。", "info");
+        return;
+      }
+      const colors: Record<string, string> = {};
+      for (const item of keywords) colors[item.word] = item.color;
+      applyHighlightKeywords(
+        keywords.map((item) => item.word),
+        colors,
+      );
+      addToast(`已提取 ${keywords.length} 个高亮词`, "success");
+    } catch (err: any) {
+      addToast(err.message || "高亮词提取失败。", "error");
+    } finally {
+      setKeywordLoading(false);
+    }
   };
 
   const openCustomBgmFolder = async () => {
@@ -725,8 +786,6 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setVolume(activePreset.bgmVolume);
       setPromptPrefix(activePreset.promptPrefix);
       setSplitType(activePreset.splitType);
-      if (activePreset.template) setSelectedTemplate(activePreset.template);
-      if (activePreset.viewMode) setViewMode(activePreset.viewMode);
       if (activePreset.enableMotion !== undefined) setEnableMotion(activePreset.enableMotion);
       if (activePreset.enableSubtitles !== undefined) setEnableSubtitles(activePreset.enableSubtitles);
       setSubtitleStyle(normalizeSubtitleStyle(activePreset.subtitleStyle));
@@ -1012,12 +1071,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       bgm,
       bgmVolume: volume,
       promptPrefix,
-      templateId: selectedTemplate,
-      viewMode,
       enableMotion,
       enableSubtitles,
-      subtitleStyle: viewMode === "pure-image" ? subtitleStyle : { ...subtitleStyle, mode: "ass" },
+      subtitleStyle,
       splitType,
+      reuseTaskId: mode === "batch" ? undefined : effectiveReuseSourceTaskId,
       scenes: renderScenes
     };
 
@@ -1041,8 +1099,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         }
         if (successfulSubmissions === 0) return;
       } else {
-        const submitted = await onGenerateTask({ ...taskInput, clientRequestKey: requestGroupKey });
-        if (!submitted) return;
+        const submittedTaskId = await onGenerateTask({ ...taskInput, clientRequestKey: requestGroupKey });
+        if (!submittedTaskId) return;
+        setReuseSourceTaskId(submittedTaskId);
       }
       setReviewConfirmed(false);
     } finally {
@@ -1063,8 +1122,6 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       bgmVolume: volume,
       promptPrefix,
       splitType,
-      template: selectedTemplate,
-      viewMode,
       enableMotion,
       enableSubtitles,
       subtitleStyle,
@@ -1121,7 +1178,6 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const reviewNarrationSeconds = estimateNarrationSeconds(
     reviewScenes.reduce((total, scene) => total + scene.ttsText.length, 0),
   );
-  const selectedTemplateOption = templateOptions.find((template) => template.id === selectedTemplate);
   const averageCopyCharsPerStoryboard = Math.max(1, Math.round(copyCharCount / Math.max(aiSceneCount, 1)));
   const estimatedCopySeconds = estimateNarrationSeconds(copyCharCount);
   const currentCopyForTts = getCurrentCopyForTts();
@@ -1868,32 +1924,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         </div>
       </div>
 
-      {/* 4. Canvas Mode & Templates */}
+      {/* 4. Image style and motion composition */}
       <div className="bg-[#101114] border border-zinc-900 rounded-lg p-4 space-y-4">
-        <div className="flex justify-between items-center pb-2 border-b border-zinc-900">
+          <div className="flex items-center pb-2 border-b border-zinc-900">
           <h3 className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
             <FileVideo className="w-4 h-4 text-amber-500" />
             分镜画风及画面渲染模式
           </h3>
-
-          <div className="flex gap-1.5 bg-[#17181c] border border-zinc-850 p-0.5 rounded">
-            <button
-              onClick={() => setViewMode("pure-image")}
-              className={`px-2 py-0.5 text-[10px] rounded transition-all ${
-                viewMode === "pure-image" ? "bg-amber-500/10 text-amber-400 font-medium" : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              图片运动生成
-            </button>
-            <button
-              onClick={() => setViewMode("template")}
-              className={`px-2 py-0.5 text-[10px] rounded transition-all ${
-                viewMode === "template" ? "bg-amber-500/10 text-amber-400 font-medium" : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              分镜模板渲染
-            </button>
-          </div>
         </div>
 
         <div className="space-y-3">
@@ -1979,56 +2016,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           </div>
         </div>
 
-        {viewMode === "template" ? (
-          <div className="space-y-4">
-            <div className="bg-amber-500/5 border border-amber-500/15 rounded-md px-3 py-2 text-[10px] text-amber-200/90 leading-relaxed">
-              <div className="font-semibold text-amber-300">模板模式下最终视频比例由模板决定</div>
-              <div className="text-amber-100/75">
-                当前模板画布: {selectedTemplateOption?.dimensions || "未选择模板"}。如果需要 9:16 竖屏成片，请选择竖屏模板或切回图片运动生成。
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto pr-1">
-              {templateOptions.length === 0 && (
-                <div className="sm:col-span-3 border border-dashed border-zinc-800 rounded p-6 text-center text-xs text-zinc-500">
-                  正在等待后端模板资源...
-                </div>
-              )}
-              {templateOptions.map((t) => (
-                <div
-                  key={t.id}
-                  onClick={() => setSelectedTemplate(t.id)}
-                  className={`border rounded overflow-hidden cursor-pointer bg-[#17181c] transition-all hover:scale-[1.01] ${
-                    selectedTemplate === t.id
-                      ? "border-amber-500 shadow-md shadow-amber-500/5"
-                      : "border-zinc-850 opacity-60 hover:opacity-100"
-                  }`}
-                >
-                  <div className="w-full h-24 bg-[#0c0d10] border-b border-zinc-900 flex items-center justify-center">
-                    <div
-                      className={`border border-amber-500/35 bg-amber-500/10 shadow-inner shadow-amber-500/5 ${
-                        t.orientation === "landscape"
-                          ? "w-24 h-14"
-                          : t.orientation === "square"
-                            ? "w-16 h-16"
-                            : "w-12 h-20"
-                      }`}
-                    />
-                  </div>
-                  <div className="p-2 space-y-1">
-                    <span className="text-[11px] font-semibold text-zinc-200 block truncate">{t.name}</span>
-                    <span className="text-[9px] text-zinc-500 block uppercase font-mono tracking-wider">
-                      {t.type} / {t.dimensions}
-                    </span>
-                    <p className="text-[10px] text-zinc-400 line-clamp-2 leading-relaxed mt-1">
-                      {t.desc}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="p-3 bg-[#17181c] border border-zinc-850 rounded-md space-y-4">
+        <div className="p-3 bg-[#17181c] border border-zinc-850 rounded-md space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
@@ -2119,12 +2107,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-zinc-300">字幕渲染</span>
                   <Select
-                    value={viewMode === "pure-image" && subtitleStyle.mode === "hyperframes" ? "hyperframes" : "ass"}
+                    value={subtitleStyle.mode === "hyperframes" ? "hyperframes" : "ass"}
                     onChange={(e) => updateSubtitleStyle({ mode: e.target.value as SubtitleStyle["mode"] })}
                     className="bg-[#101114] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                   >
                     <option value="ass">标准字幕</option>
-                    {viewMode === "pure-image" && <option value="hyperframes">动态字幕</option>}
+                    <option value="hyperframes">动态字幕</option>
                   </Select>
                 </div>
 
@@ -2142,23 +2130,18 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   </Select>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-start">
                   <div>
                     <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                       字体 / Font
                     </label>
-                    <Select
+                    <FontSelect
                       value={subtitleStyle.fontPath || ""}
-                      onChange={(e) => handleSubtitleFontChange(e.target.value)}
+                      fonts={fontOptions}
+                      onChange={handleSubtitleFontChange}
                       className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-                    >
-                      <option value="">自动选择中文字体</option>
-                      {fontOptions.map((font) => (
-                        <option key={font.path} value={font.path}>
-                          {font.name} · {font.source}
-                        </option>
-                      ))}
-                    </Select>
+                      previewText="让每一帧，都更有表达力 Aa 123"
+                    />
                   </div>
                   <button
                     type="button"
@@ -2259,41 +2242,109 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   ))}
                 </div>
 
-                {dynamicSubtitleEnabled && (
-                  <div className="border-t border-zinc-800 pt-3 space-y-3">
-                    <label className="block">
-                      <span className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">高亮词</span>
-                      <textarea
-                        value={(subtitleStyle.highlightWords || []).join("，")}
-                        onChange={(e) => updateSubtitleStyle({ highlightWords: parseHighlightWords(e.target.value) })}
-                        rows={2}
-                        className="w-full resize-y min-h-16 max-h-32 bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-                      />
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">高亮样式</label>
-                        <Select
-                          value={subtitleStyle.highlightStyle || "accent"}
-                          onChange={(e) => updateSubtitleStyle({ highlightStyle: e.target.value as NonNullable<SubtitleStyle["highlightStyle"]> })}
-                          className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                <div className="border-t border-zinc-800 pt-3 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                      高亮词（可单独配色）
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleExtractKeywords}
+                      disabled={keywordLoading}
+                      className="inline-flex items-center justify-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                    >
+                      {keywordLoading ? <Loader className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      AI 自动抽词
+                    </button>
+                  </div>
+                  <label className="block">
+                    <span className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      批量编辑（逗号分隔）
+                    </span>
+                    <textarea
+                      value={(subtitleStyle.highlightWords || []).join("，")}
+                      onChange={(e) => {
+                        const words = parseHighlightWords(e.target.value);
+                        applyHighlightKeywords(words);
+                      }}
+                      rows={2}
+                      placeholder="例如：表达力，重点"
+                      className="w-full resize-y min-h-16 max-h-32 bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    />
+                  </label>
+                  {(subtitleStyle.highlightWords || []).length > 0 && (
+                    <div className="space-y-1.5">
+                      {(subtitleStyle.highlightWords || []).map((word) => (
+                        <div
+                          key={word}
+                          className="flex items-center gap-2 rounded border border-zinc-800 bg-[#0c0d10] px-2 py-1.5"
                         >
-                          <option value="accent">强调色</option>
-                          <option value="pop">加粗强调</option>
-                          <option value="badge">色块徽标</option>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">高亮缩放</label>
-                        <input
-                          type="number"
-                          min="100"
-                          max="180"
-                          value={subtitleStyle.highlightScale || 125}
-                          onChange={(e) => updateSubtitleStyle({ highlightScale: parseInt(e.target.value || "125", 10) })}
-                          className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-                        />
-                      </div>
+                          <span
+                            className="min-w-0 flex-1 truncate text-xs font-semibold"
+                            style={{ color: subtitleStyle.keywordColors?.[word] || subtitleStyle.accentColor }}
+                          >
+                            {word}
+                          </span>
+                          <input
+                            type="color"
+                            value={subtitleStyle.keywordColors?.[word] || subtitleStyle.accentColor || "#FFD43B"}
+                            onChange={(e) =>
+                              updateSubtitleStyle({
+                                keywordColors: {
+                                  ...(subtitleStyle.keywordColors || {}),
+                                  [word]: e.target.value,
+                                },
+                              })
+                            }
+                            className="h-7 w-10 cursor-pointer rounded border border-zinc-800 bg-transparent p-0.5"
+                            title={`${word} 颜色`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextWords = (subtitleStyle.highlightWords || []).filter((item) => item !== word);
+                              const nextColors = { ...(subtitleStyle.keywordColors || {}) };
+                              delete nextColors[word];
+                              updateSubtitleStyle({ highlightWords: nextWords, keywordColors: nextColors });
+                            }}
+                            className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                            title="移除"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {dynamicSubtitleEnabled && (
+                      <>
+                        <div>
+                          <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">高亮样式</label>
+                          <Select
+                            value={subtitleStyle.highlightStyle || "accent"}
+                            onChange={(e) => updateSubtitleStyle({ highlightStyle: e.target.value as NonNullable<SubtitleStyle["highlightStyle"]> })}
+                            className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                          >
+                            <option value="accent">强调色</option>
+                            <option value="pop">加粗强调</option>
+                            <option value="badge">色块徽标</option>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">高亮缩放</label>
+                          <input
+                            type="number"
+                            min="100"
+                            max="180"
+                            value={subtitleStyle.highlightScale || 125}
+                            onChange={(e) => updateSubtitleStyle({ highlightScale: parseInt(e.target.value || "125", 10) })}
+                            className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                      </>
+                    )}
+                    {(dynamicSubtitleEnabled || subtitleStyle.preset === "caption-box") && (
                       <div>
                         <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">底色透明度</label>
                         <input
@@ -2305,9 +2356,33 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                           className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                         />
                       </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">缓入 ms</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="1000"
+                        value={subtitleStyle.fadeInMs ?? 120}
+                        onChange={(e) => updateSubtitleStyle({ fadeInMs: parseInt(e.target.value || "120", 10) })}
+                        className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">缓出 ms</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="1000"
+                        value={subtitleStyle.fadeOutMs ?? 120}
+                        onChange={(e) => updateSubtitleStyle({ fadeOutMs: parseInt(e.target.value || "120", 10) })}
+                        className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      />
                     </div>
                   </div>
-                )}
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                   <div>
@@ -2319,8 +2394,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       onChange={(e) => updateSubtitleStyle({ segmentMode: e.target.value as SubtitleStyle["segmentMode"] })}
                       className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                     >
-                      <option value="phrase">短句切分</option>
-                      <option value="sentence">按句号切分</option>
+                      <option value="sentence">按标点切分（一行一句、去标点）</option>
+                      <option value="phrase">按字数切分</option>
                       <option value="line">按换行切分</option>
                     </Select>
                   </div>
@@ -2371,7 +2446,6 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             )}
             </div>
           </div>
-        )}
 
       </div>
 
@@ -2445,6 +2519,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             ["画布", `${imageWidth} × ${imageHeight}`],
             ["字幕", enableSubtitles ? `${subtitleStyle.fontSize}px · ${subtitleStyle.fontFamily || "自动中文字体"}` : "关闭"],
             ["背景音乐", selectedBgm?.name || "无背景音乐"],
+            ["生成策略", effectiveReuseSourceTaskId ? "优先复用配音与图片" : "完整生成"],
             ["预计旁白", `约 ${Math.ceil(reviewNarrationSeconds / 60)} 分钟`],
           ].map(([label, value]) => (
             <div key={label} className="bg-[#17181c] border border-zinc-900 rounded p-2 min-w-0">

@@ -95,6 +95,24 @@ class TitleGenerateRequest(BaseModel):
         }
 
 
+class KeywordExtractRequest(BaseModel):
+    """Highlight keyword extraction request"""
+    text: str = Field(..., min_length=1, description="Narration or script text")
+    max_keywords: int = Field(8, ge=1, le=24, description="Maximum keywords to return")
+
+
+class KeywordItem(BaseModel):
+    word: str
+    color: str = "#FFD43B"
+
+
+class KeywordExtractResponse(BaseModel):
+    """Highlight keyword extraction response"""
+    success: bool = True
+    message: str = "Success"
+    keywords: List[KeywordItem] = Field(default_factory=list)
+
+
 class TitleGenerateResponse(BaseModel):
     """Title generation response"""
     success: bool = True

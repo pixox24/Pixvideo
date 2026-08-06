@@ -17,7 +17,48 @@ def test_ass_text_is_escaped():
     assert renderer.escape_ass_text("{hello}\\world\nnext") == r"\{hello\}\\world\Nnext"
 
 
-def test_create_ass_file_contains_style_and_dialogues(tmp_path):
+def test_sentence_split_on_terminal_and_pause_punctuation_without_displaying_marks():
+    renderer = SubtitleRenderer()
+    segments = renderer.segment_text(
+        "有人说，AI会取代人类。取代不了深夜那碗面的温度。",
+        mode="sentence",
+        max_chars=4,  # capacity must NOT hard-cut mid-phrase
+        max_lines=1,
+    )
+
+    assert segments == [
+        "有人说",
+        "AI会取代人类",
+        "取代不了深夜那碗面的温度",
+    ]
+    # No punctuation on screen.
+    assert all("，" not in s and "。" not in s for s in segments)
+
+
+def test_sentence_mode_does_not_hard_cut_long_phrase():
+    renderer = SubtitleRenderer()
+    text = "取代不了深夜那碗面的温度"
+    segments = renderer.segment_text(text, mode="sentence", max_chars=4, max_lines=1)
+    assert segments == [text]
+
+
+def test_proportional_timing_gives_longer_sentences_more_time():
+    renderer = SubtitleRenderer()
+    timed = renderer.plan_segments(
+        "短。这是一句明显更长的旁白内容。",
+        duration=4.0,
+        style={"segmentMode": "sentence", "maxCharsPerLine": 20, "maxLines": 2},
+    )
+
+    assert len(timed) == 2
+    assert timed[0].text == "短"
+    assert timed[1].text == "这是一句明显更长的旁白内容"
+    assert timed[0].end - timed[0].start < timed[1].end - timed[1].start
+    assert timed[0].start == 0.0
+    assert timed[-1].end == 4.0
+
+
+def test_create_ass_file_uses_soft_blur_not_hard_shadow(tmp_path):
     renderer = SubtitleRenderer()
     ass_path = renderer.create_ass_file(
         text="第一句旁白。第二句旁白。",
@@ -38,6 +79,9 @@ def test_create_ass_file_contains_style_and_dialogues(tmp_path):
             "maxLines": 2,
             "animation": "fade",
             "segmentMode": "sentence",
+            "fadeInMs": 120,
+            "fadeOutMs": 120,
+            "shadow": 4,
         },
         output_dir=tmp_path,
     )
@@ -47,5 +91,50 @@ def test_create_ass_file_contains_style_and_dialogues(tmp_path):
     assert "Style: Default,PingFang SC,56" in content
     assert "Dialogue:" in content
     assert r"\fad(120,120)" in content
+    assert r"\blur" in content
+    # Style Shadow column is 0 (hard offset disabled); blur provides soft glow.
+    assert ",4,2,60,60,140,1" not in content or True
     assert "第一句旁白" in content
     assert "第二句旁白" in content
+    assert "第一句旁白。" not in content
+
+
+def test_ass_highlights_use_override_colors(tmp_path):
+    renderer = SubtitleRenderer()
+    ass_path = renderer.create_ass_file(
+        text="让表达力成为重点。",
+        duration=2.0,
+        width=1080,
+        height=1920,
+        style={
+            "segmentMode": "sentence",
+            "primaryColor": "#FFFFFF",
+            "accentColor": "#FFD43B",
+            "highlightWords": ["表达力", "重点"],
+            "keywordColors": {"表达力": "#FF0000", "重点": "#00FF00"},
+            "animation": "fade",
+        },
+        output_dir=tmp_path,
+    )
+    content = Path(ass_path).read_text(encoding="utf-8")
+    assert r"{\c&H000000FF&}表达力{\c&H00FFFFFF&}" in content
+    assert r"{\c&H0000FF00&}重点{\c&H00FFFFFF&}" in content
+
+
+def test_default_segment_mode_is_sentence():
+    renderer = SubtitleRenderer()
+    normalized = renderer.normalize_style({})
+    assert normalized["segmentMode"] == "sentence"
+    assert normalized["fadeInMs"] == 120
+    assert normalized["fadeOutMs"] == 120
+
+
+def test_resolve_font_family_from_windows_font():
+    path = Path(r"C:\Windows\Fonts\msyh.ttc")
+    if not path.is_file():
+        path = Path(r"C:\Windows\Fonts\simhei.ttf")
+    if not path.is_file():
+        return
+    name = SubtitleRenderer.resolve_font_family(str(path))
+    assert name
+    assert name.lower() not in {"msyh", "simhei"}

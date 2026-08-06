@@ -93,7 +93,11 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
     setIsPlaying(true);
   };
   const subtitleBackground = style.preset === "caption-box" ? colorWithOpacity(style.backColor, style.backgroundOpacity ?? 72) : "transparent";
-  const textShadow = `${scaledStyle.shadow}px ${scaledStyle.shadow}px ${Math.max(1, scaledStyle.shadow * 2)}px ${style.outlineColor}`;
+  // Soft glow (blur) instead of hard offset double-shadow.
+  const textShadow =
+    scaledStyle.shadow > 0
+      ? `0 0 ${Math.max(2, scaledStyle.shadow * 2)}px ${style.outlineColor}, 0 0 ${Math.max(4, scaledStyle.shadow * 3)}px ${style.outlineColor}`
+      : "none";
   const highlightStyle = style.highlightStyle || "accent";
   const highlightScale = Math.min(Math.max(style.highlightScale || 125, 100), 180) / 100;
   const highlightAnimated = isPlaying && style.animation === "word-pop";
@@ -130,9 +134,9 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
           <div className="absolute inset-x-[8%]" style={{ bottom: `${scaledStyle.marginBottom}px`, textAlign: previewTextAlignment(style.alignment) }}>
             <div className="inline-block max-w-full rounded px-2 py-1" style={{ backgroundColor: subtitleBackground }}>
               {lines.map((line, index) => (
-                <p key={`${line}-${index}`} className={isPlaying && style.animation === "pop" ? "animate-[bounce_0.55s_ease-out]" : isPlaying && style.animation === "fade" ? "animate-[pulse_0.7s_ease-out]" : undefined} style={{ color: index === lines.length - 1 ? style.accentColor : style.primaryColor, fontFamily: activeFontFamily, fontSize: `${scaledStyle.fontSize}px`, fontWeight: style.preset === "short-video-bold" ? 800 : 600, lineHeight: 1.35, WebkitTextStroke: `${scaledStyle.outlineWidth}px ${style.outlineColor}`, textShadow }}>
-                  {splitPreviewHighlights(line, style.highlightWords).map((fragment, fragmentIndex) => fragment.highlighted ? (
-                    <span key={`${fragment.text}-${fragmentIndex}`} className={highlightAnimated ? "inline-block animate-[bounce_0.55s_ease-out]" : "inline-block"} style={{ color: highlightStyle === "badge" ? "#17110a" : style.accentColor, backgroundColor: highlightStyle === "badge" ? style.accentColor : "transparent", borderRadius: highlightStyle === "badge" ? "0.16em" : undefined, padding: highlightStyle === "badge" ? "0.02em 0.16em" : undefined, fontWeight: highlightStyle === "pop" ? 900 : undefined, transform: highlightAnimated ? `scale(${highlightScale})` : undefined, WebkitTextStroke: highlightStyle === "badge" ? "0" : undefined, textShadow: highlightStyle === "badge" ? "none" : undefined }}>
+                <p key={`${line}-${index}`} className={isPlaying && style.animation === "pop" ? "animate-[bounce_0.55s_ease-out]" : isPlaying && style.animation === "fade" ? "animate-[pulse_0.7s_ease-out]" : undefined} style={{ color: style.primaryColor, fontFamily: activeFontFamily, fontSize: `${scaledStyle.fontSize}px`, fontWeight: style.preset === "short-video-bold" ? 800 : 600, lineHeight: 1.35, WebkitTextStroke: `${scaledStyle.outlineWidth}px ${style.outlineColor}`, textShadow }}>
+                  {splitPreviewHighlights(line, style.highlightWords, style.keywordColors, style.accentColor).map((fragment, fragmentIndex) => fragment.highlighted ? (
+                    <span key={`${fragment.text}-${fragmentIndex}`} className={highlightAnimated ? "inline-block animate-[bounce_0.55s_ease-out]" : "inline-block"} style={{ color: highlightStyle === "badge" ? "#17110a" : (fragment.color || style.accentColor), backgroundColor: highlightStyle === "badge" ? (fragment.color || style.accentColor) : "transparent", borderRadius: highlightStyle === "badge" ? "0.16em" : undefined, padding: highlightStyle === "badge" ? "0.02em 0.16em" : undefined, fontWeight: highlightStyle === "pop" ? 900 : undefined, transform: highlightAnimated ? `scale(${highlightScale})` : undefined, WebkitTextStroke: highlightStyle === "badge" ? "0" : undefined, textShadow: highlightStyle === "badge" ? "none" : undefined }}>
                       {fragment.text}
                     </span>
                   ) : fragment.text)}

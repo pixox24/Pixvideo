@@ -118,7 +118,6 @@ class TemplateConfig(BaseModel):
 
 class QuickCreateConfig(BaseModel):
     """Quick Create reusable UI defaults"""
-    view_mode: str = Field(default="pure-image", description="Default Quick Create view mode")
     custom_bgm_folder: Optional[str] = Field(default=None, description="User-selected custom BGM folder")
     bgm_path: Optional[str] = Field(default="default.mp3", description="Default BGM filename")
     bgm_volume: float = Field(default=0.2, ge=0.0, le=0.5, description="Default BGM volume")

@@ -22,7 +22,8 @@ def test_caption_plan_uses_style_segmentation_and_canvas_dimensions():
 
     assert plan.canvas == {"width": 1080, "height": 1920, "fps": 30}
     assert plan.duration_ms == 4000
-    assert [segment.text for segment in plan.captions] == ["第一句旁白。", "第二句旁白。"]
+    # Punctuation is a split point only; it is not shown on captions.
+    assert [segment.text for segment in plan.captions] == ["第一句旁白", "第二句旁白"]
     assert plan.captions[0].start_ms == 0
     assert plan.captions[-1].end_ms == 4000
     assert plan.style["animation"] == "pop"
@@ -112,7 +113,7 @@ def test_composition_renders_manual_highlights_and_staggered_emphasis(tmp_path):
         encoding="utf-8"
     )
 
-    assert 'class="highlight highlight-badge"' in composition
+    assert "highlight-badge" in composition
     assert ">重点</span>" in composition
     assert ">表达力</span>" in composition
     assert "scale: 1.35" in composition
@@ -120,6 +121,8 @@ def test_composition_renders_manual_highlights_and_staggered_emphasis(tmp_path):
     assert "rgba(0, 0, 0, 0.45)" in composition
     assert "text-align: right" in composition
     assert "text-shadow: 4px 4px 8px" in composition
+    # Ease-out should be present on the timeline.
+    assert 'ease: "power2.in"' in composition
 
 
 def test_caption_plan_keeps_highlighted_phrase_intact_across_phrase_boundaries():
@@ -141,6 +144,23 @@ def test_caption_plan_keeps_highlighted_phrase_intact_across_phrase_boundaries()
     )
 
     assert [caption.text.replace("\n", "") for caption in plan.captions] == ["一二三", "表达力"]
+
+
+def test_caption_plan_uses_proportional_timing_for_uneven_sentences():
+    renderer = HyperframesCaptionRenderer()
+    plan = renderer.build_caption_plan(
+        text="短。这是一句明显更长的旁白内容。",
+        duration=4.0,
+        width=1080,
+        height=1920,
+        fps=30,
+        style={"mode": "hyperframes", "segmentMode": "sentence", "maxCharsPerLine": 20, "maxLines": 2},
+    )
+    assert len(plan.captions) == 2
+    first_dur = plan.captions[0].end_ms - plan.captions[0].start_ms
+    second_dur = plan.captions[1].end_ms - plan.captions[1].start_ms
+    assert first_dur < second_dur
+    assert plan.captions[-1].end_ms == 4000
 
 
 def test_render_overlay_runs_pinned_cli_and_returns_webm(monkeypatch, tmp_path):

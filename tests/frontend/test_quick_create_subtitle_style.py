@@ -43,8 +43,8 @@ def test_quick_create_exposes_dynamic_subtitle_mode():
 
     assert "动态字幕" in component
     assert 'value="hyperframes"' in component
-    assert 'viewMode === "pure-image"' in component
-    assert 'subtitleStyle: viewMode === "pure-image"' in component
+    assert 'const dynamicSubtitleEnabled = subtitleStyle.mode === "hyperframes"' in component
+    assert "subtitleStyle," in component
     assert '"hyperframes"' in types
 
 

@@ -18,7 +18,6 @@ test("submitVideoTask clamps subtitle numbers to backend limits", async () => {
     await submitVideoTask({
       title: "test",
       scenes: [{ ttsText: "hello" }],
-      viewMode: "pure-image",
       subtitleStyle: {
         mode: "ass",
         preset: "short-video-bold",
@@ -87,7 +86,6 @@ test("submitVideoTask forwards each scene narration and visual prompt", async ()
         { id: 1, ttsText: "first narration", visualPrompt: "first visual" },
         { id: 2, ttsText: "second narration", visualPrompt: "second visual" },
       ],
-      viewMode: "pure-image",
     });
   } finally {
     globalThis.fetch = originalFetch;

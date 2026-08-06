@@ -68,14 +68,14 @@ quick_create:
         assert data["comfyui"]["tts"]["minimax"]["voice_id"] == "female-shaonv"
         assert data["comfyui"]["tts"]["minimax"]["speed"] == 1.4
         assert data["comfyui"]["tts"]["minimax"]["emotion"] == "happy"
-        assert data["comfyui"]["video"]["default_workflow"] == "runninghub/video_wan2.1_fusionx.json"
-        assert data["comfyui"]["video"]["prompt_prefix"] == "cinematic style"
-        assert data["template"]["default_template"] == "1080x1920/video_default.html"
-        assert data["template"]["template_type"] == "video"
+        assert data["comfyui"]["image"]["default_workflow"] == "runninghub/video_wan2.1_fusionx.json"
+        assert data["comfyui"]["image"]["prompt_prefix"] == "cinematic style"
+        assert data["template"]["default_template"] == "1080x1920/default.html"
+        assert data["template"]["template_type"] == "image"
         assert data["template"]["composition_mode"] == "template"
         assert data["template"]["image_motion_enabled"] is True
         assert data["template"]["subtitle_enabled"] is False
-        assert data["quick_create"]["view_mode"] == "template"
+        assert "view_mode" not in data["quick_create"]
         assert data["quick_create"]["bgm_path"] == "custom.mp3"
         assert data["quick_create"]["bgm_volume"] == 0.31
         assert data["subtitle"]["default_style"]["preset"] == "caption-box"
@@ -90,9 +90,9 @@ quick_create:
 
         assert reloaded.config.comfyui.tts.inference_mode == "minimax"
         assert reloaded.config.comfyui.tts.minimax.voice_id == "female-shaonv"
-        assert reloaded.config.comfyui.video.default_workflow == "runninghub/video_wan2.1_fusionx.json"
-        assert reloaded.config.template.default_template == "1080x1920/video_default.html"
-        assert reloaded.config.quick_create.view_mode == "template"
+        assert reloaded.config.comfyui.image.default_workflow == "runninghub/video_wan2.1_fusionx.json"
+        assert reloaded.config.template.default_template == "1080x1920/default.html"
+        assert not hasattr(reloaded.config.quick_create, "view_mode")
         assert reloaded.config.quick_create.bgm_path == "custom.mp3"
         assert reloaded.config.subtitle.default_style["preset"] == "caption-box"
     finally:

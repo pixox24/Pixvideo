@@ -55,6 +55,7 @@ class HyperframesCaptionRenderer:
         height: int,
         fps: int,
         style: dict[str, Any] | None = None,
+        alignment: list[Any] | None = None,
     ) -> CaptionPlan:
         if duration <= 0:
             raise ValueError("Caption duration must be positive")
@@ -62,59 +63,30 @@ class HyperframesCaptionRenderer:
             raise ValueError("Caption canvas width, height, and fps must be positive")
 
         normalized_style = self.subtitle_renderer.normalize_style(style)
-        if normalized_style["highlightWords"]:
-            segments = self._dynamic_segments(
-                text,
-                normalized_style["segmentMode"],
-                normalized_style["maxCharsPerLine"],
-                normalized_style["maxLines"],
-                normalized_style["highlightWords"],
-            )
-            segments = [
-                self._wrap_highlighted_text(
-                    segment,
-                    normalized_style["maxCharsPerLine"],
-                    normalized_style["maxLines"],
-                    normalized_style["highlightWords"],
-                )
-                for segment in segments
-            ]
-        else:
-            segments = self.subtitle_renderer.segment_text(
-                text,
-                normalized_style["segmentMode"],
-                normalized_style["maxCharsPerLine"],
-                normalized_style["maxLines"],
-            )
-            if not segments:
-                segments = [self.subtitle_renderer.wrap_text(
-                    text,
-                    normalized_style["maxCharsPerLine"],
-                    normalized_style["maxLines"],
-                )]
-        segments = [segment for segment in segments if segment]
-        if not segments:
+        timed_segments = self.subtitle_renderer.plan_segments(
+            text,
+            duration,
+            normalized_style,
+            alignment=alignment,
+        )
+        if not timed_segments:
             raise ValueError("Caption text cannot be empty")
 
         duration_ms = max(1, int(round(duration * 1000)))
         captions: list[CaptionSegment] = []
-        for index, segment in enumerate(segments):
-            start_ms = round(duration_ms * index / len(segments))
-            end_ms = round(duration_ms * (index + 1) / len(segments))
+        for index, timed in enumerate(timed_segments):
+            start_ms = max(0, int(round(timed.start * 1000)))
+            end_ms = max(start_ms + 1, int(round(timed.end * 1000)))
+            if index == len(timed_segments) - 1:
+                end_ms = duration_ms
             captions.append(
                 CaptionSegment(
                     id=f"caption-{index + 1}",
-                    text=segment,
+                    text=timed.text,
                     start_ms=start_ms,
-                    end_ms=max(start_ms + 1, end_ms),
+                    end_ms=end_ms,
                 )
             )
-        captions[-1] = CaptionSegment(
-            id=captions[-1].id,
-            text=captions[-1].text,
-            start_ms=captions[-1].start_ms,
-            end_ms=duration_ms,
-        )
 
         return CaptionPlan(
             canvas={"width": width, "height": height, "fps": fps},
@@ -249,16 +221,20 @@ class HyperframesCaptionRenderer:
                 f'data-start="{caption.start_ms / 1000:.3f}" '
                 f'data-duration="{(caption.end_ms - caption.start_ms) / 1000:.3f}" '
                 'data-track-index="1" data-layout-allow-occlusion>'
-                f"{self._caption_markup(caption.text, highlight_words, highlight_style)}"
+                f"{self._caption_markup(caption.text, highlight_words, highlight_style, style)}"
                 "</div>"
             )
             for caption in plan.captions
         )
+        fade_in = max(0, min(1000, int(style.get("fadeInMs", 120)))) / 1000
+        fade_out = max(0, min(1000, int(style.get("fadeOutMs", 120)))) / 1000
         timelines = "\n".join(
             self._timeline_statement(
                 caption,
                 style.get("animation", "fade"),
                 highlight_scale,
+                fade_in,
+                fade_out,
             )
             for caption in plan.captions
         )
@@ -314,29 +290,47 @@ class HyperframesCaptionRenderer:
         caption: CaptionSegment,
         animation: str,
         highlight_scale: float,
+        fade_in: float = 0.12,
+        fade_out: float = 0.12,
     ) -> str:
         start = caption.start_ms / 1000
+        end = caption.end_ms / 1000
+        duration = max(0.05, end - start)
+        enter = min(fade_in if fade_in > 0 else 0.18, max(0.05, duration * 0.35))
+        exit_dur = min(fade_out if fade_out > 0 else 0.12, max(0.04, duration * 0.3))
+        exit_at = max(start + enter, end - exit_dur)
+
         if animation == "none":
-            return ""
+            return (
+                f'tl.set("#{caption.id}", {{ autoAlpha: 1 }}, {start:.3f});\n'
+                f'tl.set("#{caption.id}", {{ autoAlpha: 0 }}, {end:.3f});'
+            )
         if animation == "word-pop":
             return (
                 f'tl.fromTo("#{caption.id}", {{ autoAlpha: 0, y: 22 }}, '
-                f'{{ autoAlpha: 1, y: 0, duration: 0.18, ease: "power2.out" }}, {start:.3f});\n'
+                f'{{ autoAlpha: 1, y: 0, duration: {enter:.3f}, ease: "power2.out" }}, {start:.3f});\n'
                 f'tl.fromTo("#{caption.id} .highlight", {{ autoAlpha: 0, scale: 0.72 }}, '
-                f'{{ autoAlpha: 1, scale: {highlight_scale:.2f}, duration: 0.18, '
+                f'{{ autoAlpha: 1, scale: {highlight_scale:.2f}, duration: {enter:.3f}, '
                 f'ease: "back.out(2.4)", stagger: 0.08 }}, {start + 0.08:.3f});\n'
                 f'tl.to("#{caption.id} .highlight", {{ scale: 1, duration: 0.14, '
-                f'ease: "power2.out", stagger: 0.08 }}, {start + 0.26:.3f});'
+                f'ease: "power2.out", stagger: 0.08 }}, {start + enter:.3f});\n'
+                f'tl.to("#{caption.id}", {{ autoAlpha: 0, y: 10, duration: {exit_dur:.3f}, '
+                f'ease: "power2.in" }}, {exit_at:.3f});'
             )
         if animation == "pop":
             return (
                 f'tl.fromTo("#{caption.id}", {{ autoAlpha: 0, scale: 0.72, y: 26 }}, '
-                f'{{ autoAlpha: 1, scale: 1.08, y: 0, duration: 0.18, ease: "back.out(2.4)" }}, {start:.3f});\n'
-                f'tl.to("#{caption.id}", {{ scale: 1, duration: 0.16, ease: "power2.out" }}, {start + 0.18:.3f});'
+                f'{{ autoAlpha: 1, scale: 1.08, y: 0, duration: {enter:.3f}, ease: "back.out(2.4)" }}, {start:.3f});\n'
+                f'tl.to("#{caption.id}", {{ scale: 1, duration: 0.16, ease: "power2.out" }}, {start + enter:.3f});\n'
+                f'tl.to("#{caption.id}", {{ autoAlpha: 0, scale: 0.96, y: 10, duration: {exit_dur:.3f}, '
+                f'ease: "power2.in" }}, {exit_at:.3f});'
             )
+        # Default: ease-in / ease-out fade.
         return (
             f'tl.fromTo("#{caption.id}", {{ autoAlpha: 0, y: 22 }}, '
-            f'{{ autoAlpha: 1, y: 0, duration: 0.18, ease: "power2.out" }}, {start:.3f});'
+            f'{{ autoAlpha: 1, y: 0, duration: {enter:.3f}, ease: "power2.out" }}, {start:.3f});\n'
+            f'tl.to("#{caption.id}", {{ autoAlpha: 0, y: 10, duration: {exit_dur:.3f}, '
+            f'ease: "power2.in" }}, {exit_at:.3f});'
         )
 
     @staticmethod
@@ -355,27 +349,64 @@ class HyperframesCaptionRenderer:
         return "center", "left: 6.7%; right: 6.7%;"
 
     @staticmethod
-    def _caption_markup(text: str, highlight_words: list[str], highlight_style: str) -> str:
+    def _caption_markup(
+        text: str,
+        highlight_words: list[str],
+        highlight_style: str,
+        style: dict[str, Any] | None = None,
+    ) -> str:
         def escape_fragment(fragment: str) -> str:
             return html.escape(fragment).replace("\n", "<br>")
 
-        if not highlight_words:
+        style = style or {}
+        accent = HyperframesCaptionRenderer._hex_color(style.get("accentColor"), "#FFD43B")
+        keyword_colors = style.get("keywordColors") if isinstance(style.get("keywordColors"), dict) else {}
+        # Merge keywordColors-only keys into the highlight list.
+        words = list(highlight_words)
+        for key in keyword_colors:
+            if str(key).strip() and not any(str(key).casefold() == w.casefold() for w in words):
+                words.append(str(key).strip())
+        words = HyperframesCaptionRenderer._highlight_words(words)
+        if not words:
             return escape_fragment(text)
 
         matcher = re.compile(
-            "(" + "|".join(re.escape(word) for word in highlight_words) + ")",
+            "(" + "|".join(re.escape(word) for word in words) + ")",
             flags=re.IGNORECASE,
         )
-        highlight_keys = {word.casefold() for word in highlight_words}
+        color_by_key: dict[str, str] = {}
+        for word in words:
+            override = None
+            if isinstance(keyword_colors, dict):
+                override = keyword_colors.get(word)
+                if not override:
+                    for raw_key, raw_color in keyword_colors.items():
+                        if str(raw_key).casefold() == word.casefold():
+                            override = raw_color
+                            break
+            color_by_key[word.casefold()] = HyperframesCaptionRenderer._hex_color(
+                override,
+                accent,
+            )
+
         fragments: list[str] = []
         for fragment in matcher.split(text):
             if not fragment:
                 continue
             escaped = escape_fragment(fragment)
-            if fragment.casefold() in highlight_keys:
-                fragments.append(
-                    f'<span class="highlight highlight-{highlight_style}">{escaped}</span>'
-                )
+            key = fragment.casefold()
+            if key in color_by_key:
+                color = color_by_key[key]
+                if highlight_style == "badge":
+                    fragments.append(
+                        f'<span class="highlight highlight-badge" '
+                        f'style="background:{html.escape(color)};color:#17110a">{escaped}</span>'
+                    )
+                else:
+                    fragments.append(
+                        f'<span class="highlight highlight-{html.escape(highlight_style)}" '
+                        f'style="color:{html.escape(color)}">{escaped}</span>'
+                    )
             else:
                 fragments.append(escaped)
         return "".join(fragments)

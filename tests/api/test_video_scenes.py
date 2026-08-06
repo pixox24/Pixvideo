@@ -44,6 +44,20 @@ def test_video_request_forwards_structured_scenes(monkeypatch):
     ]
 
 
+def test_video_request_forwards_asset_reuse_source(monkeypatch):
+    monkeypatch.setattr("api.routers.video._resolve_media_size", lambda _request: (1080, 1920))
+    request = VideoGenerateRequest(
+        text="第一段",
+        mode="fixed",
+        scenes=[{"narration": "第一段", "visual_prompt": "visual"}],
+        reuse_assets_from_task_id="completed-task-id",
+    )
+
+    params = _build_video_params(request)
+
+    assert params["reuse_assets_from_task_id"] == "completed-task-id"
+
+
 def test_video_request_rejects_whitespace_only_scene_narration():
     with pytest.raises(ValidationError):
         VideoGenerateRequest(

@@ -25,8 +25,6 @@ def test_quick_create_autosaves_and_recovers_a_versioned_draft():
         "minimaxModel",
         "emotion",
         "promptPrefix",
-        "selectedTemplate",
-        "viewMode",
         "enableMotion",
         "enableSubtitles",
         "imageAspectRatio",

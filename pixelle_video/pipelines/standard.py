@@ -19,6 +19,7 @@ Refactored to use LinearVideoPipeline (Template Method Pattern).
 """
 
 import asyncio
+import copy
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -69,6 +70,79 @@ class StandardPipeline(LinearVideoPipeline):
     
     # ==================== Lifecycle Methods ====================
 
+    _ASSET_REUSE_INPUT_KEYS = (
+        "scenes",
+        "tts_inference_mode",
+        "tts_voice",
+        "tts_speed",
+        "tts_workflow",
+        "ref_audio",
+        "minimax_model",
+        "minimax_emotion",
+        "media_width",
+        "media_height",
+        "media_workflow",
+        "prompt_prefix",
+        "composition_mode",
+        "image_motion_enabled",
+        "image_motion_mode",
+        "image_motion_strength",
+        "image_fit_mode",
+        "video_fps",
+    )
+
+    @staticmethod
+    def _normalize_reuse_value(key: str, value: Any) -> Any:
+        if key != "scenes":
+            return value
+        return [
+            {
+                "narration": str(scene.get("narration") or "").strip(),
+                "visual_prompt": str(scene.get("visual_prompt") or "").strip(),
+            }
+            for scene in (value or [])
+        ]
+
+    @staticmethod
+    def _asset_exists(path: str | None) -> bool:
+        if not path:
+            return False
+        try:
+            asset = Path(path)
+            return asset.is_file() and asset.stat().st_size > 0
+        except OSError:
+            return False
+
+    async def _load_reusable_storyboard(
+        self,
+        ctx: PipelineContext,
+        source_task_id: str,
+    ) -> tuple[Storyboard | None, str | None]:
+        metadata = await self.core.persistence.load_task_metadata(source_task_id)
+        source = await self.core.persistence.load_storyboard(source_task_id)
+        if not metadata or metadata.get("status") != "completed":
+            return None, "source task is not completed"
+        if not source or not source.frames:
+            return None, "source storyboard is unavailable"
+        if source.config.composition_mode != "plain_image":
+            return None, "source task is not an image-motion composition"
+
+        source_input = metadata.get("input") or {}
+        for key in self._ASSET_REUSE_INPUT_KEYS:
+            source_value = self._normalize_reuse_value(key, source_input.get(key))
+            requested_value = self._normalize_reuse_value(key, ctx.params.get(key))
+            if source_value != requested_value:
+                return None, f"production input changed: {key}"
+
+        for frame in source.frames:
+            if not self._asset_exists(frame.audio_path):
+                return None, f"source audio is unavailable for frame {frame.index + 1}"
+            media_path = frame.image_path or frame.video_path
+            if not self._asset_exists(media_path):
+                return None, f"source media is unavailable for frame {frame.index + 1}"
+
+        return copy.deepcopy(source), None
+
     async def setup_environment(self, ctx: PipelineContext):
         """Step 1: Setup task directory and environment."""
         text = ctx.input_text
@@ -98,6 +172,22 @@ class StandardPipeline(LinearVideoPipeline):
             logger.info(f"♻️  Resuming task: {resume_task_id}")
             await self._persist_running_task_data(ctx)
             return
+
+        source_task_id = ctx.params.get("reuse_assets_from_task_id")
+        reusable_storyboard = None
+        if source_task_id:
+            ctx.params["asset_reuse"] = False
+            reusable_storyboard, fallback_reason = await self._load_reusable_storyboard(
+                ctx,
+                source_task_id,
+            )
+            if fallback_reason:
+                ctx.params["asset_reuse_fallback_reason"] = fallback_reason
+                logger.info(
+                    "Asset reuse skipped for task {}: {}",
+                    source_task_id,
+                    fallback_reason,
+                )
         
         # Create isolated task directory
         task_dir, task_id = create_task_output_dir(ctx.params.get("task_id"))
@@ -119,11 +209,53 @@ class StandardPipeline(LinearVideoPipeline):
             ctx.final_video_path = get_task_final_video_path(task_id)
             logger.info(f"   Will copy final video to: {output_path}")
 
+        if reusable_storyboard:
+            ctx.params["asset_reuse"] = True
+            ctx.params["reused_assets_from_task_id"] = source_task_id
+            ctx.params.pop("asset_reuse_fallback_reason", None)
+            ctx.storyboard = reusable_storyboard
+            ctx.config = reusable_storyboard.config
+            ctx.config.task_id = task_id
+            ctx.config.subtitle_enabled = ctx.params.get("subtitle_enabled", True)
+            ctx.config.subtitle_style = ctx.params.get("subtitle_style")
+            ctx.storyboard.title = ctx.params.get("title") or reusable_storyboard.title
+            ctx.storyboard.final_video_path = ctx.final_video_path
+            ctx.storyboard.total_duration = 0.0
+            ctx.storyboard.completed_at = None
+            ctx.title = ctx.storyboard.title
+            ctx.narrations = [frame.narration for frame in ctx.storyboard.frames]
+            ctx.image_prompts = [frame.image_prompt for frame in ctx.storyboard.frames]
+
+            for frame in ctx.storyboard.frames:
+                frame.composed_image_path = None
+                frame.video_segment_path = None
+                frame.status = "pending"
+                frame.completed_steps = {
+                    "audio": True,
+                    "media": True,
+                    "compose": False,
+                    "segment": False,
+                }
+                frame.errors = {}
+
+            logger.info(
+                "Reusing narration audio and media from task {} for subtitle rerender",
+                source_task_id,
+            )
+            self._report_progress(
+                ctx.progress_callback,
+                "reusing_audio_and_media",
+                0.03,
+                extra_info=f"source_task_id={source_task_id}",
+            )
+            await self._persist_running_task_data(ctx)
+            return
+
         await self._persist_running_task_data(ctx)
 
     async def generate_content(self, ctx: PipelineContext):
         """Step 2: Generate or process script/narrations."""
-        if ctx.params.get("resume") and ctx.narrations:
+        if (ctx.params.get("resume") or ctx.params.get("asset_reuse")) and ctx.narrations:
             logger.info("♻️  Reusing saved narrations")
             return
 
@@ -162,7 +294,7 @@ class StandardPipeline(LinearVideoPipeline):
 
     async def determine_title(self, ctx: PipelineContext):
         """Step 3: Determine or generate video title."""
-        if ctx.params.get("resume") and ctx.title:
+        if (ctx.params.get("resume") or ctx.params.get("asset_reuse")) and ctx.title:
             logger.info("♻️  Reusing saved title")
             return
 
@@ -190,7 +322,7 @@ class StandardPipeline(LinearVideoPipeline):
 
     async def plan_visuals(self, ctx: PipelineContext):
         """Step 4: Generate image prompts or visual descriptions."""
-        if ctx.params.get("resume") and ctx.image_prompts:
+        if (ctx.params.get("resume") or ctx.params.get("asset_reuse")) and ctx.image_prompts:
             logger.info("♻️  Reusing saved image prompts")
             return
 
@@ -293,7 +425,7 @@ class StandardPipeline(LinearVideoPipeline):
 
     async def initialize_storyboard(self, ctx: PipelineContext):
         """Step 5: Create Storyboard object and frames."""
-        if ctx.params.get("resume") and ctx.storyboard:
+        if (ctx.params.get("resume") or ctx.params.get("asset_reuse")) and ctx.storyboard:
             ctx.config = ctx.storyboard.config
             ctx.config.task_id = ctx.task_id
             logger.info("♻️  Reusing saved storyboard")
@@ -559,6 +691,8 @@ class StandardPipeline(LinearVideoPipeline):
         input_params.pop("progress_callback", None)
         input_params.pop("resume", None)
         input_params.pop("resume_task_id", None)
+        input_params.pop("asset_reuse", None)
+        input_params.pop("asset_reuse_fallback_reason", None)
         input_params["text"] = ctx.input_text
         if ctx.storyboard and not input_params.get("title"):
             input_params["title"] = ctx.storyboard.title

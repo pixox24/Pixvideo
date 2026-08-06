@@ -90,8 +90,6 @@ PRESET_FIELDS = {
     "bgmVolume",
     "promptPrefix",
     "splitType",
-    "template",
-    "viewMode",
     "enableMotion",
     "enableSubtitles",
     "minimaxModel",
@@ -116,8 +114,6 @@ PRESET_DEFAULTS = {
     "bgmVolume": 30,
     "promptPrefix": "",
     "splitType": "line",
-    "template": "",
-    "viewMode": "pure-image",
     "enableMotion": True,
     "enableSubtitles": True,
     "minimaxModel": "speech-2.8-turbo",
@@ -228,15 +224,6 @@ def _is_frontend_placeholder(value: str | None) -> bool:
     return bool(value and value.startswith(("bgm-", "tpl-", "runninghub-", "bizyair-", "comfyui-")))
 
 
-def _template_type_from_path(template_path: str | None) -> str:
-    filename = (template_path or "").split("/")[-1]
-    if filename.startswith("video_"):
-        return "video"
-    if filename.startswith("static_"):
-        return "static"
-    return "image"
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -289,8 +276,6 @@ def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = 
     normalized["splitType"] = _normalize_split_type(str(normalized.get("splitType") or "line"))
     normalized["copyCharCountMode"] = _normalize_char_count_mode(str(normalized.get("copyCharCountMode") or "around"))
     normalized["copyDraftMode"] = _normalize_draft_mode(str(normalized.get("copyDraftMode") or "full"))
-    normalized["viewMode"] = "template" if normalized.get("viewMode") == "template" else "pure-image"
-
     normalized["speed"] = _coerce_float(normalized.get("speed"), 1.0, 0.5, 2.0)
     normalized["bgmVolume"] = _coerce_int(normalized.get("bgmVolume"), 30, 0, 100)
     normalized["sceneCount"] = _coerce_int(normalized.get("sceneCount"), 5, 1, 30)
@@ -302,7 +287,7 @@ def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = 
     normalized["enableSubtitles"] = bool(normalized.get("enableSubtitles", True))
     normalized["subtitleStyle"] = _normalize_subtitle_style(normalized.get("subtitleStyle"))
 
-    for key in ["voice", "workflow", "bgm", "promptPrefix", "template", "minimaxModel", "emotion", "imageAspectRatio"]:
+    for key in ["voice", "workflow", "bgm", "promptPrefix", "minimaxModel", "emotion", "imageAspectRatio"]:
         normalized[key] = str(normalized.get(key) or "")
 
     if not normalized["imageAspectRatio"]:
@@ -415,8 +400,6 @@ def _preset_from_config(name: str = "当前保存配置") -> dict[str, Any]:
             or ""
         ),
         "splitType": "line",
-        "template": config_manager.get("template", {}).get("default_template"),
-        "viewMode": quick_create.get("view_mode") or "pure-image",
         "enableMotion": config_manager.get("template", {}).get("image_motion_enabled", True),
         "enableSubtitles": config_manager.get("template", {}).get("subtitle_enabled", True),
         "subtitleStyle": config_manager.get("subtitle", {}).get("default_style") or SUBTITLE_STYLE_DEFAULTS,
@@ -446,13 +429,7 @@ def _quick_create_config_from_preset(preset: dict[str, Any]) -> dict[str, Any]:
         "prompt_prefix": preset.get("promptPrefix", ""),
         "bgm_path": bgm_path,
         "bgm_volume": volume,
-        "view_mode": preset.get("viewMode", "pure-image"),
-        "frame_template": preset.get("template"),
-        "template_type": _template_type_from_path(preset.get("template")),
-        "template_media_type": _template_type_from_path(preset.get("template")),
-        "composition_mode": "plain_image"
-        if preset.get("viewMode") == "pure-image"
-        else "template",
+        "composition_mode": "plain_image",
         "image_motion_enabled": preset.get("enableMotion", True),
         "subtitle_enabled": preset.get("enableSubtitles", True),
         "subtitle_style": preset.get("subtitleStyle") or SUBTITLE_STYLE_DEFAULTS,

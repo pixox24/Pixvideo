@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { Select } from "./components/Select";
 import {
   Sparkles,
-  Layers,
-  User,
   History,
   Settings as SettingsIcon,
   Cpu,
@@ -14,7 +12,6 @@ import {
   Sliders,
   Play,
   Activity,
-  Workflow,
   Download,
   Menu,
   PanelRightOpen,
@@ -24,10 +21,6 @@ import {
 import { ActiveTab, Preset, Task, SystemSettings } from "./types";
 import { Toast, ToastMessage } from "./components/Toast";
 import { QuickCreate } from "./components/QuickCreate";
-import { CustomMedia } from "./components/CustomMedia";
-import { DigitalHuman } from "./components/DigitalHuman";
-import { ImageToVideo } from "./components/ImageToVideo";
-import { ActionTransfer } from "./components/ActionTransfer";
 import { HistoryList } from "./components/HistoryList";
 import { SystemSettingsTab } from "./components/SystemSettingsTab";
 import { ConsolePanel } from "./components/ConsolePanel";
@@ -45,10 +38,6 @@ import {
   mapHistoryTask,
   optimisticTaskFromInput,
   resumeHistoryTask,
-  submitActionTransferTask,
-  submitCustomMediaTask,
-  submitDigitalHumanTask,
-  submitImageToVideoTask,
   submitVideoTask,
 } from "./lib/api";
 
@@ -427,15 +416,7 @@ export default function App() {
     addToast(`开始提交视频渲染任务: ${taskInput.title}`, "info");
 
     try {
-      const response = taskInput.tabType === "custom-media"
-        ? await submitCustomMediaTask(taskInput)
-        : taskInput.tabType === "image-to-video"
-          ? await submitImageToVideoTask(taskInput)
-          : taskInput.tabType === "action-transfer"
-            ? await submitActionTransferTask(taskInput)
-            : taskInput.tabType === "digital-human"
-              ? await submitDigitalHumanTask(taskInput)
-          : await submitVideoTask(taskInput);
+      const response = await submitVideoTask(taskInput);
       const backendTask = { ...optimisticTask, id: response.task_id };
       setTasks((prev) =>
         prev.map((task) => (task.id === tempTaskId ? backendTask : task))
@@ -461,14 +442,14 @@ export default function App() {
           } catch (err) {
             console.warn("Task was cancelled, but history refresh failed.", err);
           }
-          return true;
+          return null;
         } catch (err: any) {
           addToast(err.message || "自动取消失败，任务将继续运行。", "error");
         }
       }
 
       await pollBackendTask(response.task_id, backendTask);
-      return true;
+      return response.task_id;
     } catch (err: any) {
       pendingCancellationIdsRef.current.delete(tempTaskId);
       const failedTask: Task = {
@@ -482,7 +463,7 @@ export default function App() {
       );
       setActiveTask(failedTask);
       addToast(err.message || "任务提交失败，请检查后端服务。", "error");
-      return false;
+      return null;
     }
   };
 
@@ -557,6 +538,9 @@ export default function App() {
   const hasRunningHub = serviceStatus.runninghub || settings.runninghub.apiKey !== "";
   const hasImageGeneration = serviceStatus.image_generation || settings.imageGeneration.apiKey !== "";
   const hasMiniMax = serviceStatus.minimax || settings.minimaxKey !== "";
+  const latestCompletedQuickCreateTaskId = tasks.find(
+    (task) => task.tabType === "quick-create" && task.status === "completed" && !isPendingTaskId(task.id),
+  )?.id || null;
 
   return (
     <div className="flex h-screen w-full bg-[#07080a] text-zinc-100 overflow-hidden font-sans relative antialiased">
@@ -614,54 +598,6 @@ export default function App() {
             >
               <Sparkles className="w-4 h-4" />
               <span>快捷创作 Quick Create</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("custom-media")}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded transition-all ${
-                activeTab === "custom-media"
-                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c]"
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              <span>自定义素材 Custom Media</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("digital-human")}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded transition-all ${
-                activeTab === "digital-human"
-                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c]"
-              }`}
-            >
-              <User className="w-4 h-4" />
-              <span>数字人口播 Digital Human</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("image-to-video")}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded transition-all ${
-                activeTab === "image-to-video"
-                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c]"
-              }`}
-            >
-              <Tv className="w-4 h-4" />
-              <span>图生视频 Image to Video</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("action-transfer")}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded transition-all ${
-                activeTab === "action-transfer"
-                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c]"
-              }`}
-            >
-              <Workflow className="w-4 h-4" />
-              <span>动作迁移 Action Transfer</span>
             </button>
 
             <div className="pt-4 pb-1">
@@ -821,10 +757,6 @@ export default function App() {
             </button>
             <span className="text-sm font-semibold text-zinc-200 font-display">
               {activeTab === "quick-create" && "快捷创作工作室 / Quick Create Studio"}
-              {activeTab === "custom-media" && "自定义素材混剪 / Custom Media Stitching"}
-              {activeTab === "digital-human" && "数字人口播生成 / Digital Human Anchor"}
-              {activeTab === "image-to-video" && "图片扩散图生视频 / Image to Video SVD"}
-              {activeTab === "action-transfer" && "骨骼姿态动作迁移 / Action Transfer Control"}
               {activeTab === "history" && "生产日志与历史项目 / Production History"}
               {activeTab === "settings" && "系统算力网络配置 / Server Configurations"}
             </span>
@@ -861,6 +793,7 @@ export default function App() {
           {activeTab === "quick-create" && (
             <QuickCreate
               onGenerateTask={handleGenerateTask}
+              latestCompletedTaskId={latestCompletedQuickCreateTaskId}
               presets={presets}
               activePreset={activePreset}
               defaultPresetId={defaultPresetId}
@@ -874,22 +807,6 @@ export default function App() {
               resources={resources}
               addToast={addToast}
             />
-          )}
-
-          {activeTab === "custom-media" && (
-            <CustomMedia onGenerateTask={handleGenerateTask} addToast={addToast} />
-          )}
-
-          {activeTab === "digital-human" && (
-            <DigitalHuman onGenerateTask={handleGenerateTask} addToast={addToast} />
-          )}
-
-          {activeTab === "image-to-video" && (
-            <ImageToVideo onGenerateTask={handleGenerateTask} addToast={addToast} />
-          )}
-
-          {activeTab === "action-transfer" && (
-            <ActionTransfer onGenerateTask={handleGenerateTask} addToast={addToast} />
           )}
 
           {activeTab === "history" && (

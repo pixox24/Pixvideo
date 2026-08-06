@@ -44,20 +44,20 @@ def test_quick_create_test_prompt_labels_image_motion_size_source():
     assert "{imageWidth}x{imageHeight}" in component
 
 
-def test_quick_create_explains_output_ratio_source_by_render_mode():
+def test_quick_create_uses_image_motion_output_size():
     component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
     assert "图片/视频画布比例" in component
     assert "此尺寸会同时用于生成图片素材和最终视频画布" in component
-    assert "模板模式下最终视频比例由模板决定" in component
-    assert "当前模板画布" in component
+    assert "分镜模板渲染" not in component
+    assert 'setViewMode("template")' not in component
 
 
-def test_quick_create_defaults_to_image_motion_before_template_rendering():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
+def test_quick_create_submission_is_fixed_to_plain_image_composition():
+    api = Path("frontend/src/lib/api.ts").read_text(encoding="utf-8")
 
-    assert 'useState<"template" | "pure-image">("pure-image")' in component
-    assert component.index('setViewMode("pure-image")') < component.index('setViewMode("template")')
+    assert 'composition_mode: "plain_image"' in api
+    assert "frame_template: input.templateId" not in api
 
 
 def test_quick_create_workflow_panel_is_collapsed_by_default():

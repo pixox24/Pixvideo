@@ -79,6 +79,8 @@ class StoryboardFrame:
     video_path: Optional[str] = None           # Original video path (for video type, before composition)
     composed_image_path: Optional[str] = None  # Composed image path (with subtitles, for image type)
     video_segment_path: Optional[str] = None   # Final video segment path
+    # TTS subtitle timestamps: list of {text, start_ms, end_ms}
+    subtitle_alignment: Optional[List[Dict[str, Any]]] = None
 
     # Metadata
     duration: float = 0.0                      # Frame duration (seconds, from audio or video)

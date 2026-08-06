@@ -5,7 +5,7 @@ import pytest
 from api.routers import workbench
 
 
-def test_quick_create_preset_defaults_to_image_motion_view(monkeypatch):
+def test_quick_create_preset_excludes_template_mode(monkeypatch):
     monkeypatch.setattr(
         workbench.config_manager,
         "get_comfyui_config",
@@ -27,7 +27,8 @@ def test_quick_create_preset_defaults_to_image_motion_view(monkeypatch):
 
     preset = workbench._preset_from_config()
 
-    assert preset["viewMode"] == "pure-image"
+    assert "viewMode" not in preset
+    assert "template" not in preset
 
 
 def _preset_payload(name: str = "小红书竖屏口播"):
@@ -41,8 +42,6 @@ def _preset_payload(name: str = "小红书竖屏口播"):
         "bgmVolume": 25,
         "promptPrefix": "cinematic amber style",
         "splitType": "sentence",
-        "template": "1080x1920/image_default.html",
-        "viewMode": "pure-image",
         "enableMotion": True,
         "enableSubtitles": False,
         "minimaxModel": "speech-2.8-hd",

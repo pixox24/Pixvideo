@@ -15,6 +15,7 @@ TTS (Text-to-Speech) Service - Supports local, ComfyUI, and MiniMax inference
 """
 
 import binascii
+import json
 import os
 import uuid
 from pathlib import Path
@@ -306,6 +307,12 @@ class TTSService(ComfyBaseService):
         if final_emotion:
             voice_setting["emotion"] = final_emotion
 
+        # Prefer sentence-level timestamps for subtitle burn-in sync.
+        subtitle_enable = params.get("subtitle_enable", minimax_config.get("subtitle_enable", True))
+        subtitle_type = params.get("subtitle_type", minimax_config.get("subtitle_type", "sentence"))
+        if subtitle_type not in {"sentence", "word", "word_streaming"}:
+            subtitle_type = "sentence"
+
         payload = {
             "model": final_model,
             "text": text,
@@ -317,7 +324,8 @@ class TTSService(ComfyBaseService):
                 "format": params.get("minimax_format", minimax_config.get("format", "mp3")),
                 "channel": params.get("minimax_channel", minimax_config.get("channel", 1)),
             },
-            "subtitle_enable": False,
+            "subtitle_enable": bool(subtitle_enable),
+            "subtitle_type": subtitle_type,
             "output_format": "hex",
         }
 
@@ -369,6 +377,9 @@ class TTSService(ComfyBaseService):
 
         output_file.write_bytes(audio_bytes)
 
+        # Persist subtitle timestamps when MiniMax returns them (URL or inline).
+        await self._save_minimax_alignment(data, output_path, params)
+
         extra_info = response_json.get("extra_info") or {}
         audio_length_ms = extra_info.get("audio_length")
         if audio_length_ms:
@@ -376,6 +387,51 @@ class TTSService(ComfyBaseService):
         else:
             logger.info(f"✅ Generated audio (MiniMax): {output_path} (trace_id={trace_id})")
         return output_path
+
+    async def _save_minimax_alignment(
+        self,
+        data: dict,
+        output_path: str,
+        params: dict,
+    ) -> None:
+        """Download/parse MiniMax subtitle timestamps and write a sidecar JSON."""
+        from pixelle_video.services.subtitle_alignment import (
+            parse_alignment_payload,
+            save_alignment,
+        )
+
+        raw_payload = data.get("subtitle") or data.get("subtitles") or data.get("subtitle_data")
+        subtitle_file = data.get("subtitle_file")
+
+        try:
+            if not raw_payload and subtitle_file:
+                import httpx
+
+                timeout = params.get("minimax_timeout", 120.0)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.get(str(subtitle_file))
+                    response.raise_for_status()
+                    content_type = (response.headers.get("content-type") or "").lower()
+                    if "json" in content_type or str(subtitle_file).endswith(".json"):
+                        raw_payload = response.json()
+                    else:
+                        # Some MiniMax variants return JSON text body without content-type.
+                        try:
+                            raw_payload = response.json()
+                        except ValueError:
+                            raw_payload = json.loads(response.text)
+
+            if raw_payload is None:
+                return
+
+            cues = parse_alignment_payload(raw_payload)
+            if not cues:
+                logger.debug("MiniMax subtitle payload produced no alignment cues")
+                return
+            sidecar = save_alignment(output_path, cues)
+            logger.info(f"📝 Saved MiniMax subtitle alignment ({len(cues)} cues): {sidecar}")
+        except Exception as exc:
+            logger.warning(f"Failed to save MiniMax subtitle alignment: {exc}")
     
     async def _call_comfyui_workflow(
         self,

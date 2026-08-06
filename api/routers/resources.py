@@ -53,7 +53,15 @@ SYSTEM_FONT_DIRS = (
 
 
 def _font_name(path: Path) -> str:
-    """Return a readable font name from a font file path."""
+    """Return a readable font family name (prefer real font metadata)."""
+    try:
+        from pixelle_video.services.subtitle_renderer import SubtitleRenderer
+
+        resolved = SubtitleRenderer.resolve_font_family(str(path))
+        if resolved:
+            return resolved
+    except Exception:
+        pass
     return path.stem.replace("_", " ").replace("-", " ").strip() or path.name
 
 

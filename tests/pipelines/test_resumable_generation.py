@@ -20,6 +20,7 @@ async def test_persistence_round_trips_frame_resume_state(tmp_path):
         audio_path="output/task/frames/01_audio.mp3",
         image_path="output/task/frames/01_image.png",
         video_segment_path=None,
+        subtitle_alignment=[{"text": "hello", "start_ms": 0, "end_ms": 500}],
         created_at=datetime.now(),
     )
     frame.status = "failed"
@@ -47,6 +48,9 @@ async def test_persistence_round_trips_frame_resume_state(tmp_path):
         "segment": False,
     }
     assert loaded.frames[0].errors == {"segment": "ffmpeg failed"}
+    assert loaded.frames[0].subtitle_alignment == [
+        {"text": "hello", "start_ms": 0, "end_ms": 500}
+    ]
 
 
 def test_frame_processor_reuses_existing_nonempty_asset(tmp_path):
@@ -95,6 +99,158 @@ class ResumeCore:
         self.media = object()
         self.video = object()
         self.persistence = ResumePersistence(storyboard)
+
+
+class AssetReusePersistence(ResumePersistence):
+    def __init__(self, storyboard, metadata):
+        super().__init__(storyboard)
+        self.metadata = metadata
+
+    async def load_task_metadata(self, task_id):
+        return self.metadata
+
+
+class AssetReuseCore(ResumeCore):
+    def __init__(self, storyboard, metadata):
+        super().__init__(storyboard)
+        self.persistence = AssetReusePersistence(storyboard, metadata)
+
+
+def _asset_reuse_fixture(tmp_path):
+    audio = tmp_path / "source_audio.mp3"
+    image = tmp_path / "source_image.png"
+    segment = tmp_path / "source_segment.mp4"
+    for path, content in ((audio, b"audio"), (image, b"image"), (segment, b"video")):
+        path.write_bytes(content)
+
+    source_input = {
+        "scenes": [{"narration": "kept narration", "visual_prompt": "kept prompt"}],
+        "tts_inference_mode": "local",
+        "tts_voice": "zh-CN-YunjianNeural",
+        "tts_speed": 1.0,
+        "tts_workflow": None,
+        "ref_audio": None,
+        "minimax_model": None,
+        "minimax_emotion": None,
+        "media_width": 1080,
+        "media_height": 1920,
+        "media_workflow": "image-workflow.json",
+        "prompt_prefix": "cinematic",
+        "composition_mode": "plain_image",
+        "image_motion_enabled": True,
+        "image_motion_mode": "auto",
+        "image_motion_strength": "subtle",
+        "image_fit_mode": "cover",
+        "video_fps": 30,
+    }
+    frame = StoryboardFrame(
+        index=0,
+        narration="kept narration",
+        image_prompt="kept prompt",
+        audio_path=str(audio),
+        image_path=str(image),
+        media_type="image",
+        video_segment_path=str(segment),
+        subtitle_alignment=[{"text": "kept", "start_ms": 0, "end_ms": 600}],
+        status="completed",
+        completed_steps={"audio": True, "media": True, "compose": True, "segment": True},
+    )
+    storyboard = Storyboard(
+        title="Source title",
+        config=StoryboardConfig(
+            media_width=1080,
+            media_height=1920,
+            task_id="source-task",
+            tts_inference_mode="local",
+            voice_id="zh-CN-YunjianNeural",
+            tts_speed=1.0,
+            media_workflow="image-workflow.json",
+            composition_mode="plain_image",
+            image_motion_enabled=True,
+        ),
+        frames=[frame],
+    )
+    return storyboard, {"status": "completed", "input": source_input}, source_input
+
+
+@pytest.mark.asyncio
+async def test_standard_pipeline_asset_reuse_keeps_audio_and_images_but_invalidates_video(
+    tmp_path, monkeypatch
+):
+    storyboard, metadata, source_input = _asset_reuse_fixture(tmp_path)
+    core = AssetReuseCore(storyboard, metadata)
+    pipeline = StandardPipeline(core)
+    monkeypatch.setattr(
+        "pixelle_video.pipelines.standard.create_task_output_dir",
+        lambda task_id: (str(tmp_path / task_id), task_id),
+    )
+    monkeypatch.setattr(
+        "pixelle_video.pipelines.standard.get_task_final_video_path",
+        lambda task_id: str(tmp_path / task_id / "final.mp4"),
+    )
+    params = {
+        **source_input,
+        "task_id": "rerender-task",
+        "reuse_assets_from_task_id": "source-task",
+        "subtitle_enabled": True,
+        "subtitle_style": {"mode": "ass", "fontSize": 72},
+        "bgm_path": "new-bgm.mp3",
+        "bgm_volume": 0.25,
+        "title": "Updated title",
+    }
+    ctx = PipelineContext(input_text="kept narration", params=params)
+
+    await pipeline.setup_environment(ctx)
+
+    assert ctx.params["asset_reuse"] is True
+    assert ctx.params["reused_assets_from_task_id"] == "source-task"
+    assert ctx.task_id == "rerender-task"
+    assert ctx.storyboard is not storyboard
+    assert ctx.storyboard.title == "Updated title"
+    assert ctx.config.task_id == "rerender-task"
+    assert ctx.config.subtitle_style == {"mode": "ass", "fontSize": 72}
+    assert ctx.storyboard.frames[0].audio_path == storyboard.frames[0].audio_path
+    assert ctx.storyboard.frames[0].image_path == storyboard.frames[0].image_path
+    assert ctx.storyboard.frames[0].subtitle_alignment == storyboard.frames[0].subtitle_alignment
+    assert ctx.storyboard.frames[0].video_segment_path is None
+    assert ctx.storyboard.frames[0].composed_image_path is None
+    assert ctx.storyboard.frames[0].completed_steps == {
+        "audio": True,
+        "media": True,
+        "compose": False,
+        "segment": False,
+    }
+    assert storyboard.frames[0].video_segment_path is not None
+
+
+@pytest.mark.asyncio
+async def test_standard_pipeline_asset_reuse_falls_back_when_tts_changes(tmp_path, monkeypatch):
+    storyboard, metadata, source_input = _asset_reuse_fixture(tmp_path)
+    pipeline = StandardPipeline(AssetReuseCore(storyboard, metadata))
+    monkeypatch.setattr(
+        "pixelle_video.pipelines.standard.create_task_output_dir",
+        lambda task_id: (str(tmp_path / task_id), task_id),
+    )
+    monkeypatch.setattr(
+        "pixelle_video.pipelines.standard.get_task_final_video_path",
+        lambda task_id: str(tmp_path / task_id / "final.mp4"),
+    )
+    ctx = PipelineContext(
+        input_text="kept narration",
+        params={
+            **source_input,
+            "task_id": "full-task",
+            "reuse_assets_from_task_id": "source-task",
+            "tts_voice": "different-voice",
+        },
+    )
+
+    await pipeline.setup_environment(ctx)
+
+    assert ctx.params["asset_reuse"] is False
+    assert "reused_assets_from_task_id" not in ctx.params
+    assert ctx.task_id == "full-task"
+    assert ctx.storyboard is None
 
 
 @pytest.mark.asyncio

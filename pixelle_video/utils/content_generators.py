@@ -296,6 +296,127 @@ async def split_narration_script(
     return narrations
 
 
+_KEYWORD_PALETTE = [
+    "#FFD43B",
+    "#FF6B6B",
+    "#4DABF7",
+    "#69DB7C",
+    "#DA77F2",
+    "#FFA94D",
+    "#22B8CF",
+    "#F06595",
+]
+
+
+async def generate_highlight_keywords(
+    llm_service,
+    text: str,
+    max_keywords: int = 8,
+) -> List[dict]:
+    """
+    Extract highlight keywords (with optional colors) from narration text via LLM.
+
+    Returns a list of dicts: [{"word": str, "color": "#RRGGBB"}, ...]
+    Falls back to a simple heuristic if the LLM response cannot be parsed.
+    """
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return []
+
+    max_keywords = max(1, min(24, int(max_keywords or 8)))
+    prompt = f"""你是短视频字幕高亮词提取助手。从下面旁白中提取最值得高亮的关键词/短语。
+
+要求：
+1. 只输出 JSON 数组，不要 markdown，不要解释
+2. 每项格式：{{"word":"关键词","color":"#RRGGBB"}}
+3. 最多 {max_keywords} 个词；优先专有名词、卖点、情绪词、数字亮点
+4. 关键词必须原样出现在原文中（可少数字）
+5. 颜色用醒目高饱和十六进制色，彼此尽量区分
+6. 不要标点，不要整句
+
+旁白：
+{cleaned[:2000]}
+"""
+    try:
+        response = await llm_service(prompt=prompt, temperature=0.3, max_tokens=400)
+        raw = str(response or "").strip()
+        # Strip optional code fences.
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        # Prefer first JSON array.
+        match = re.search(r"\[[\s\S]*\]", raw)
+        payload = json.loads(match.group(0) if match else raw)
+        if not isinstance(payload, list):
+            raise ValueError("keywords payload is not a list")
+    except Exception as exc:
+        logger.warning(f"LLM keyword extraction failed, using heuristic: {exc}")
+        return _heuristic_keywords(cleaned, max_keywords)
+
+    results: List[dict] = []
+    seen: set[str] = set()
+    for index, item in enumerate(payload):
+        if isinstance(item, str):
+            word = item.strip()
+            color = _KEYWORD_PALETTE[index % len(_KEYWORD_PALETTE)]
+        elif isinstance(item, dict):
+            word = str(item.get("word") or item.get("text") or item.get("keyword") or "").strip()
+            color = str(item.get("color") or _KEYWORD_PALETTE[index % len(_KEYWORD_PALETTE)]).strip()
+        else:
+            continue
+        if not word or len(word) > 20:
+            continue
+        # Prefer keywords that actually appear in source text.
+        if word not in cleaned and word.casefold() not in cleaned.casefold():
+            continue
+        key = word.casefold()
+        if key in seen:
+            continue
+        if not re.fullmatch(r"#?[0-9a-fA-F]{6}", color):
+            color = _KEYWORD_PALETTE[index % len(_KEYWORD_PALETTE)]
+        if not color.startswith("#"):
+            color = f"#{color}"
+        results.append({"word": word, "color": color.upper()})
+        seen.add(key)
+        if len(results) >= max_keywords:
+            break
+
+    if not results:
+        return _heuristic_keywords(cleaned, max_keywords)
+    logger.info(f"Extracted {len(results)} highlight keywords")
+    return results
+
+
+def _heuristic_keywords(text: str, max_keywords: int) -> List[dict]:
+    """Lightweight fallback: pick mid-length CJK/English tokens from the text."""
+    # English-like tokens
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9\-]{2,16}", text)
+    # Sliding CJK windows of length 2–4 prefer natural short keywords.
+    cjk_chars = re.findall(r"[\u4e00-\u9fff]", text)
+    for size in (4, 3, 2):
+        for index in range(0, max(0, len(cjk_chars) - size + 1)):
+            tokens.append("".join(cjk_chars[index : index + size]))
+    stop = {
+        "我们", "你们", "他们", "这个", "那个", "一个", "可以", "已经",
+        "因为", "所以", "如果", "什么", "怎么", "成为", "进行", "以及",
+    }
+    # Prefer rarer mid-length phrases that appear once.
+    ranked = sorted(
+        {t for t in tokens if t not in stop and 2 <= len(t) <= 6},
+        key=lambda t: (-(3 if 2 <= len(t) <= 4 else 1), text.find(t)),
+    )
+    results: List[dict] = []
+    seen_chars: set[str] = set()
+    for word in ranked:
+        # Light de-duplication so overlapping windows don't flood the list.
+        if any(char in seen_chars for char in word) and len(results) >= max_keywords // 2:
+            continue
+        results.append({"word": word, "color": _KEYWORD_PALETTE[len(results) % len(_KEYWORD_PALETTE)]})
+        seen_chars.update(word)
+        if len(results) >= max_keywords:
+            break
+    return results
+
+
 async def generate_image_prompts(
     llm_service,
     narrations: List[str],

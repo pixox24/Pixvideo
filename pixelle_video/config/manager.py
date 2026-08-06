@@ -238,16 +238,7 @@ class ConfigManager:
         is intentionally ignored.
         """
         tts_mode = video_params.get("tts_inference_mode") or self.config.comfyui.tts.inference_mode
-        composition_mode = video_params.get("composition_mode") or self.config.template.composition_mode
-        frame_template = video_params.get("frame_template") or self.config.template.default_template
-        template_type = video_params.get("template_type") or self.config.template.template_type
-        media_type = video_params.get("template_media_type") or template_type
-        if composition_mode == "plain_image":
-            media_config_key = "image"
-        elif media_type in {"image", "video"}:
-            media_config_key = media_type
-        else:
-            media_config_key = None
+        media_config_key = "image"
 
         comfyui_updates: dict[str, Any] = {
             "tts": {
@@ -301,9 +292,6 @@ class ConfigManager:
         updates = {
             "comfyui": comfyui_updates,
             "template": {
-                "default_template": frame_template,
-                "template_type": template_type,
-                "composition_mode": composition_mode,
                 "image_motion_enabled": video_params.get(
                     "image_motion_enabled",
                     self.config.template.image_motion_enabled,
@@ -326,7 +314,6 @@ class ConfigManager:
                 ),
             },
             "quick_create": {
-                "view_mode": video_params.get("view_mode") or self.config.quick_create.view_mode,
                 "bgm_path": video_params.get("bgm_path"),
                 "bgm_volume": bgm_volume,
             },

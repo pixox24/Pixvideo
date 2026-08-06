@@ -58,6 +58,28 @@ def check_ffmpeg() -> None:
         )
 
 
+def decode_ffmpeg_output(data: bytes | str | None) -> str:
+    """
+    Decode FFmpeg stdout/stderr safely.
+
+    On Chinese Windows, FFmpeg often emits GBK/CP936 console text. Using the
+    default UTF-8 decode turns a real FFmpeg failure into a misleading
+    UnicodeDecodeError and hides the original message.
+    """
+    if data is None:
+        return ""
+    if isinstance(data, str):
+        return data
+    if not data:
+        return ""
+    for encoding in ("utf-8", "gbk", "cp936", "latin-1"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
 class VideoService:
     """
     Video compositor for common video processing tasks
@@ -176,37 +198,50 @@ class VideoService:
         FFmpeg equivalent:
             ffmpeg -f concat -safe 0 -i filelist.txt -c copy output.mp4
         """
-        # Create temporary file list
-        with tempfile.NamedTemporaryFile(
-            mode='w',
-            delete=False,
-            suffix='.txt',
-            encoding='utf-8'
-        ) as f:
-            for video in videos:
-                abs_path = Path(video).absolute()
-                escaped_path = str(abs_path).replace("'", "'\\''")
-                f.write(f"file '{escaped_path}'\n")
-            filelist = f.name
+        # Write the concat list next to the output (not system TEMP).
+        # On some Windows environments, TEMP files are rewritten by transparent
+        # encryption / DLP and FFmpeg then sees garbage like "%TSD-Header-###%".
+        output_path = Path(output).resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        # Use .ffconcat (not .txt): some Windows DLP/transparent-encryption
+        # products rewrite *.txt in TEMP/workspace and FFmpeg then sees "%TSD-Header-###%".
+        filelist_path = output_path.with_name(output_path.stem + ".ffconcat")
+        lines = []
+        for video in videos:
+            abs_path = Path(video).resolve().as_posix()
+            escaped_path = abs_path.replace("'", r"'\''")
+            lines.append(f"file '{escaped_path}'")
+        filelist_path.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
+        filelist = str(filelist_path)
 
         try:
             logger.debug(f"Created filelist: {filelist}")
             (
                 ffmpeg
                 .input(filelist, format='concat', safe=0)
-                .output(output, c='copy')
+                .output(str(output_path), c='copy')
                 .overwrite_output()
                 .run(capture_stdout=True, capture_stderr=True)
             )
             logger.success(f"Videos concatenated successfully: {output}")
-            return output
+            return str(output_path)
         except ffmpeg.Error as e:
-            error_msg = e.stderr.decode() if e.stderr else str(e)
+            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
             logger.error(f"FFmpeg concat error: {error_msg}")
-            raise RuntimeError(f"Failed to concatenate videos: {error_msg}")
+            # Fall back to filter concat when stream-copy demuxer fails (e.g. mismatched streams).
+            logger.warning("Concat demuxer failed; retrying with filter method (re-encode)")
+            try:
+                return self._concat_filter(videos, str(output_path))
+            except Exception as filter_exc:
+                raise RuntimeError(
+                    f"Failed to concatenate videos (demuxer and filter): {error_msg}; {filter_exc}"
+                ) from filter_exc
         finally:
-            if os.path.exists(filelist):
-                os.unlink(filelist)
+            if filelist_path.exists():
+                try:
+                    filelist_path.unlink()
+                except OSError:
+                    pass
 
     def _concat_filter(self, videos: List[str], output: str) -> str:
         """
@@ -458,6 +493,7 @@ class VideoService:
         image_fit_mode: str = "cover",
         frame_index: int = 0,
         subtitle_style: Optional[dict] = None,
+        subtitle_alignment: Optional[list] = None,
     ) -> str:
         """
         Create a video segment directly from a generated image and narration audio.
@@ -540,6 +576,7 @@ class VideoService:
                             height=height,
                             fps=fps,
                             style=normalized_style,
+                            alignment=subtitle_alignment,
                         )
                         subtitle_overlay_path = dynamic_renderer.render_overlay(
                             caption_plan,
@@ -578,21 +615,39 @@ class VideoService:
                         and normalized_style["mode"] == "ass"
                         and self._ffmpeg_filter_available("subtitles")
                     ):
+                        # Prefer user font; otherwise discover a local Chinese-capable font.
+                        custom_font_path = str(normalized_style.get("fontPath") or "").strip()
+                        if not custom_font_path:
+                            try:
+                                custom_font_path = self._find_subtitle_font()
+                                normalized_style = {
+                                    **normalized_style,
+                                    "fontPath": custom_font_path,
+                                }
+                            except RuntimeError:
+                                custom_font_path = ""
                         subtitle_overlay_path = renderer.create_ass_file(
                             text=subtitle_text,
                             duration=audio_duration,
                             width=width,
                             height=height,
                             style=normalized_style,
+                            alignment=subtitle_alignment,
                         )
                         subtitle_filter_kwargs = {
                             "filename": Path(subtitle_overlay_path).as_posix(),
                         }
-                        custom_font_path = str(normalized_style.get("fontPath") or "").strip()
                         if custom_font_path:
-                            subtitle_filter_kwargs["fontsdir"] = (
-                                Path(custom_font_path).expanduser().parent.as_posix()
-                            )
+                            font_file = Path(custom_font_path).expanduser()
+                            if font_file.is_file():
+                                subtitle_filter_kwargs["fontsdir"] = font_file.parent.as_posix()
+                                # Force libass to pick the selected family even if system
+                                # fonts would otherwise win the name match.
+                                family = renderer._font_name(normalized_style)
+                                if family:
+                                    subtitle_filter_kwargs["force_style"] = (
+                                        f"Fontname={family}"
+                                    )
                         video_stream = video_stream.filter("subtitles", **subtitle_filter_kwargs)
                     elif wrapped_text and self._ffmpeg_filter_available("drawtext"):
                         custom_font_path = Path(
@@ -651,7 +706,7 @@ class VideoService:
             logger.success(f"Pure image video segment created: {output}")
             return output
         except ffmpeg.Error as e:
-            error_msg = e.stderr.decode() if e.stderr else str(e)
+            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
             logger.error(f"FFmpeg error creating pure image segment: {error_msg}")
             raise RuntimeError(f"Failed to create pure image video segment: {error_msg}")
         finally:
@@ -836,7 +891,7 @@ class VideoService:
                 logger.success(f"Audio added to silent video: {output}")
                 return output
             except ffmpeg.Error as e:
-                error_msg = e.stderr.decode() if e.stderr else str(e)
+                error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
                 logger.error(f"FFmpeg error adding audio to silent video: {error_msg}")
                 raise RuntimeError(f"Failed to add audio to video: {error_msg}")
 
@@ -888,7 +943,7 @@ class VideoService:
             logger.success(f"Audio merged successfully: {output}")
             return output
         except ffmpeg.Error as e:
-            error_msg = e.stderr.decode() if e.stderr else str(e)
+            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
             logger.error(f"FFmpeg merge error: {error_msg}")
             raise RuntimeError(f"Failed to merge audio and video: {error_msg}")
 
@@ -975,7 +1030,7 @@ class VideoService:
             logger.success(f"Image overlaid on video: {output}")
             return output
         except ffmpeg.Error as e:
-            error_msg = e.stderr.decode() if e.stderr else str(e)
+            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
             logger.error(f"FFmpeg overlay error: {error_msg}")
             raise RuntimeError(f"Failed to overlay image on video: {error_msg}")
 
@@ -1051,7 +1106,7 @@ class VideoService:
             logger.success(f"Video created from image: {output} (duration: {audio_duration:.3f}s)")
             return output
         except ffmpeg.Error as e:
-            error_msg = e.stderr.decode() if e.stderr else str(e)
+            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
             logger.error(f"FFmpeg error creating video from image: {error_msg}")
             raise RuntimeError(f"Failed to create video from image: {error_msg}")
 
@@ -1138,7 +1193,7 @@ class VideoService:
             logger.success(f"BGM added successfully: {output}")
             return output
         except ffmpeg.Error as e:
-            error_msg = e.stderr.decode() if e.stderr else str(e)
+            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
             logger.error(f"FFmpeg BGM error: {error_msg}")
             raise RuntimeError(f"Failed to add BGM: {error_msg}")
 
@@ -1306,7 +1361,7 @@ class VideoService:
             )
             return output
         except ffmpeg.Error as e:
-            error_msg = e.stderr.decode() if e.stderr else str(e)
+            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
             logger.error(f"FFmpeg error trimming video: {error_msg}")
             raise RuntimeError(f"Failed to trim video: {error_msg}")
 
@@ -1391,6 +1446,6 @@ class VideoService:
 
             return output
         except ffmpeg.Error as e:
-            error_msg = e.stderr.decode() if e.stderr else str(e)
+            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
             logger.error(f"FFmpeg error padding video: {error_msg}")
             raise RuntimeError(f"Failed to pad video: {error_msg}")

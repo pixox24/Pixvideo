@@ -1,11 +1,14 @@
 export type ActiveTab =
   | "quick-create"
+  | "history"
+  | "settings";
+
+export type TaskSource =
+  | "quick-create"
   | "custom-media"
   | "digital-human"
   | "image-to-video"
-  | "action-transfer"
-  | "history"
-  | "settings";
+  | "action-transfer";
 
 export interface Preset {
   id: string;
@@ -20,8 +23,6 @@ export interface Preset {
   bgmVolume: number;
   promptPrefix: string;
   splitType: "paragraph" | "line" | "sentence";
-  template?: string;
-  viewMode?: "template" | "pure-image";
   enableMotion?: boolean;
   enableSubtitles?: boolean;
   minimaxModel?: string;
@@ -39,7 +40,7 @@ export interface Preset {
 export interface Task {
   id: string;
   title: string;
-  tabType: ActiveTab;
+  tabType: TaskSource;
   status: "ready" | "generating" | "completed" | "failed" | "cancelled";
   progress: number;
   currentStep: string;
@@ -135,9 +136,15 @@ export interface SubtitleStyle {
   animation: "none" | "fade" | "pop" | "word-pop";
   segmentMode: "line" | "sentence" | "phrase";
   highlightWords?: string[];
+  /** Optional per-keyword hex colors; falls back to accentColor. */
+  keywordColors?: Record<string, string>;
   highlightStyle?: "accent" | "pop" | "badge";
   highlightScale?: number;
   backgroundOpacity?: number;
+  /** Ease-in duration in ms (ASS fad / dynamic overlay). */
+  fadeInMs?: number;
+  /** Ease-out duration in ms. */
+  fadeOutMs?: number;
 }
 
 export interface FontOption {
@@ -146,18 +153,8 @@ export interface FontOption {
   source: string;
 }
 
-export interface TemplateOption {
-  id: string;
-  name: string;
-  type: string;
-  dimensions: string;
-  orientation: string;
-  desc: string;
-}
-
 export interface WorkbenchResources {
   workflows: WorkflowOption[];
   bgm: BgmOption[];
-  templates: TemplateOption[];
   fonts: FontOption[];
 }

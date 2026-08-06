@@ -41,14 +41,23 @@ class SubtitleStyle(BaseModel):
         "fade",
         description="Subtitle animation",
     )
-    segmentMode: Literal["line", "sentence", "phrase"] = Field("phrase", description="Subtitle segmentation")
+    segmentMode: Literal["line", "sentence", "phrase"] = Field(
+        "sentence",
+        description="Subtitle segmentation (sentence splits on punctuation, punctuation is not shown)",
+    )
     highlightWords: list[str] = Field(default_factory=list, description="Manual highlighted words")
+    keywordColors: dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional per-keyword hex colors; defaults to accentColor",
+    )
     highlightStyle: Literal["accent", "pop", "badge"] = Field(
         "accent",
         description="Highlighted phrase appearance",
     )
     highlightScale: int = Field(125, ge=100, le=180, description="Highlighted phrase scale percentage")
     backgroundOpacity: int = Field(72, ge=0, le=100, description="Caption-box background opacity percentage")
+    fadeInMs: int = Field(120, ge=0, le=1000, description="Ease-in duration in milliseconds")
+    fadeOutMs: int = Field(120, ge=0, le=1000, description="Ease-out duration in milliseconds")
 
 
 class VideoSceneInput(BaseModel):
@@ -85,6 +94,15 @@ class VideoGenerateRequest(BaseModel):
         min_length=8,
         max_length=120,
         description="Client-generated idempotency key for async submission",
+    )
+    reuse_assets_from_task_id: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=120,
+        description=(
+            "Completed task whose narration audio and generated media may be reused. "
+            "The backend falls back to full generation when production inputs differ."
+        ),
     )
     
     # === Processing Mode ===

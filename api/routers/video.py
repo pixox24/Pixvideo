@@ -120,6 +120,7 @@ def _build_video_params(request_body: VideoGenerateRequest, progress_callback=No
         "scenes": [scene.model_dump() for scene in request_body.scenes]
         if request_body.scenes
         else None,
+        "reuse_assets_from_task_id": request_body.reuse_assets_from_task_id,
         "min_narration_words": request_body.min_narration_words,
         "max_narration_words": request_body.max_narration_words,
         "min_image_prompt_words": request_body.min_image_prompt_words,

@@ -144,6 +144,14 @@ class FrameProcessor:
                 frame.completed_steps["audio"] = True
                 if not frame.duration:
                     frame.duration = await self._get_audio_duration(frame.audio_path)
+                if not frame.subtitle_alignment:
+                    try:
+                        from pixelle_video.services.subtitle_alignment import load_alignment
+
+                        cues = load_alignment(frame.audio_path)
+                        frame.subtitle_alignment = [cue.to_dict() for cue in cues] if cues else None
+                    except Exception:
+                        frame.subtitle_alignment = None
 
             # Step 2: Generate media (image or video, conditional)
             if needs_generation and not has_existing_media:
@@ -267,6 +275,18 @@ class FrameProcessor:
 
         # Get audio duration
         frame.duration = await self._get_audio_duration(audio_path)
+
+        # Load TTS alignment sidecar when available (MiniMax subtitles / Edge word boundaries).
+        try:
+            from pixelle_video.services.subtitle_alignment import load_alignment
+
+            cues = load_alignment(audio_path)
+            frame.subtitle_alignment = [cue.to_dict() for cue in cues] if cues else None
+            if cues:
+                logger.debug(f"  ✓ Loaded {len(cues)} TTS alignment cues for frame {frame.index}")
+        except Exception as exc:
+            logger.warning(f"  Failed to load TTS alignment for frame {frame.index}: {exc}")
+            frame.subtitle_alignment = None
 
         logger.debug(f"  ✓ Audio generated: {audio_path} ({frame.duration:.2f}s)")
 
@@ -482,6 +502,7 @@ class FrameProcessor:
                     image_fit_mode=config.image_fit_mode,
                     frame_index=frame.index,
                     subtitle_style=config.subtitle_style,
+                    subtitle_alignment=frame.subtitle_alignment,
                 )
             else:
                 logger.debug("  → Using image-based composition")

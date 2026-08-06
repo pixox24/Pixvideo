@@ -23,12 +23,15 @@ from api.dependencies import PixelleVideoDep
 from api.schemas.content import (
     ImagePromptGenerateRequest,
     ImagePromptGenerateResponse,
+    KeywordExtractRequest,
+    KeywordExtractResponse,
     NarrationGenerateRequest,
     NarrationGenerateResponse,
     TitleGenerateRequest,
     TitleGenerateResponse,
 )
 from pixelle_video.utils.content_generators import (
+    generate_highlight_keywords,
     generate_image_prompts,
     generate_narrations_from_topic,
     generate_title,
@@ -72,6 +75,27 @@ async def generate_narration(
         
     except Exception as e:
         logger.error(f"Narration generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/keywords", response_model=KeywordExtractResponse)
+async def extract_keywords(
+    request: KeywordExtractRequest,
+    pixelle_video: PixelleVideoDep,
+):
+    """
+    Extract highlight keywords (with suggested colors) from narration text.
+    """
+    try:
+        logger.info(f"Extracting up to {request.max_keywords} highlight keywords")
+        keywords = await generate_highlight_keywords(
+            llm_service=pixelle_video.llm,
+            text=request.text,
+            max_keywords=request.max_keywords,
+        )
+        return KeywordExtractResponse(keywords=keywords)
+    except Exception as e:
+        logger.error(f"Keyword extraction error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

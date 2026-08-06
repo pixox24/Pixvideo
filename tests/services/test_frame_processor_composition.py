@@ -1,6 +1,6 @@
 import pytest
 
-from pixelle_video.models.storyboard import StoryboardConfig, StoryboardFrame
+from pixelle_video.models.storyboard import Storyboard, StoryboardConfig, StoryboardFrame
 from pixelle_video.services.frame_processor import FrameProcessor
 
 
@@ -88,3 +88,42 @@ async def test_plain_image_mode_rejects_video_media():
 
     with pytest.raises(ValueError, match="Pure image mode only supports image media"):
         await processor._step_create_video_segment(frame, make_config())
+
+
+@pytest.mark.asyncio
+async def test_rerender_frame_reuses_existing_audio_and_image(monkeypatch, tmp_path):
+    processor = FrameProcessor(DummyCore())
+    audio = tmp_path / "source.mp3"
+    image = tmp_path / "source.png"
+    audio.write_bytes(b"audio")
+    image.write_bytes(b"image")
+    frame = StoryboardFrame(
+        index=0,
+        narration="旁白",
+        image_prompt="prompt",
+        audio_path=str(audio),
+        image_path=str(image),
+        media_type="image",
+        duration=1.0,
+    )
+    storyboard = Storyboard(title="Title", config=make_config(), frames=[frame])
+
+    async def fail_generation(*_args, **_kwargs):
+        raise AssertionError("rerender must not regenerate source assets")
+
+    async def no_op_compose(*_args, **_kwargs):
+        return None
+
+    async def create_segment(current_frame, _config):
+        current_frame.video_segment_path = str(tmp_path / "rerendered.mp4")
+
+    monkeypatch.setattr(processor, "_step_generate_audio", fail_generation)
+    monkeypatch.setattr(processor, "_step_generate_media", fail_generation)
+    monkeypatch.setattr(processor, "_step_compose_frame", no_op_compose)
+    monkeypatch.setattr(processor, "_step_create_video_segment", create_segment)
+
+    result = await processor(frame, storyboard, make_config(), total_frames=1)
+
+    assert result.audio_path == str(audio)
+    assert result.image_path == str(image)
+    assert result.video_segment_path == str(tmp_path / "rerendered.mp4")

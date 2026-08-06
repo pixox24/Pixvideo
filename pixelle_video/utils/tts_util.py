@@ -144,11 +144,20 @@ async def edge_tts(
                     pitch=pitch,
                 )
                 
-                # Collect audio chunks
+                # Collect audio chunks and optional word boundaries for subtitle sync.
                 audio_chunks = []
+                word_boundaries: list[dict] = []
                 async for chunk in communicate.stream():
                     if chunk["type"] == "audio":
                         audio_chunks.append(chunk["data"])
+                    elif chunk["type"] == "WordBoundary":
+                        word_boundaries.append(
+                            {
+                                "text": chunk.get("text", ""),
+                                "offset": chunk.get("offset", 0),
+                                "duration": chunk.get("duration", 0),
+                            }
+                        )
                 
                 audio_data = b"".join(audio_chunks)
                 
@@ -162,6 +171,18 @@ async def edge_tts(
                     with open(output_path, "wb") as f:
                         f.write(audio_data)
                     logger.info(f"Audio saved to: {output_path}")
+                    if word_boundaries:
+                        try:
+                            from pixelle_video.services.subtitle_alignment import (
+                                edge_word_boundaries_to_cues,
+                                save_alignment,
+                            )
+                            cues = edge_word_boundaries_to_cues(word_boundaries)
+                            if cues:
+                                save_alignment(output_path, cues)
+                                logger.debug(f"Saved Edge TTS word alignment ({len(cues)} cues)")
+                        except Exception as align_exc:
+                            logger.warning(f"Failed to save Edge TTS alignment: {align_exc}")
                 
                 return audio_data
             

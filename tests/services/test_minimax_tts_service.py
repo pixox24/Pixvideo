@@ -64,6 +64,8 @@ async def test_minimax_tts_decodes_hex_audio_and_writes_output(tmp_path, monkeyp
     assert captured["json"]["text"] == "大家好"
     assert captured["json"]["stream"] is False
     assert captured["json"]["output_format"] == "hex"
+    assert captured["json"]["subtitle_enable"] is True
+    assert captured["json"]["subtitle_type"] == "sentence"
     assert captured["json"]["voice_setting"] == {
         "voice_id": "female-shaonv",
         "speed": 1.2,

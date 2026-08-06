@@ -12,7 +12,7 @@ def test_batch_mode_expands_topics_into_independent_video_tasks():
 def test_generation_submission_is_awaited_locked_and_confirmed():
     quick_create = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
-    assert "onGenerateTask: (taskInput: any) => Promise<boolean>" in quick_create
+    assert "onGenerateTask: (taskInput: any) => Promise<string | null>" in quick_create
     assert "const [isSubmitting, setIsSubmitting]" in quick_create
     assert "const [reviewConfirmed, setReviewConfirmed]" in quick_create
     assert "disabled={isSubmitting || !reviewConfirmed}" in quick_create
@@ -27,8 +27,8 @@ def test_batch_submission_reports_partial_failures_truthfully():
 
     assert "successfulSubmissions" in quick_create
     assert "taskInputs.length - successfulSubmissions" in quick_create
-    assert "return true;" in app
-    assert "return false;" in app
+    assert "return response.task_id;" in app
+    assert "return null;" in app
 
 
 def test_generation_review_summarizes_critical_configuration():

@@ -60,6 +60,29 @@ class UpdateNarrationRequest(BaseModel):
         return value
 
 
+class UpdateSceneRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    narration: str | None = Field(default=None, min_length=1)
+    visual_prompt: str | None = Field(default=None, alias="visualPrompt")
+    manual_hold_seconds: float | None = Field(default=None, ge=0, alias="manualHoldSeconds")
+    duration_seconds: float | None = Field(default=None, gt=0, alias="durationSeconds")
+
+    @field_validator("narration")
+    @classmethod
+    def optional_narration_not_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("narration must not be blank")
+        return value
+
+
+class ReorderScenesRequest(BaseModel):
+    scene_ids: list[str] = Field(..., min_length=1, alias="sceneIds")
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class AssetVersionResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     version_id: str = Field(alias="versionId")

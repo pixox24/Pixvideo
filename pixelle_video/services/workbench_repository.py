@@ -166,6 +166,8 @@ class WorkbenchRepository:
         row = self._connection.execute("SELECT * FROM asset_versions WHERE version_id=?", (version_id,)).fetchone()
         return self._asset_from_row(row) if row else None
 
+    get_asset = get_asset_version
+
     def list_asset_versions(self, project_id: str, scene_id: str | None = None) -> list[AssetVersion]:
         query, args = "SELECT * FROM asset_versions WHERE project_id=?", [project_id]
         if scene_id is not None:

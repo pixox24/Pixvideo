@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, status
+import tempfile
+from pathlib import Path
+
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
 from api.dependencies import PixelleVideoDep
 from api.schemas.workbench import (
@@ -11,10 +14,12 @@ from api.schemas.workbench import (
     ProjectSceneResponse,
     RegenerateImageRequest,
     UpdateNarrationRequest,
+    UpdateSceneRequest,
+    ReorderScenesRequest,
 )
 from api.tasks import task_manager
 from api.tasks.models import TaskType
-from pixelle_video.models.workbench import GenerationJob, GenerationKind, Project, Scene
+from pixelle_video.models.workbench import GenerationJob, GenerationKind, Project, Scene, effective_scene_duration
 
 router = APIRouter(prefix="/projects", tags=["Workbench Projects"])
 
@@ -113,3 +118,68 @@ async def regenerate_tts(project_id: str, scene_id: str, body: UpdateNarrationRe
                          {"narration": body.narration}, core.workbench_jobs.run_tts_job, body.narration)
     return GenerationJobResponse(jobId=job.job_id, taskId=job.task_id, sceneId=scene_id,
                                  kind=job.kind.value, status=job.status.value, progress=job.progress)
+
+
+@router.patch("/{project_id}/scenes/{scene_id}")
+async def update_scene(project_id: str, scene_id: str, body: UpdateSceneRequest, core: PixelleVideoDep):
+    scene = _scene_or_404(core, project_id, scene_id)
+    changes = body.model_dump(exclude_none=True, by_alias=False)
+    if "duration_seconds" in changes and changes["duration_seconds"] < scene.duration_seconds:
+        raise HTTPException(status_code=422, detail="duration cannot be shorter than audio duration")
+    if "manual_hold_seconds" in changes:
+        changes["duration_seconds"] = effective_scene_duration(
+            scene.duration_seconds, changes["manual_hold_seconds"]
+        )
+    if not changes:
+        return {"sceneId": scene_id}
+    core.workbench_repository.update_scene(scene_id, **changes)
+    updated = core.workbench_repository.get_scene(scene_id)
+    return {"sceneId": scene_id, "narration": updated.narration, "visualPrompt": updated.visual_prompt,
+            "durationSeconds": updated.duration_seconds, "manualHoldSeconds": updated.manual_hold_seconds}
+
+
+@router.post("/{project_id}/scenes/{scene_id}/versions/{version_id}/select")
+async def select_asset_version(project_id: str, scene_id: str, version_id: str, core: PixelleVideoDep):
+    _scene_or_404(core, project_id, scene_id)
+    if core.workbench_repository.get_asset_version(version_id) is None:
+        raise HTTPException(status_code=404, detail="version not found")
+    try:
+        core.workbench_repository.select_asset_version(project_id, scene_id, version_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="version not found") from exc
+    return {"sceneId": scene_id, "currentVersionId": version_id}
+
+
+@router.post("/{project_id}/scenes/reorder")
+async def reorder_scenes(project_id: str, body: ReorderScenesRequest, core: PixelleVideoDep):
+    if core.workbench_repository.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    scenes = core.workbench_repository.list_project_scenes(project_id)
+    expected = {scene.scene_id for scene in scenes}
+    if len(body.scene_ids) != len(set(body.scene_ids)) or set(body.scene_ids) != expected:
+        raise HTTPException(status_code=422, detail="sceneIds must contain every project scene exactly once")
+    core.workbench_repository.reorder_scenes(project_id, body.scene_ids)
+    return {"sceneIds": body.scene_ids}
+
+
+@router.post("/{project_id}/scenes/{scene_id}/uploads", status_code=201)
+async def upload_scene_asset(project_id: str, scene_id: str, core: PixelleVideoDep, file: UploadFile = File(...)):
+    _scene_or_404(core, project_id, scene_id)
+    extension = Path(file.filename or "").suffix.lower()
+    if file.content_type not in {"image/png", "image/jpeg", "image/webp", "image/gif"} or extension not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+        raise HTTPException(status_code=415, detail="only image uploads are supported")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as handle:
+            temporary = Path(handle.name)
+            while chunk := await file.read(1024 * 1024):
+                handle.write(chunk)
+        relative = core.workbench_media.copy_upload(project_id, scene_id, temporary, file.filename or "upload.png")
+        from pixelle_video.models.workbench import AssetSource, AssetVersion
+        version = AssetVersion(project_id, scene_id, AssetSource.UPLOAD, relative)
+        core.workbench_repository.create_asset_version(version)
+        return {"versionId": version.version_id, "imageUrl": core.workbench_media.to_api_url(project_id, relative, None)}
+    finally:
+        if temporary:
+            temporary.unlink(missing_ok=True)
+        await file.close()

@@ -14,6 +14,11 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def effective_scene_duration(audio_seconds: float, manual_hold_seconds: float) -> float:
+    """Visual duration is audio-driven and may only be extended by a hold."""
+    return max(float(audio_seconds), float(audio_seconds) + max(float(manual_hold_seconds), 0.0))
+
+
 class AssetSource(str, Enum):
     AI = "ai"
     UPLOAD = "upload"

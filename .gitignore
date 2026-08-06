@@ -70,6 +70,7 @@ tmp/
 .playwright-mcp/
 .streamlit.pid
 .worktrees/
+.superpowers/
 
 # MkDocs build output
 site/

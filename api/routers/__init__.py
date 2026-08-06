@@ -29,6 +29,7 @@ from api.routers.tts import router as tts_router
 from api.routers.uploads import router as uploads_router
 from api.routers.video import router as video_router
 from api.routers.workbench import router as workbench_router
+from api.routers.projects import router as projects_router
 
 __all__ = [
     "health_router",
@@ -44,6 +45,7 @@ __all__ = [
     "configuration_router",
     "history_router",
     "workbench_router",
+    "projects_router",
     "uploads_router",
     "specialist_router",
 ]

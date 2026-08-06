@@ -193,6 +193,17 @@ class WorkbenchRepository:
         if not row: return None
         return GenerationJob(row["project_id"], GenerationKind(row["kind"]), row["task_id"], json.loads(row["request_snapshot_json"]), row["scene_id"], row["job_id"], GenerationStatus(row["status"]), row["progress"], row["error"], _from_dt(row["created_at"]), _from_dt(row["updated_at"]))
 
+    def get_generation_job_by_task_id(self, task_id: str) -> GenerationJob | None:
+        row = self._connection.execute("SELECT * FROM generation_jobs WHERE task_id=?", (task_id,)).fetchone()
+        if not row:
+            return None
+        return self.get_generation_job(row["job_id"])
+
+    def update_generation_job_by_task_id(self, task_id: str, **changes: Any) -> None:
+        job = self.get_generation_job_by_task_id(task_id)
+        if job:
+            self.update_generation_job(job.job_id, **changes)
+
     def update_generation_job(self, job_id: str, **changes: Any) -> None:
         allowed = {"status", "progress", "error", "updated_at"}; values = {k:v for k,v in changes.items() if k in allowed}
         if "status" in values: values["status"] = values["status"].value if isinstance(values["status"], GenerationStatus) else values["status"]

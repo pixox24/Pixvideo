@@ -9,10 +9,32 @@ from api.schemas.workbench import (
     GenerationJobResponse,
     ProjectResponse,
     ProjectSceneResponse,
+    RegenerateImageRequest,
+    UpdateNarrationRequest,
 )
-from pixelle_video.models.workbench import Project, Scene
+from api.tasks import task_manager
+from api.tasks.models import TaskType
+from pixelle_video.models.workbench import GenerationJob, GenerationKind, Project, Scene
 
 router = APIRouter(prefix="/projects", tags=["Workbench Projects"])
+
+
+def _scene_or_404(core, project_id: str, scene_id: str):
+    if core.workbench_repository.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    scene = core.workbench_repository.get_scene(scene_id)
+    if scene is None or scene.project_id != project_id:
+        raise HTTPException(status_code=404, detail="scene not found")
+    return scene
+
+
+async def _enqueue(core, project_id: str, scene_id: str | None, kind: GenerationKind,
+                   task_type: TaskType, request_snapshot: dict, runner, *runner_args):
+    task = task_manager.create_task(task_type, request_params=request_snapshot)
+    job = GenerationJob(project_id, kind, task.task_id, request_snapshot, scene_id=scene_id)
+    core.workbench_repository.create_generation_job(job)
+    await task_manager.execute_task(task.task_id, runner, project_id, scene_id, task.task_id, *runner_args)
+    return job
 
 
 def _response(project, scenes, repository, media, request: Request) -> ProjectResponse:
@@ -64,3 +86,30 @@ async def get_project(project_id: str, core: PixelleVideoDep, request: Request):
     scenes = core.workbench_repository.list_project_scenes(project_id)
     return _response(project, scenes, core.workbench_repository, core.workbench_media, request)
 
+
+@router.post("/{project_id}/scenes/{scene_id}/generate", response_model=GenerationJobResponse, status_code=202)
+async def generate_scene(project_id: str, scene_id: str, core: PixelleVideoDep):
+    scene = _scene_or_404(core, project_id, scene_id)
+    job = await _enqueue(core, project_id, scene_id, GenerationKind.SCENE, TaskType.WORKBENCH_SCENE,
+                         {"narration": scene.narration, "prompt": scene.visual_prompt},
+                         core.workbench_jobs.run_scene_job)
+    return GenerationJobResponse(jobId=job.job_id, taskId=job.task_id, sceneId=scene_id,
+                                 kind=job.kind.value, status=job.status.value, progress=job.progress)
+
+
+@router.post("/{project_id}/scenes/{scene_id}/image-generations", response_model=GenerationJobResponse, status_code=202)
+async def regenerate_image(project_id: str, scene_id: str, body: RegenerateImageRequest, core: PixelleVideoDep):
+    _scene_or_404(core, project_id, scene_id)
+    job = await _enqueue(core, project_id, scene_id, GenerationKind.IMAGE, TaskType.WORKBENCH_IMAGE,
+                         {"prompt": body.prompt}, core.workbench_jobs.run_image_job, body.prompt)
+    return GenerationJobResponse(jobId=job.job_id, taskId=job.task_id, sceneId=scene_id,
+                                 kind=job.kind.value, status=job.status.value, progress=job.progress)
+
+
+@router.post("/{project_id}/scenes/{scene_id}/tts", response_model=GenerationJobResponse, status_code=202)
+async def regenerate_tts(project_id: str, scene_id: str, body: UpdateNarrationRequest, core: PixelleVideoDep):
+    _scene_or_404(core, project_id, scene_id)
+    job = await _enqueue(core, project_id, scene_id, GenerationKind.TTS, TaskType.WORKBENCH_TTS,
+                         {"narration": body.narration}, core.workbench_jobs.run_tts_job, body.narration)
+    return GenerationJobResponse(jobId=job.job_id, taskId=job.task_id, sceneId=scene_id,
+                                 kind=job.kind.value, status=job.status.value, progress=job.progress)

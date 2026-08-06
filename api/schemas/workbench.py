@@ -35,6 +35,31 @@ class CreateProjectRequest(BaseModel):
         return value
 
 
+class RegenerateImageRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    prompt: str = Field(..., min_length=1)
+
+    @field_validator("prompt")
+    @classmethod
+    def prompt_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("prompt must not be blank")
+        return value
+
+
+class UpdateNarrationRequest(BaseModel):
+    narration: str = Field(..., min_length=1)
+
+    @field_validator("narration")
+    @classmethod
+    def narration_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("narration must not be blank")
+        return value
+
+
 class AssetVersionResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     version_id: str = Field(alias="versionId")
@@ -80,4 +105,3 @@ class ProjectResponse(BaseModel):
     scenes: list[ProjectSceneResponse]
     jobs: list[GenerationJobResponse]
     updated_at: str = Field(alias="updatedAt")
-

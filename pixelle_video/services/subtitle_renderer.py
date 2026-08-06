@@ -44,6 +44,57 @@ SUBTITLE_STYLE_DEFAULTS: dict[str, Any] = {
     "fadeOutMs": 120,
 }
 
+# Presets provide defaults only. Values explicitly supplied by the caller are
+# merged after these values so manual controls always win.
+SUBTITLE_PRESET_DEFAULTS: dict[str, dict[str, Any]] = {
+    "short-video-bold": {
+        "fontSize": 56,
+        "primaryColor": "#FFFFFF",
+        "accentColor": "#FFD43B",
+        "outlineColor": "#000000",
+        "outlineWidth": 4,
+        "shadow": 1,
+        "marginV": 120,
+        "maxLines": 2,
+        "animation": "fade",
+    },
+    "clean-white": {
+        "fontSize": 52,
+        "primaryColor": "#FFFFFF",
+        "accentColor": "#FFFFFF",
+        "outlineColor": "#000000",
+        "outlineWidth": 1,
+        "shadow": 0,
+        "marginV": 120,
+        "maxLines": 2,
+        "animation": "fade",
+    },
+    "cinema-soft": {
+        "fontSize": 52,
+        "primaryColor": "#FFF7ED",
+        "accentColor": "#FBBF24",
+        "outlineColor": "#3F2A1D",
+        "outlineWidth": 2,
+        "shadow": 2,
+        "marginV": 140,
+        "maxLines": 2,
+        "animation": "fade",
+    },
+    "caption-box": {
+        "fontSize": 52,
+        "primaryColor": "#FFFFFF",
+        "accentColor": "#FFD43B",
+        "outlineColor": "#000000",
+        "backColor": "#000000",
+        "outlineWidth": 0,
+        "shadow": 0,
+        "marginV": 120,
+        "maxLines": 2,
+        "backgroundOpacity": 72,
+        "animation": "fade",
+    },
+}
+
 
 @dataclass(frozen=True)
 class TimedCaptionSegment:
@@ -59,7 +110,16 @@ class SubtitleRenderer:
     """Plan and burn-in styled ASS subtitles for FFmpeg."""
 
     def normalize_style(self, style: dict[str, Any] | None) -> dict[str, Any]:
-        normalized = {**SUBTITLE_STYLE_DEFAULTS, **(style or {})}
+        raw_style = style or {}
+        preset = str(raw_style.get("preset") or SUBTITLE_STYLE_DEFAULTS["preset"])
+        if preset not in SUBTITLE_PRESET_DEFAULTS:
+            preset = SUBTITLE_STYLE_DEFAULTS["preset"]
+        normalized = {
+            **SUBTITLE_STYLE_DEFAULTS,
+            **SUBTITLE_PRESET_DEFAULTS[preset],
+            **raw_style,
+            "preset": preset,
+        }
         normalized["fontSize"] = self._coerce_int(normalized.get("fontSize"), 52, 12, 120)
         normalized["outlineWidth"] = self._coerce_int(normalized.get("outlineWidth"), 3, 0, 12)
         normalized["shadow"] = self._coerce_int(normalized.get("shadow"), 0, 0, 12)
@@ -157,10 +217,11 @@ class SubtitleRenderer:
             return f"#{body.upper()}"
         return default
 
-    def hex_to_ass_color(self, value: str) -> str:
+    def hex_to_ass_color(self, value: str, alpha: int = 0) -> str:
         color = self._normalize_hex_color(value, "#FFFFFF").lstrip("#")
         rr, gg, bb = color[0:2], color[2:4], color[4:6]
-        return f"&H00{bb}{gg}{rr}"
+        ass_alpha = min(255, max(0, int(alpha)))
+        return f"&H{ass_alpha:02X}{bb}{gg}{rr}"
 
     def escape_ass_text(self, text: str) -> str:
         return (
@@ -499,6 +560,11 @@ class SubtitleRenderer:
 
         # Escape commas in font name for ASS style line safety.
         safe_font = str(font_name).replace(",", " ")
+        is_caption_box = normalized["preset"] == "caption-box"
+        background_opacity = normalized.get("backgroundOpacity", 72)
+        background_alpha = round(255 * (1 - (int(background_opacity) / 100)))
+        border_style = 3 if is_caption_box else 1
+        bold = 1 if normalized["preset"] == "short-video-bold" else 0
         ass = "\n".join(
             [
                 "[Script Info]",
@@ -518,8 +584,8 @@ class SubtitleRenderer:
                 f"{self.hex_to_ass_color(normalized['primaryColor'])},"
                 f"{self.hex_to_ass_color(normalized['accentColor'])},"
                 f"{self.hex_to_ass_color(normalized['outlineColor'])},"
-                f"{self.hex_to_ass_color(normalized['backColor'])},"
-                "1,0,0,0,100,100,0,0,1,"
+                f"{self.hex_to_ass_color(normalized['backColor'], background_alpha if is_caption_box else 0)},"
+                f"{bold},0,0,0,100,100,0,0,{border_style},"
                 f"{normalized['outlineWidth']},{style_shadow},"
                 f"{normalized['alignment']},60,60,{normalized['marginV']},1",
                 "",

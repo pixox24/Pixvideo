@@ -148,6 +148,58 @@ const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   fadeOutMs: 120,
 };
 
+const SUBTITLE_PRESET_STYLES: Record<SubtitleStyle["preset"], Partial<SubtitleStyle>> = {
+  "short-video-bold": {
+    fontSize: 56,
+    primaryColor: "#FFFFFF",
+    accentColor: "#FFD43B",
+    outlineColor: "#000000",
+    backColor: "#000000",
+    outlineWidth: 4,
+    shadow: 1,
+    marginV: 120,
+    maxLines: 2,
+    animation: "fade",
+  },
+  "clean-white": {
+    fontSize: 52,
+    primaryColor: "#FFFFFF",
+    accentColor: "#FFFFFF",
+    outlineColor: "#000000",
+    backColor: "#000000",
+    outlineWidth: 1,
+    shadow: 0,
+    marginV: 120,
+    maxLines: 2,
+    animation: "fade",
+  },
+  "cinema-soft": {
+    fontSize: 52,
+    primaryColor: "#FFF7ED",
+    accentColor: "#FBBF24",
+    outlineColor: "#3F2A1D",
+    backColor: "#000000",
+    outlineWidth: 2,
+    shadow: 2,
+    marginV: 140,
+    maxLines: 2,
+    animation: "fade",
+  },
+  "caption-box": {
+    fontSize: 52,
+    primaryColor: "#FFFFFF",
+    accentColor: "#FFD43B",
+    outlineColor: "#000000",
+    backColor: "#000000",
+    outlineWidth: 0,
+    shadow: 0,
+    marginV: 120,
+    maxLines: 2,
+    backgroundOpacity: 72,
+    animation: "fade",
+  },
+};
+
 export const QuickCreate: React.FC<QuickCreateProps> = ({
   onGenerateTask,
   latestCompletedTaskId,
@@ -458,6 +510,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
   const updateSubtitleStyle = (patch: Partial<SubtitleStyle>) => {
     setSubtitleStyle((current) => ({ ...current, ...patch }));
+  };
+
+  const handleSubtitlePresetChange = (preset: SubtitleStyle["preset"]) => {
+    updateSubtitleStyle({ preset, ...SUBTITLE_PRESET_STYLES[preset] });
   };
 
   const dynamicSubtitleEnabled = subtitleStyle.mode === "hyperframes";
@@ -2120,7 +2176,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   <span className="text-xs font-semibold text-zinc-300">字幕样式</span>
                   <Select
                     value={subtitleStyle.preset}
-                    onChange={(e) => updateSubtitleStyle({ preset: e.target.value as SubtitleStyle["preset"] })}
+                    onChange={(e) => handleSubtitlePresetChange(e.target.value as SubtitleStyle["preset"])}
                     className="bg-[#101114] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                   >
                     <option value="short-video-bold">短视频粗体</option>

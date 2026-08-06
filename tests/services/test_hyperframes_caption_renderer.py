@@ -56,6 +56,7 @@ def test_prepared_project_uses_custom_font_and_escaped_caption_text(tmp_path):
     assert (project_dir / "index.html").read_text(encoding="utf-8") == composition
     assert "@font-face" in composition
     assert "assets/" + font_path.name in composition
+    assert '\"Microsoft YaHei\"' in composition
     assert "<script>不要执行" not in composition
     assert "&lt;script&gt;" in composition
     assert "ript&gt;" in composition
@@ -85,6 +86,39 @@ def test_composition_limits_dynamic_font_size_to_the_requested_line_length(tmp_p
 
     assert "font-size: 32px" in composition
     assert "white-space: nowrap" in composition
+
+
+def test_dynamic_preset_changes_font_weight_and_caption_box_background(tmp_path):
+    renderer = HyperframesCaptionRenderer()
+    weights = {}
+    for preset in ("short-video-bold", "clean-white", "cinema-soft", "caption-box"):
+        plan = renderer.build_caption_plan(
+            text="预置样式验证",
+            duration=1.0,
+            width=720,
+            height=1280,
+            fps=24,
+            style={"mode": "hyperframes", "preset": preset},
+        )
+        project_dir = renderer.prepare_project(plan, tmp_path / preset)
+        composition = (project_dir / "compositions" / "caption-overlay.html").read_text(
+            encoding="utf-8"
+        )
+        weights[preset] = next(
+            line for line in composition.splitlines() if "font-size:" in line and "font-weight:" in line
+        )
+        if preset == "caption-box":
+            assert "background: rgba(0, 0, 0, 0.72)" in composition
+        else:
+            assert "background: transparent" in composition
+
+    assert len(set(weights.values())) == 4
+
+
+def test_npx_command_can_be_configured_for_service_environment(monkeypatch):
+    monkeypatch.setenv("PIXELLE_NPX_COMMAND", "C:/node/npx.cmd")
+    renderer = HyperframesCaptionRenderer()
+    assert renderer.npx_command == "C:/node/npx.cmd"
 
 
 def test_composition_renders_manual_highlights_and_staggered_emphasis(tmp_path):
@@ -175,7 +209,7 @@ def test_render_overlay_runs_pinned_cli_and_returns_webm(monkeypatch, tmp_path):
     )
     captured: dict[str, object] = {}
 
-    def fake_run(command, cwd, check, capture_output, text, timeout):
+    def fake_run(command, cwd, check, capture_output, text, encoding, errors, timeout):
         captured["command"] = command
         captured["cwd"] = cwd
         Path(cwd, "caption-overlay.webm").write_bytes(b"webm")

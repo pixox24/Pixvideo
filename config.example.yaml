@@ -108,4 +108,6 @@ quick_create:
 # ==================== Subtitle Defaults ====================
 subtitle:
   custom_font_folder: null
+  # Optional absolute path when the backend service does not inherit Node.js PATH.
+  # npx_command: "C:/Program Files/nodejs/npx.cmd"
   default_style: {}

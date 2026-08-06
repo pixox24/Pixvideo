@@ -126,6 +126,10 @@ class QuickCreateConfig(BaseModel):
 class SubtitleConfig(BaseModel):
     """Subtitle rendering configuration"""
     custom_font_folder: Optional[str] = Field(default=None, description="User-selected custom subtitle font folder")
+    npx_command: Optional[str] = Field(
+        default=None,
+        description="Optional absolute Node.js npx/npx.cmd path for dynamic subtitles",
+    )
     default_style: Dict[str, Any] = Field(default_factory=dict, description="Default subtitle style")
 
 

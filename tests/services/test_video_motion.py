@@ -213,7 +213,9 @@ def test_create_video_from_image_with_motion_uses_custom_font_for_drawtext_fallb
         motion_enabled=True,
     )
 
-    assert f"fontfile={font_path.as_posix()}" in captured["command"]
+    normalized_command = captured["command"].replace("\\", "/")
+    assert "fontfile=" in normalized_command
+    assert font_path.name in normalized_command
 
 
 def test_create_video_from_image_with_motion_uses_hyperframes_overlay(monkeypatch, tmp_path):

@@ -568,7 +568,15 @@ class VideoService:
                 if normalized_style["mode"] == "hyperframes":
                     try:
                         subtitle_workspace = tempfile.mkdtemp(prefix="pixelle-hyperframes-")
-                        dynamic_renderer = HyperframesCaptionRenderer()
+                        subtitle_config = config_manager.get("subtitle", {})
+                        npx_command = str(
+                            os.getenv("PIXELLE_NPX_COMMAND")
+                            or subtitle_config.get("npx_command")
+                            or "npx"
+                        ).strip()
+                        dynamic_renderer = HyperframesCaptionRenderer(
+                            npx_command=npx_command or "npx"
+                        )
                         caption_plan = dynamic_renderer.build_caption_plan(
                             text=subtitle_text,
                             duration=audio_duration,
@@ -608,7 +616,7 @@ class VideoService:
                     )
                     if not wrapped_text:
                         wrapped_text = ""
-                    font_size = max(24, min(56, width // 22))
+                    font_size = max(24, min(120, int(normalized_style.get("fontSize", width // 22))))
                     bottom_margin = max(48, height // 14)
                     if (
                         wrapped_text
@@ -654,7 +662,7 @@ class VideoService:
                             str(normalized_style.get("fontPath") or "")
                         ).expanduser()
                         drawtext_font_path = (
-                            str(custom_font_path)
+                            custom_font_path.as_posix()
                             if custom_font_path.is_file()
                             else font_path
                         )
@@ -663,9 +671,22 @@ class VideoService:
                             fontfile=drawtext_font_path,
                             text=self._escape_drawtext_text(wrapped_text),
                             fontsize=font_size,
-                            fontcolor="white",
-                            bordercolor="black",
-                            borderw=max(2, width // 360),
+                            fontcolor=str(normalized_style.get("primaryColor") or "#FFFFFF"),
+                            bordercolor=str(normalized_style.get("outlineColor") or "#000000"),
+                            borderw=max(0, int(normalized_style.get("outlineWidth", 3))),
+                            shadowx=max(0, int(normalized_style.get("shadow", 0))),
+                            shadowy=max(0, int(normalized_style.get("shadow", 0))),
+                            shadowcolor=str(normalized_style.get("outlineColor") or "#000000"),
+                            box=1 if normalized_style.get("preset") == "caption-box" else 0,
+                            boxcolor=(
+                                f"{str(normalized_style.get('backColor') or '#000000')}@"
+                                f"{max(0, min(100, int(normalized_style.get('backgroundOpacity', 72)))) / 100:.2f}"
+                            ),
+                            boxborderw=(
+                                max(4, int(normalized_style.get("outlineWidth", 0)) * 2)
+                                if normalized_style.get("preset") == "caption-box"
+                                else 0
+                            ),
                             line_spacing=max(4, font_size // 6),
                             x="(w-text_w)/2",
                             y=f"h-text_h-{bottom_margin}",

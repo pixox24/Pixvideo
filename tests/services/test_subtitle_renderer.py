@@ -99,6 +99,29 @@ def test_create_ass_file_uses_soft_blur_not_hard_shadow(tmp_path):
     assert "第一句旁白。" not in content
 
 
+def test_ass_presets_have_distinct_rendered_styles(tmp_path):
+    renderer = SubtitleRenderer()
+    style_lines = {}
+
+    for preset in ("short-video-bold", "clean-white", "cinema-soft", "caption-box"):
+        ass_path = renderer.create_ass_file(
+            text="预置样式验证",
+            duration=1.0,
+            width=1080,
+            height=1920,
+            style={"preset": preset},
+            output_dir=tmp_path,
+        )
+        content = Path(ass_path).read_text(encoding="utf-8")
+        style_lines[preset] = next(line for line in content.splitlines() if line.startswith("Style:"))
+
+    assert len(set(style_lines.values())) == 4
+    assert ",1,4,0,2,60,60,120,1" in style_lines["short-video-bold"]
+    assert ",3,0,0,2,60,60,120,1" in style_lines["caption-box"]
+    # 72% opacity is encoded as ASS alpha 0x47 (0 transparent, 255 opaque).
+    assert "&H47000000" in style_lines["caption-box"]
+
+
 def test_ass_highlights_use_override_colors(tmp_path):
     renderer = SubtitleRenderer()
     ass_path = renderer.create_ass_file(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -43,7 +44,9 @@ class HyperframesCaptionRenderer:
     """Render an advanced caption plan to a transparent WebM overlay."""
 
     def __init__(self, npx_command: str = "npx", timeout_seconds: int = 300):
-        self.npx_command = npx_command
+        # Keep the default portable, while allowing Windows services whose PATH
+        # differs from the interactive shell to point at an absolute npx.cmd.
+        self.npx_command = os.getenv("PIXELLE_NPX_COMMAND", npx_command).strip() or npx_command
         self.timeout_seconds = timeout_seconds
         self.subtitle_renderer = SubtitleRenderer()
 
@@ -162,6 +165,8 @@ class HyperframesCaptionRenderer:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=self.timeout_seconds,
             )
         except FileNotFoundError as exc:
@@ -204,6 +209,12 @@ class HyperframesCaptionRenderer:
         font_family = "DynamicCaptionFont" if font_url else str(style.get("fontFamily") or "")
         if not font_family:
             font_family = "PingFang SC"
+        font_weight = {
+            "short-video-bold": 800,
+            "clean-white": 600,
+            "cinema-soft": 500,
+            "caption-box": 700,
+        }.get(str(style.get("preset")), 600)
 
         font_face = ""
         if font_url:
@@ -251,13 +262,13 @@ class HyperframesCaptionRenderer:
       @font-face {{ font-family: \"Hiragino Sans GB\"; src: local(\"Hiragino Sans GB\"); }}
       * {{ box-sizing: border-box; }}
       html, body {{ width: {width}px; height: {height}px; margin: 0; overflow: hidden; background: transparent; }}
-      body {{ font-family: {json.dumps(font_family, ensure_ascii=False)}, \"PingFang SC\", \"Hiragino Sans GB\", sans-serif; }}
+      body {{ font-family: {json.dumps(font_family, ensure_ascii=False)}, \"Microsoft YaHei\", \"PingFang SC\", \"Hiragino Sans GB\", \"Noto Sans CJK SC\", sans-serif; }}
       #caption-root {{ position: relative; width: {width}px; height: {height}px; overflow: hidden; }}
-      .caption {{
+        .caption {{
         position: absolute; {caption_position} bottom: {bottom}px;
         width: fit-content; max-width: 86.6%; padding: 0.2em 0.35em;
         color: {text_color}; background: {background_rule}; border-radius: 12px;
-        font-size: {font_size}px; font-weight: 800; line-height: 1.28; text-align: {text_alignment};
+        font-size: {font_size}px; font-weight: {font_weight}; line-height: 1.28; text-align: {text_alignment};
         white-space: nowrap; word-break: keep-all;
         -webkit-text-stroke: {outline}px {outline_color};
         text-shadow: {shadow}px {shadow}px {max(1, shadow * 2)}px {outline_color};

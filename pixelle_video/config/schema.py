@@ -138,6 +138,7 @@ class PixelleVideoConfig(BaseModel):
     template: TemplateConfig = Field(default_factory=TemplateConfig)
     quick_create: QuickCreateConfig = Field(default_factory=QuickCreateConfig)
     subtitle: SubtitleConfig = Field(default_factory=SubtitleConfig)
+    workbench_dir: Optional[str] = Field(default=None, description="Workbench data directory override")
     
     def is_llm_configured(self) -> bool:
         """Check if LLM is properly configured"""

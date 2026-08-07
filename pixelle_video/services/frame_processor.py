@@ -20,12 +20,8 @@ Key Feature:
   to ensure perfect sync between audio and video (no padding, no trimming needed)
 """
 
-import base64
-import shutil
-from pathlib import Path
 from typing import Callable, Optional
 
-import httpx
 from loguru import logger
 
 from pixelle_video.models.progress import ProgressEvent
@@ -549,26 +545,8 @@ class FrameProcessor:
         from pixelle_video.utils.os_util import get_task_frame_path
         output_path = get_task_frame_path(task_id, frame_index, media_type)
 
-        source_path = Path(url)
-        if source_path.exists():
-            if source_path.resolve() != Path(output_path).resolve():
-                shutil.copyfile(source_path, output_path)
-            return output_path
-
-        if url.startswith("data:"):
-            b64_payload = url.split(",", 1)[1] if "," in url else url
-            Path(output_path).write_bytes(base64.b64decode(b64_payload))
-            return output_path
-
-        timeout = httpx.Timeout(connect=10.0, read=60, write=60, pool=60)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-
-            with open(output_path, 'wb') as f:
-                f.write(response.content)
-
-        return output_path
+        from pixelle_video.services.workbench_media import WorkbenchMediaStore
+        return await WorkbenchMediaStore.download_to_path(url, output_path)
 
     async def _get_video_duration(self, video_path: str) -> float:
         """Get video duration in seconds"""

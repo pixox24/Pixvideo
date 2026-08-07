@@ -4,6 +4,9 @@
 
 project_name: Pixelle-Video
 
+# Optional local workbench data directory override
+# workbench_dir: data/workbench
+
 # ==================== LLM Configuration ====================
 # Supports any OpenAI SDK compatible API
 llm:

@@ -18,12 +18,13 @@ import {
   PanelRightClose,
   X,
 } from "lucide-react";
-import { ActiveTab, Preset, Task, SystemSettings } from "./types";
+import { ActiveTab, Preset, QuickCreateInput, Task, SystemSettings } from "./types";
 import { Toast, ToastMessage } from "./components/Toast";
 import { QuickCreate } from "./components/QuickCreate";
 import { HistoryList } from "./components/HistoryList";
 import { SystemSettingsTab } from "./components/SystemSettingsTab";
 import { ConsolePanel } from "./components/ConsolePanel";
+import { ProjectWorkbench } from "./components/ProjectWorkbench";
 import {
   buildConfigPayload,
   cancelTask,
@@ -40,6 +41,8 @@ import {
   resumeHistoryTask,
   submitVideoTask,
 } from "./lib/api";
+import { createProject } from "./lib/workbenchApi";
+import { createProjectFromHistory } from "./lib/workbenchApi";
 
 const PENDING_TASK_ID_PREFIX = "pending-";
 
@@ -48,6 +51,7 @@ const isPendingTaskId = (taskId: string) => taskId.startsWith(PENDING_TASK_ID_PR
 export default function App() {
   // Global States
   const [activeTab, setActiveTab] = useState<ActiveTab>("quick-create");
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [presets, setPresets] = useState<Preset[]>([]);
@@ -532,6 +536,29 @@ export default function App() {
     }
   };
 
+  const handleCreateProject = async (input: QuickCreateInput) => {
+    try {
+      const project = await createProject(input);
+      setActiveProjectId(project.projectId);
+      setActiveTab("project-workbench");
+      addToast("项目草稿已创建，正在打开剪辑工作台。", "success");
+    } catch (error) {
+      addToast(error, "error");
+      throw error;
+    }
+  };
+
+  const handleOpenHistoryWorkbench = async (task: Task) => {
+    try {
+      const project = await createProjectFromHistory(task.id);
+      setActiveProjectId(project.projectId);
+      setActiveTab("project-workbench");
+      addToast("历史任务已打开为可编辑项目。", "success");
+    } catch (error) {
+      addToast(error, "error");
+    }
+  };
+
   // Sidebar connectivity widgets indicator
   const hasLlmKey = serviceStatus.llm || settings.llm.apiKey !== "";
   const hasComfyUrl = serviceStatus.comfyui || settings.comfy.url !== "";
@@ -605,6 +632,17 @@ export default function App() {
                 资产管理 / Logs
               </span>
             </div>
+
+            <button
+              onClick={() => activeProjectId && setActiveTab("project-workbench")}
+              disabled={!activeProjectId}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded transition-all ${
+                activeTab === "project-workbench" ? "bg-amber-500/10 text-amber-400 border border-amber-500/15" : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c] disabled:opacity-40"
+              }`}
+            >
+              <Tv className="w-4 h-4" />
+              <span>项目工作台 Project</span>
+            </button>
 
             <button
               onClick={() => setActiveTab("history")}
@@ -806,8 +844,11 @@ export default function App() {
               onRefreshResources={refreshResources}
               resources={resources}
               addToast={addToast}
+              onCreateProject={handleCreateProject}
             />
           )}
+
+          {activeTab === "project-workbench" && activeProjectId && <ProjectWorkbench projectId={activeProjectId} addToast={addToast} />}
 
           {activeTab === "history" && (
             <HistoryList
@@ -815,6 +856,7 @@ export default function App() {
               onDeleteTask={handleDeleteTask}
               onResumeTask={handleResumeTask}
               onCancelTask={handleCancelTask}
+              onOpenWorkbench={handleOpenHistoryWorkbench}
               addToast={addToast}
             />
           )}

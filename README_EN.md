@@ -1,5 +1,11 @@
 # Pixvideo
 
+## AI Editing Workbench
+
+Quick Create can save 1-100 scenes as a project and open a three-column editing workbench. Each scene supports narration and prompt edits, image or TTS regeneration, project-local image uploads, explicit candidate selection, and an audio-driven single-track timeline where visuals may be held longer but never shortened below their audio.
+
+Export preflight freezes an immutable revision and reuses the existing subtitle, BGM, template, and FFmpeg pipeline. Historical tasks can be opened without deleting the original history, while direct video generation remains available as a fast bypass. This release does not include a cross-project asset library, collaboration, or a full multi-track editor.
+
 Pixvideo is an AI short-video generation tool. It can connect script generation, voice synthesis, image/video generation, template rendering, and final video composition from a topic, script, or uploaded media.
 
 ## Features

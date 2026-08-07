@@ -33,6 +33,10 @@ class TaskStatus(str, Enum):
 class TaskType(str, Enum):
     """Task type"""
     VIDEO_GENERATION = "video_generation"
+    WORKBENCH_SCENE = "workbench_scene"
+    WORKBENCH_IMAGE = "workbench_image"
+    WORKBENCH_TTS = "workbench_tts"
+    WORKBENCH_EXPORT = "workbench_export"
 
 
 class TaskProgress(BaseModel):

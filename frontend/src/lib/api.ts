@@ -23,6 +23,8 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+export const requestJson = fetchJson;
+
 export function formatApiErrorValue(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim()) return value;
 

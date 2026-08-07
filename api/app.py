@@ -53,6 +53,7 @@ from api.routers import (
     history_router,
     image_router,
     llm_router,
+    projects_router,
     resources_router,
     specialist_router,
     tasks_router,
@@ -143,6 +144,7 @@ app.include_router(frame_router, prefix=api_config.api_prefix)
 app.include_router(configuration_router, prefix=api_config.api_prefix)
 app.include_router(history_router, prefix=api_config.api_prefix)
 app.include_router(workbench_router, prefix=api_config.api_prefix)
+app.include_router(projects_router, prefix=api_config.api_prefix)
 app.include_router(uploads_router, prefix=api_config.api_prefix)
 app.include_router(specialist_router, prefix=api_config.api_prefix)
 

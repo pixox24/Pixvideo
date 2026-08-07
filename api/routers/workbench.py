@@ -44,7 +44,7 @@ class GenerateScriptRequest(BaseModel):
     """Current React workbench script-generation request."""
 
     topic: str = Field(..., min_length=1)
-    sceneCount: int = Field(5, ge=1, le=20)
+    sceneCount: int = Field(5, ge=1, le=100)
     splitType: str = "line"
     draftMode: str = "full"
     confirmedText: str | None = None
@@ -54,7 +54,7 @@ class GenerateCopyDraftRequest(BaseModel):
     """Create editable copy before generating storyboard prompts."""
 
     topic: str = Field(..., min_length=1)
-    sceneCount: int = Field(5, ge=1, le=20)
+    sceneCount: int = Field(5, ge=1, le=100)
     draftMode: str = "full"
     splitType: str = "line"
     targetCharCount: int = Field(175, ge=50, le=3000)
@@ -278,7 +278,7 @@ def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = 
     normalized["copyDraftMode"] = _normalize_draft_mode(str(normalized.get("copyDraftMode") or "full"))
     normalized["speed"] = _coerce_float(normalized.get("speed"), 1.0, 0.5, 2.0)
     normalized["bgmVolume"] = _coerce_int(normalized.get("bgmVolume"), 30, 0, 100)
-    normalized["sceneCount"] = _coerce_int(normalized.get("sceneCount"), 5, 1, 30)
+    normalized["sceneCount"] = _coerce_int(normalized.get("sceneCount"), 5, 1, 100)
     normalized["copyCharCount"] = _coerce_int(normalized.get("copyCharCount"), 175, 50, 3000)
     normalized["mediaWidth"] = _coerce_int(normalized.get("mediaWidth"), 1024, 512, 3840)
     normalized["mediaHeight"] = _coerce_int(normalized.get("mediaHeight"), 1536, 512, 3840)

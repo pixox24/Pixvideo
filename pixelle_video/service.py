@@ -18,6 +18,7 @@ Provides unified access to all capabilities (LLM, TTS, Image, etc.)
 
 import hashlib
 import json
+import os
 from typing import Optional
 
 from comfykit import ComfyKit
@@ -36,6 +37,10 @@ from pixelle_video.services.persistence import PersistenceService
 from pixelle_video.services.tts_service import TTSService
 from pixelle_video.services.video import VideoService
 from pixelle_video.services.video_analysis import VideoAnalysisService
+from pixelle_video.services.workbench_jobs import WorkbenchJobService
+from pixelle_video.services.workbench_media import WorkbenchMediaStore
+from pixelle_video.services.workbench_repository import WorkbenchRepository
+from pixelle_video.utils.os_util import get_data_path
 
 
 class PixelleVideoCore:
@@ -94,6 +99,9 @@ class PixelleVideoCore:
         self.frame_processor: Optional[FrameProcessor] = None
         self.persistence: Optional[PersistenceService] = None
         self.history: Optional[HistoryManager] = None
+        self.workbench_repository: Optional[WorkbenchRepository] = None
+        self.workbench_media: Optional[WorkbenchMediaStore] = None
+        self.workbench_jobs: Optional[WorkbenchJobService] = None
         
         # Video generation pipelines (dictionary of pipeline_name -> pipeline_instance)
         self.pipelines = {}
@@ -204,6 +212,14 @@ class PixelleVideoCore:
         self.frame_processor = FrameProcessor(self)
         self.persistence = PersistenceService(output_dir="output")
         self.history = HistoryManager(self.persistence)
+        configured_workbench_dir = self.config.get("workbench_dir")
+        workbench_dir = os.environ.get("PIXVIDEO_WORKBENCH_DIR") or configured_workbench_dir
+        if not workbench_dir:
+            workbench_dir = get_data_path("workbench")
+        workbench_dir = os.path.abspath(workbench_dir)
+        self.workbench_media = WorkbenchMediaStore(os.path.join(workbench_dir, "projects"))
+        self.workbench_repository = WorkbenchRepository(os.path.join(workbench_dir, "workbench.sqlite3"))
+        self.workbench_jobs = WorkbenchJobService(self, self.workbench_repository, self.workbench_media)
         
         # 2. Register video generation pipelines
         self.pipelines = {
@@ -236,6 +252,10 @@ class PixelleVideoCore:
             finally:
                 self._comfykit = None
                 self._comfykit_config_hash = None
+        if self.workbench_repository:
+            self.workbench_repository.close()
+            self.workbench_repository = None
+            self.workbench_jobs = None
     
     async def __aenter__(self):
         """Async context manager entry"""

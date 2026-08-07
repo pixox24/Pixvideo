@@ -1,5 +1,6 @@
 export type ActiveTab =
   | "quick-create"
+  | "project-workbench"
   | "history"
   | "settings";
 
@@ -158,3 +159,10 @@ export interface WorkbenchResources {
   bgm: BgmOption[];
   fonts: FontOption[];
 }
+
+export type WorkbenchJobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+export interface AssetVersion { versionId: string; source: "ai" | "upload"; imageUrl: string; thumbnailUrl?: string; promptSnapshot?: string; createdAt: string; }
+export interface WorkbenchScene { sceneId: string; position: number; narration: string; visualPrompt: string; currentVersionId: string | null; audioUrl?: string; durationSeconds: number; manualHoldSeconds: number; status: string; versions: AssetVersion[]; }
+export interface GenerationJob { jobId: string; taskId: string; sceneId?: string; kind: "scene" | "image" | "tts" | "export"; status: WorkbenchJobStatus; progress: number; error?: string; }
+export interface Project { projectId: string; title: string; source?: string; config: Record<string, unknown>; scenes: WorkbenchScene[]; jobs: GenerationJob[]; updatedAt: string; }
+export interface QuickCreateInput { title: string; scenes: Array<{ id?: number; ttsText: string; visualPrompt: string }>; [key: string]: unknown; }

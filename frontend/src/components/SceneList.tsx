@@ -2,15 +2,15 @@ import React, { useMemo, useState } from "react";
 import { Check, Image as ImageIcon } from "lucide-react";
 import { WorkbenchScene } from "../types";
 
-interface Props { scenes: WorkbenchScene[]; selectedSceneId: string | null; selectedSceneIds: Set<string>; onSelect: (id: string) => void; onToggle: (id: string) => void; }
+interface Props { scenes: WorkbenchScene[]; selectedSceneId: string | null; selectedSceneIds: Set<string>; onSelect: (id: string) => void; onToggle: (id: string) => void; className?: string; }
 
-export const SceneList: React.FC<Props> = ({ scenes, selectedSceneId, selectedSceneIds, onSelect, onToggle }) => {
+export const SceneList: React.FC<Props> = ({ scenes, selectedSceneId, selectedSceneIds, onSelect, onToggle, className = "" }) => {
   const [scrollTop, setScrollTop] = useState(0);
   const rowHeight = 72;
   const start = Math.max(0, Math.floor(scrollTop / rowHeight) - 3);
   const visibleScenes = useMemo(() => scenes.slice(start, start + 18), [scenes, start]);
   return (
-    <section className="min-h-0 flex flex-col border-r border-zinc-800 bg-[#0d0e11]">
+    <section className={`min-h-0 flex flex-col border-r border-zinc-800 bg-[#0d0e11] ${className}`}>
       <div className="border-b border-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-200">分镜 / 素材</div>
       <div className="min-h-0 flex-1 overflow-y-auto" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
         <div style={{ height: scenes.length * rowHeight, position: "relative" }}>

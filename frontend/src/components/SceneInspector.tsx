@@ -9,9 +9,10 @@ interface Props {
   onRegenerateTts: (narration: string) => Promise<void>;
   onUpload: (file: File) => Promise<void>;
   onSelectVersion: (versionId: string) => Promise<void>;
+  className?: string;
 }
 
-export const SceneInspector: React.FC<Props> = ({ scene, onSave, onRegenerateImage, onRegenerateTts, onUpload, onSelectVersion }) => {
+export const SceneInspector: React.FC<Props> = ({ scene, onSave, onRegenerateImage, onRegenerateTts, onUpload, onSelectVersion, className = "" }) => {
   const [narration, setNarration] = useState("");
   const [prompt, setPrompt] = useState("");
   const [saveState, setSaveState] = useState("idle");
@@ -23,8 +24,8 @@ export const SceneInspector: React.FC<Props> = ({ scene, onSave, onRegenerateIma
     return () => window.clearTimeout(timer);
   }, [scene, narration, prompt, onSave]);
   const run = async (key: string, action: () => Promise<void>) => { setBusy(key); try { await action(); } finally { setBusy(null); } };
-  if (!scene) return <aside className="border-l border-zinc-800 bg-[#0d0e11] p-4 text-xs text-zinc-500">选择一个分镜查看提示词与候选版本</aside>;
-  return <aside className="min-h-0 overflow-y-auto border-l border-zinc-800 bg-[#0d0e11] p-4">
+  if (!scene) return <aside className={`border-l border-zinc-800 bg-[#0d0e11] p-4 text-xs text-zinc-500 ${className}`}>选择一个分镜查看提示词与候选版本</aside>;
+  return <aside className={`min-h-0 overflow-y-auto border-l border-zinc-800 bg-[#0d0e11] p-4 ${className}`}>
     <div className="mb-3 flex items-center justify-between text-xs font-semibold text-zinc-200"><span>提示词 / 版本</span><span className="text-[10px] text-zinc-500">{saveState === "saving" ? "保存中" : saveState === "saved" ? "已保存" : saveState === "failed" ? "保存失败" : ""}</span></div>
     <label className="mb-2 block text-[10px] text-zinc-500">旁白<textarea value={narration} onChange={(event) => setNarration(event.target.value)} className="mt-1 min-h-20 w-full resize-y border border-zinc-800 bg-zinc-950 p-2 text-xs text-zinc-200" /></label>
     <button type="button" disabled={Boolean(busy) || !narration.trim()} onClick={() => run("tts", () => onRegenerateTts(narration))} className="mb-3 flex w-full items-center justify-center gap-1 border border-zinc-700 px-2 py-2 text-xs text-zinc-300 disabled:opacity-40">{busy === "tts" ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Volume2 className="h-3.5 w-3.5" />}重新生成配音</button>

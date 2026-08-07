@@ -3,6 +3,24 @@ from pydantic import ValidationError
 
 from api.routers.video import _build_video_params
 from api.schemas.video import VideoGenerateRequest
+
+
+def test_video_request_accepts_100_explicit_scenes():
+    request = VideoGenerateRequest(
+        text="long project",
+        mode="fixed",
+        scenes=[{"narration": f"scene {index}"} for index in range(100)],
+    )
+    assert len(request.scenes) == 100
+
+
+def test_video_request_rejects_101_explicit_scenes():
+    with pytest.raises(ValidationError):
+        VideoGenerateRequest(
+            text="long project",
+            mode="fixed",
+            scenes=[{"narration": str(index)} for index in range(101)],
+        )
 from pixelle_video.pipelines.linear import PipelineContext
 from pixelle_video.pipelines.standard import StandardPipeline
 

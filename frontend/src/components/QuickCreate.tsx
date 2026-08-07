@@ -1441,7 +1441,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <input
                   type="range"
                   min="3"
-                  max="30"
+                  max="100"
                   step="1"
                   value={aiSceneCount}
                   onChange={(e) => setAiSceneCount(parseInt(e.target.value))}

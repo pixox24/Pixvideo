@@ -86,7 +86,7 @@ class VideoGenerateRequest(BaseModel):
     scenes: Optional[list[VideoSceneInput]] = Field(
         None,
         min_length=1,
-        max_length=30,
+        max_length=100,
         description="Explicit storyboard scenes. When present, narration splitting is skipped.",
     )
     client_request_key: Optional[str] = Field(
@@ -119,7 +119,7 @@ class VideoGenerateRequest(BaseModel):
     title: Optional[str] = Field(None, description="Video title (auto-generated if not provided)")
     
     # === Basic Config ===
-    n_scenes: Optional[int] = Field(5, ge=1, le=30, description="Number of scenes (only used in 'generate' mode, ignored in 'fixed' mode)")
+    n_scenes: Optional[int] = Field(5, ge=1, le=100, description="Number of scenes (only used in 'generate' mode, ignored in 'fixed' mode)")
     
     # === TTS Parameters ===
     tts_inference_mode: Literal["local", "comfyui", "minimax"] = Field(

@@ -110,8 +110,10 @@ class ProjectGenerationService:
         run = self._require_run(run_id)
         if run.is_terminal:
             raise ValueError("generation run is already terminal")
-        if run.pause_requested or run.status == GenerationRunStatus.PAUSED:
-            return run
+        if run.status not in {GenerationRunStatus.QUEUED, GenerationRunStatus.RUNNING}:
+            raise ValueError(f"generation run cannot be paused from {run.status.value} state")
+        if run.pause_requested:
+            raise ValueError("generation run pause has already been requested")
         changes: dict[str, Any] = {"pause_requested": True}
         if run.status == GenerationRunStatus.QUEUED:
             changes["status"] = GenerationRunStatus.PAUSED
@@ -122,6 +124,8 @@ class ProjectGenerationService:
         run = self._require_run(run_id)
         if run.is_terminal:
             raise ValueError("generation run is already terminal")
+        if run.status != GenerationRunStatus.PAUSED:
+            raise ValueError(f"generation run cannot be resumed from {run.status.value} state")
         self.repository.update_generation_run(
             run_id,
             pause_requested=False,

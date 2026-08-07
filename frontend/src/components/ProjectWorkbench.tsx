@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Download, List, PanelRight, RefreshCw } from "lucide-react";
 import { GenerationRun, Project } from "../types";
 import { cancelGenerationRun, createExport, fetchActiveGenerationRun, fetchGenerationRun, fetchProject, pauseGenerationRun, patchScene, regenerateImage, regenerateTts, retryFailedGeneration, resumeGenerationRun, selectAssetVersion, startGenerationRun, submitBatchImageGeneration, updateTimeline, uploadSceneAsset } from "../lib/workbenchApi";
-import { initialGenerationState, reduceRunActionFailed, reduceRunActionFinished, reduceRunFetched, reduceRunStarted, ProjectGenerationState } from "../lib/projectGenerationState";
+import { initialGenerationState, reduceRunActionFailed, reduceRunActionFinished, reduceRunFetched, reduceRunStarted, ProjectGenerationState, shouldRefreshProject } from "../lib/projectGenerationState";
 import { SceneList } from "./SceneList";
 import { SceneInspector } from "./SceneInspector";
 import { GenerationQueue } from "./GenerationQueue";
@@ -19,15 +19,20 @@ export const ProjectWorkbench: React.FC<{ projectId: string; addToast: (text: un
   const [exportOpen, setExportOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"scenes" | "inspector" | null>(null);
   const [generation, setGeneration] = useState<ProjectGenerationState>(initialGenerationState);
+  const latestRunRef = useRef<GenerationRun | null>(null);
 
   const load = async () => { try { const next = await fetchProject(projectId); setProject(next); setSelectedSceneId((current) => current || next.scenes[0]?.sceneId || null); } catch (error) { addToast(error, "error"); } };
   useEffect(() => {
+    latestRunRef.current = null;
     setGeneration(initialGenerationState);
     void (async () => {
       await load();
       try {
         const activeRun = await fetchActiveGenerationRun(projectId);
-        if (activeRun) setGeneration((current) => reduceRunStarted(current, activeRun));
+        if (activeRun) {
+          latestRunRef.current = activeRun;
+          setGeneration((current) => reduceRunStarted(current, activeRun));
+        }
       } catch (error) { addToast(error, "error"); }
     })();
   }, [projectId]);
@@ -37,7 +42,13 @@ export const ProjectWorkbench: React.FC<{ projectId: string; addToast: (text: un
     let busy = false;
     const timer = window.setInterval(async () => {
       if (busy) return; busy = true;
-      try { const next = await fetchGenerationRun(projectId, runId); setGeneration((current) => reduceRunFetched(current, next)); await load(); }
+      try {
+        const next = await fetchGenerationRun(projectId, runId);
+        const previous = latestRunRef.current;
+        latestRunRef.current = next;
+        setGeneration((current) => reduceRunFetched(current, next));
+        if (shouldRefreshProject(previous, next)) await load();
+      }
       catch (error) { setGeneration((current) => ({ ...current, error, polling: false })); }
       finally { busy = false; }
     }, 1000);
@@ -52,7 +63,13 @@ export const ProjectWorkbench: React.FC<{ projectId: string; addToast: (text: un
   const runAction = async (action: string, request: () => Promise<GenerationRun>) => { setGeneration((current) => ({ ...current, actionBusy: action, error: null })); try { const next = await request(); setGeneration((current) => reduceRunActionFinished(current, next)); await load(); } catch (error) { setGeneration((current) => reduceRunActionFailed(current, error)); addToast(error, "error"); } };
   const startRun = () => runAction("start", async () => { const next = await startGenerationRun(projectId); setGeneration((current) => reduceRunStarted(current, next)); return next; });
   const submitBatch = async () => { setBatchBusy(true); try { await act(() => submitBatchImageGeneration(projectId, [...selectedSceneIds], batchPrefix), "批量图片任务已提交"); } finally { setBatchBusy(false); } };
-  const submitExport = async (allowIncomplete: boolean) => { const result = await createExport(projectId, allowIncomplete); setProject((current) => current ? { ...current, jobs: [...current.jobs, { jobId: result.jobId, taskId: result.taskId, kind: "export", status: result.status, progress: 0 }] } : current); addToast("导出任务已提交", "success"); };
+  const submitExport = async (allowIncomplete: boolean) => {
+    const result = await createExport(projectId, allowIncomplete);
+    setProject((current) => current ? { ...current, jobs: [...current.jobs, { jobId: result.jobId, taskId: result.taskId, kind: "export", status: result.status, progress: 0 }] } : current);
+    if (result.candidateWarnings?.length) addToast(`已提交导出，${result.candidateWarnings.length} 个场景仍使用当前版本`, "info");
+    else addToast("导出任务已提交", "success");
+    return result;
+  };
   const pendingCount = project.scenes.filter((scene) => scene.generationState?.image !== "ready" || scene.generationState?.audio !== "ready").length;
   return <div className="flex min-h-[640px] flex-col overflow-hidden border border-zinc-800 bg-[#101114]"><GenerationRunPanel run={generation.run} busy={generation.actionBusy} pendingCount={pendingCount} onStart={startRun} onPause={() => generation.run && void runAction("pause", () => pauseGenerationRun(projectId, generation.run!.runId))} onResume={() => generation.run && void runAction("resume", () => resumeGenerationRun(projectId, generation.run!.runId))} onCancel={() => generation.run && void runAction("cancel", () => cancelGenerationRun(projectId, generation.run!.runId))} onRetry={() => generation.run && void runAction("retry", () => retryFailedGeneration(projectId, generation.run!.runId))} />
     <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-3"><div className="min-w-0"><div className="truncate text-sm font-semibold text-zinc-100">{project.title}</div><div className="text-[10px] text-zinc-500">AI 剪辑工作台 · {project.scenes.length} 个分镜</div></div><div className="flex items-center gap-1"><button type="button" aria-label="打开分镜面板" onClick={() => setMobilePanel(mobilePanel === "scenes" ? null : "scenes")} className="p-2 text-zinc-400 lg:hidden"><List className="h-4 w-4" /></button><button type="button" aria-label="打开检查器" onClick={() => setMobilePanel(mobilePanel === "inspector" ? null : "inspector")} className="p-2 text-zinc-400 lg:hidden"><PanelRight className="h-4 w-4" /></button><button type="button" onClick={() => setExportOpen(true)} className="flex items-center gap-1 bg-amber-500 px-3 py-2 text-xs font-semibold text-black"><Download className="h-3.5 w-3.5" />导出</button><button type="button" title="刷新项目" aria-label="刷新项目" onClick={() => void load()} className="p-2 text-zinc-400 hover:text-zinc-100"><RefreshCw className="h-4 w-4" /></button></div></div>

@@ -32,6 +32,26 @@ async def test_export_snapshot_freezes_selected_version(tmp_path, monkeypatch):
     core.workbench_repository.select_asset_version(project.project_id, scene.scene_id, new.version_id)
 
     assert snapshot.snapshot["scenes"][0]["versionId"] == old.version_id
+    assert response["candidateWarnings"] == []
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_export_warns_about_unconfirmed_ai_candidate_without_replacing_current(tmp_path):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scene = Scene(project.project_id, 0, "n", "p", audio_relative_path="audio/a.mp3")
+    core.workbench_repository.create_project(project, [scene])
+    current = AssetVersion(project.project_id, scene.scene_id, AssetSource.AI, "assets/current.png")
+    candidate = AssetVersion(project.project_id, scene.scene_id, AssetSource.AI, "assets/candidate.png")
+    core.workbench_repository.create_asset_version(current)
+    core.workbench_repository.create_asset_version(candidate)
+    core.workbench_repository.select_asset_version(project.project_id, scene.scene_id, current.version_id)
+
+    response = await create_export(project.project_id, core, ExportRequest())
+    snapshot = core.workbench_repository.get_export_revision(response["exportId"])
+    assert response["candidateWarnings"] == [scene.scene_id]
+    assert snapshot.snapshot["scenes"][0]["versionId"] == current.version_id
     core.workbench_repository.close()
 
 

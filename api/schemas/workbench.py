@@ -178,6 +178,7 @@ class GenerationRunResponse(BaseModel):
     error: str | None = None
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
+    allowed_actions: list[str] = Field(default_factory=list, alias="allowedActions")
     items: list[GenerationRunItemResponse]
 
 

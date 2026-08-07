@@ -155,6 +155,19 @@ async def test_pause_resume_and_cooperative_cancel(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_pause_and_resume_reject_invalid_states(tmp_path):
+    _, _, repository, _, service, _ = _setup(tmp_path, scene_count=1)
+    run = await service.start("project-1")
+    repository.update_generation_run(run.run_id, status=GenerationRunStatus.PAUSED, pause_requested=True)
+    with pytest.raises(ValueError, match="cannot be paused"):
+        await service.request_pause(run.run_id)
+
+    repository.update_generation_run(run.run_id, status=GenerationRunStatus.RUNNING, pause_requested=False)
+    with pytest.raises(ValueError, match="cannot be resumed"):
+        await service.request_resume(run.run_id)
+
+
+@pytest.mark.asyncio
 async def test_cancel_after_tts_does_not_start_image_phase(tmp_path):
     provider, _, repository, _, service, _ = _setup(
         tmp_path,

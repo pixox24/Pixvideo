@@ -41,5 +41,10 @@ export function reduceRunActionFinished(state: ProjectGenerationState, run: Gene
 }
 
 export function shouldRefreshProject(previous: GenerationRun | null, next: GenerationRun): boolean {
-  return !previous || previous.updatedAt !== next.updatedAt || previous.items.some((item, index) => item.updatedAt !== next.items[index]?.updatedAt);
+  if (!previous || previous.runId !== next.runId) return true;
+  if (previous.status !== next.status || previous.items.length !== next.items.length) return true;
+  return next.items.some((item, index) => {
+    const previousItem = previous.items[index];
+    return previousItem?.itemId !== item.itemId || previousItem?.updatedAt !== item.updatedAt;
+  });
 }

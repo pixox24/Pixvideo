@@ -27,8 +27,10 @@ from api.schemas.workbench import (
 from api.tasks import task_manager
 from api.tasks.models import TaskType
 from pixelle_video.models.workbench import (
+    AssetSource,
     GenerationJob,
     GenerationKind,
+    GenerationRunStatus,
     Project,
     Scene,
     effective_scene_duration,
@@ -166,6 +168,7 @@ def _run_response(core, run_id: str) -> GenerationRunResponse:
         failedCount=run.failed_count, candidateReviewCount=run.candidate_review_count,
         pauseRequested=run.pause_requested, cancelRequested=run.cancel_requested,
         error=run.error, createdAt=run.created_at.isoformat(), updatedAt=run.updated_at.isoformat(),
+        allowedActions=_allowed_generation_actions(run),
         items=[GenerationRunItemResponse(
             itemId=item.item_id, sceneId=item.scene_id, position=item.position,
             status=item.status.value,
@@ -175,6 +178,18 @@ def _run_response(core, run_id: str) -> GenerationRunResponse:
             error=item.error, updatedAt=item.updated_at.isoformat(),
         ) for item in items],
     )
+
+
+def _allowed_generation_actions(run) -> list[str]:
+    if run.cancel_requested or run.is_terminal:
+        return []
+    if run.status in {GenerationRunStatus.QUEUED, GenerationRunStatus.RUNNING}:
+        return ["cancel"] if run.pause_requested else ["pause", "cancel"]
+    if run.status == GenerationRunStatus.PAUSED:
+        return ["resume", "cancel"]
+    if run.status == GenerationRunStatus.COMPLETED_WITH_FAILURES:
+        return ["retry-failed"]
+    return []
 
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
@@ -229,7 +244,14 @@ async def _generation_action(project_id: str, run_id: str, core, action: str):
     try:
         result = await getattr(core.project_generation, f"request_{action}")(run_id)
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail={"message": str(exc), "allowedActions": []}) from exc
+        current = core.workbench_repository.get_generation_run(run_id)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(exc),
+                "allowedActions": _allowed_generation_actions(current) if current else [],
+            },
+        ) from exc
     return _run_response(core, result.run_id)
 
 
@@ -256,7 +278,7 @@ async def retry_failed_generation(project_id: str, run_id: str, core: PixelleVid
     try:
         retry = await core.project_generation.retry_failed(run_id)
     except (ValueError, ActiveGenerationRunError) as exc:
-        detail = {"message": str(exc)}
+        detail = {"message": str(exc), "allowedActions": _allowed_generation_actions(run)}
         if isinstance(exc, ActiveGenerationRunError):
             detail["currentRunId"] = exc.run.run_id
         raise HTTPException(status_code=409, detail=detail) from exc
@@ -420,9 +442,13 @@ async def create_export(project_id: str, core: PixelleVideoDep, body: ExportRequ
     scenes = core.workbench_repository.list_project_scenes(project_id)
     snapshot_scenes = []
     blocking = []
+    candidate_warnings = []
     for scene in scenes:
+        versions = core.workbench_repository.list_asset_versions(project_id, scene.scene_id)
         version = (core.workbench_repository.get_asset_version(scene.current_version_id)
                    if scene.current_version_id else None)
+        if any(item.source == AssetSource.AI and item.version_id != scene.current_version_id for item in versions):
+            candidate_warnings.append(scene.scene_id)
         audio_path = scene.audio_relative_path
         if version is None or not audio_path:
             blocking.append(scene.scene_id)
@@ -443,7 +469,14 @@ async def create_export(project_id: str, core: PixelleVideoDep, body: ExportRequ
     core.workbench_repository.create_export_revision(revision)
     if core.workbench_jobs and hasattr(core.workbench_jobs, "run_export_job"):
         await task_manager.execute_task(task.task_id, core.workbench_jobs.run_export_job, project_id, revision.export_id, task.task_id)
-    return {"exportId": revision.export_id, "jobId": task.task_id, "taskId": task.task_id, "status": revision.status.value, "blockingScenes": blocking}
+    return {
+        "exportId": revision.export_id,
+        "jobId": task.task_id,
+        "taskId": task.task_id,
+        "status": revision.status.value,
+        "blockingScenes": blocking,
+        "candidateWarnings": candidate_warnings,
+    }
 
 
 @router.post("/{project_id}/scenes/{scene_id}/uploads", status_code=201)

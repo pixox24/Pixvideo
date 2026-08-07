@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from PIL import Image
 
 from api.routers.projects import (
@@ -8,6 +9,7 @@ from api.routers.projects import (
     get_generation_run,
     get_project,
     pause_generation_run,
+    resume_generation_run,
     start_generation_run,
 )
 from api.schemas.workbench import GenerationRunCreateRequest
@@ -17,6 +19,7 @@ from pixelle_video.models.workbench import (
     AssetVersion,
     GenerationRun,
     GenerationRunItem,
+    GenerationRunStatus,
     Project,
     Scene,
 )
@@ -119,4 +122,37 @@ async def test_project_response_marks_fingerprint_mismatches_stale(tmp_path):
     response = await get_project(project.project_id, core, None)
     assert response.scenes[0].generation_state["image"] == "stale"
     assert response.scenes[0].generation_state["audio"] == "stale"
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_invalid_generation_action_returns_current_allowed_actions(tmp_path):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scene = Scene(project.project_id, 0, "narration", "prompt")
+    core.workbench_repository.create_project(project, [scene])
+    run = GenerationRun(project.project_id, "task-1", {}, status=GenerationRunStatus.PAUSED)
+    core.workbench_repository.create_generation_run(
+        run,
+        [GenerationRunItem(run.run_id, scene.scene_id, 0, "narration", "prompt", "tts", "image")],
+    )
+
+    async def invalid_pause(run_id):
+        raise ValueError("generation run cannot be paused from paused state")
+
+    core.project_generation.request_pause = invalid_pause
+    with pytest.raises(HTTPException) as error:
+        await pause_generation_run(project.project_id, run.run_id, core)
+    assert error.value.status_code == 409
+    assert error.value.detail["allowedActions"] == ["resume", "cancel"]
+
+    async def invalid_resume(run_id):
+        raise ValueError("generation run cannot be resumed from paused state")
+
+    core.project_generation.request_resume = invalid_resume
+    core.workbench_repository.update_generation_run(run.run_id, status=GenerationRunStatus.RUNNING, pause_requested=False)
+    with pytest.raises(HTTPException) as error:
+        await resume_generation_run(project.project_id, run.run_id, core)
+    assert error.value.status_code == 409
+    assert error.value.detail["allowedActions"] == ["pause", "cancel"]
     core.workbench_repository.close()

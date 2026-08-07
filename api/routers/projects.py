@@ -17,6 +17,7 @@ from api.schemas.workbench import (
     UpdateSceneRequest,
     ReorderScenesRequest,
     TimelineUpdateRequest,
+    BatchImageRequest,
 )
 from api.tasks import task_manager
 from api.tasks.models import TaskType
@@ -177,6 +178,25 @@ async def update_timeline(project_id: str, body: TimelineUpdateRequest, core: Pi
     for scene_id, hold in body.holds.items():
         core.workbench_repository.update_scene(scene_id, manual_hold_seconds=hold)
     return {"sceneIds": body.scene_ids, "scenes": [scene.__dict__ for scene in core.workbench_repository.list_project_scenes(project_id)]}
+
+
+@router.post("/{project_id}/batch/image-generations", status_code=202)
+async def batch_image_generations(project_id: str, body: BatchImageRequest, core: PixelleVideoDep):
+    if core.workbench_repository.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    scenes = {scene.scene_id: scene for scene in core.workbench_repository.list_project_scenes(project_id)}
+    if any(scene_id not in scenes for scene_id in body.scene_ids):
+        raise HTTPException(status_code=404, detail="scene not found")
+    jobs = []
+    for scene_id in body.scene_ids:
+        scene = scenes[scene_id]
+        prompt = " ".join(part for part in (body.prompt_prefix.strip(), scene.visual_prompt.strip()) if part)
+        job = await _enqueue(core, project_id, scene_id, GenerationKind.IMAGE, TaskType.WORKBENCH_IMAGE,
+                             {"prompt": prompt, "promptPrefix": body.prompt_prefix},
+                             core.workbench_jobs.run_image_job_limited, prompt)
+        jobs.append({"jobId": job.job_id, "taskId": job.task_id, "sceneId": scene_id,
+                     "kind": job.kind.value, "status": job.status.value, "progress": job.progress})
+    return {"jobs": jobs}
 
 
 @router.post("/{project_id}/scenes/{scene_id}/uploads", status_code=201)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 from pathlib import Path
 
@@ -13,6 +14,12 @@ class WorkbenchJobService:
         self.core = core
         self.repository = repository
         self.media_store = media_store
+        concurrency = int(core.config.get("workbench", {}).get("scene_concurrency", 3))
+        self._image_semaphore = asyncio.Semaphore(max(1, concurrency))
+
+    async def run_image_job_limited(self, project_id: str, scene_id: str, task_id: str, prompt_snapshot: str) -> None:
+        async with self._image_semaphore:
+            await self.run_image_job(project_id, scene_id, task_id, prompt_snapshot)
 
     async def run_scene_job(self, project_id: str, scene_id: str, task_id: str) -> None:
         scene = self._require_scene(scene_id, project_id)
@@ -114,4 +121,3 @@ class WorkbenchJobService:
     def _new_version_id():
         from uuid import uuid4
         return uuid4().hex
-

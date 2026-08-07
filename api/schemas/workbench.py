@@ -97,6 +97,19 @@ class TimelineUpdateRequest(BaseModel):
         return value
 
 
+class BatchImageRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    scene_ids: list[str] = Field(..., min_length=1, max_length=100, alias="sceneIds")
+    prompt_prefix: str = Field(default="", max_length=1000, alias="promptPrefix")
+
+    @field_validator("scene_ids")
+    @classmethod
+    def scene_ids_are_unique(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("sceneIds must be unique")
+        return value
+
+
 class AssetVersionResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     version_id: str = Field(alias="versionId")

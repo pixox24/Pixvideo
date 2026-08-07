@@ -34,6 +34,7 @@ from pixelle_video.services.image_analysis import ImageAnalysisService
 from pixelle_video.services.llm_service import LLMService
 from pixelle_video.services.media import MediaService
 from pixelle_video.services.persistence import PersistenceService
+from pixelle_video.services.project_generation_service import ProjectGenerationService
 from pixelle_video.services.tts_service import TTSService
 from pixelle_video.services.video import VideoService
 from pixelle_video.services.video_analysis import VideoAnalysisService
@@ -102,6 +103,7 @@ class PixelleVideoCore:
         self.workbench_repository: Optional[WorkbenchRepository] = None
         self.workbench_media: Optional[WorkbenchMediaStore] = None
         self.workbench_jobs: Optional[WorkbenchJobService] = None
+        self.project_generation: Optional[ProjectGenerationService] = None
         
         # Video generation pipelines (dictionary of pipeline_name -> pipeline_instance)
         self.pipelines = {}
@@ -220,6 +222,11 @@ class PixelleVideoCore:
         self.workbench_media = WorkbenchMediaStore(os.path.join(workbench_dir, "projects"))
         self.workbench_repository = WorkbenchRepository(os.path.join(workbench_dir, "workbench.sqlite3"))
         self.workbench_jobs = WorkbenchJobService(self, self.workbench_repository, self.workbench_media)
+        self.project_generation = ProjectGenerationService(
+            self,
+            self.workbench_repository,
+            self.workbench_jobs,
+        )
         
         # 2. Register video generation pipelines
         self.pipelines = {
@@ -256,6 +263,7 @@ class PixelleVideoCore:
             self.workbench_repository.close()
             self.workbench_repository = None
             self.workbench_jobs = None
+            self.project_generation = None
     
     async def __aenter__(self):
         """Async context manager entry"""

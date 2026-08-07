@@ -41,7 +41,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from api.config import api_config
-from api.dependencies import shutdown_pixelle_video
+from api.dependencies import get_pixelle_video, shutdown_pixelle_video
 
 # Import routers
 from api.routers import (
@@ -75,6 +75,12 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting Pixelle-Video API...")
     await task_manager.start()
+    try:
+        core = await get_pixelle_video()
+        if core.project_generation:
+            await core.project_generation.resume_active_runs()
+    except Exception as exc:
+        logger.warning(f"Failed to resume project generation runs: {exc}")
     logger.info("✅ Pixelle-Video API started successfully\n")
     
     yield

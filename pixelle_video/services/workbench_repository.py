@@ -425,6 +425,23 @@ class WorkbenchRepository:
         ).fetchone()
         return self._generation_run_from_row(row) if row else None
 
+    def list_active_generation_runs(self) -> list[GenerationRun]:
+        terminal = (
+            GenerationRunStatus.COMPLETED.value,
+            GenerationRunStatus.COMPLETED_WITH_FAILURES.value,
+            GenerationRunStatus.CANCELLED.value,
+            GenerationRunStatus.FAILED.value,
+        )
+        rows = self._connection.execute(
+            """
+            SELECT * FROM generation_runs
+            WHERE status NOT IN (?, ?, ?, ?)
+            ORDER BY created_at
+            """,
+            terminal,
+        ).fetchall()
+        return [self._generation_run_from_row(row) for row in rows]
+
     def list_generation_runs(self, project_id: str, limit: int = 20) -> list[GenerationRun]:
         rows = self._connection.execute(
             """

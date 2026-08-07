@@ -14,7 +14,13 @@ def test_schema_creates_all_project_tables(tmp_path):
     repository = WorkbenchRepository(tmp_path / "workbench.sqlite3")
 
     assert repository.table_names() == {
-        "projects", "scenes", "asset_versions", "generation_jobs", "export_revisions"
+        "projects",
+        "scenes",
+        "asset_versions",
+        "generation_jobs",
+        "export_revisions",
+        "generation_runs",
+        "generation_run_items",
     }
 
 
@@ -88,3 +94,10 @@ def test_generation_job_round_trip_and_update(tmp_path):
     loaded = repository.get_generation_job(job.job_id)
     assert loaded.status == GenerationStatus.COMPLETED
     assert loaded.progress == 100
+    assert [item.job_id for item in repository.list_generation_jobs(project.project_id)] == [
+        job.job_id
+    ]
+    assert repository.list_generation_jobs(
+        project.project_id,
+        include_terminal=False,
+    ) == []

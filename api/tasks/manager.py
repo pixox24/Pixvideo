@@ -114,6 +114,26 @@ class TaskManager:
             self._request_keys[request_key] = task_id
         logger.info(f"Created task {task_id} ({task_type})")
         return task
+
+    def restore_task(
+        self,
+        task_id: str,
+        task_type: TaskType,
+        request_params: Optional[dict] = None,
+    ) -> Task:
+        """Restore a persisted task so its async work can be scheduled again."""
+        existing = self._tasks.get(task_id)
+        if existing is not None:
+            return existing
+        task = Task(
+            task_id=task_id,
+            task_type=task_type,
+            status=TaskStatus.PENDING,
+            request_params=request_params,
+        )
+        self._tasks[task_id] = task
+        logger.info(f"Restored task {task_id} ({task_type})")
+        return task
     
     async def execute_task(
         self,

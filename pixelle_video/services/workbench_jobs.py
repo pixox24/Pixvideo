@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import shutil
 from pathlib import Path
+from typing import Any
 
 from pixelle_video.models.workbench import AssetSource, AssetVersion, GenerationStatus
 
@@ -33,44 +34,125 @@ class WorkbenchJobService:
             self._fail(scene_id, task_id, exc)
             raise
 
-    async def run_image_job(self, project_id: str, scene_id: str, task_id: str, prompt_snapshot: str) -> None:
+    async def generate_image_asset(
+        self,
+        project_id: str,
+        scene_id: str,
+        task_id: str,
+        prompt_snapshot: str,
+        image_fingerprint: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate and persist one image without changing job status."""
         scene = self._require_scene(scene_id, project_id)
+        result = await self.core.media(
+            prompt=prompt_snapshot,
+            media_type="image",
+            workflow=self._workflow(),
+            width=self._width(),
+            height=self._height(),
+            scene_id=scene_id,
+        )
+        source_url = result.url if hasattr(result, "url") else result
+        version_id = self._new_version_id()
+        relative_path = await self.media_store.download_result(
+            project_id,
+            scene_id,
+            source_url,
+            version_id,
+        )
+        absolute_path = self.media_store.resolve(project_id, relative_path)
+        thumbnail = self.media_store.create_thumbnail(absolute_path, relative_path)
+        parameters = {}
+        if image_fingerprint:
+            parameters["imageFingerprint"] = image_fingerprint
+        version = AssetVersion(
+            project_id,
+            scene_id,
+            AssetSource.AI,
+            relative_path,
+            prompt_snapshot=prompt_snapshot,
+            version_id=version_id,
+            thumbnail_relative_path=thumbnail,
+            parameters=parameters,
+        )
+        self.repository.create_asset_version(version)
+        has_current_version = scene.current_version_id is not None
+        if not has_current_version:
+            self.repository.select_asset_version(project_id, scene_id, version_id)
+            if image_fingerprint:
+                self.repository.update_scene(
+                    scene_id,
+                    image_fingerprint=image_fingerprint,
+                )
+        return {
+            "version_id": version_id,
+            "relative_path": relative_path,
+            "thumbnail_relative_path": thumbnail,
+            "candidate": has_current_version,
+        }
+
+    async def run_image_job(self, project_id: str, scene_id: str, task_id: str, prompt_snapshot: str) -> None:
+        self._require_scene(scene_id, project_id)
         self._start(scene_id, task_id)
         try:
-            result = await self.core.media(
-                prompt=prompt_snapshot, media_type="image",
-                workflow=self._workflow(), width=self._width(), height=self._height(),
+            await self.generate_image_asset(
+                project_id,
+                scene_id,
+                task_id,
+                prompt_snapshot,
             )
-            source_url = result.url if hasattr(result, "url") else result
-            version_id = self._new_version_id()
-            relative_path = await self.media_store.download_result(project_id, scene_id, source_url, version_id)
-            absolute_path = self.media_store.resolve(project_id, relative_path)
-            thumbnail = self.media_store.create_thumbnail(absolute_path, relative_path)
-            version = AssetVersion(project_id, scene_id, AssetSource.AI, relative_path,
-                                   prompt_snapshot=prompt_snapshot, version_id=version_id,
-                                   thumbnail_relative_path=thumbnail)
-            self.repository.create_asset_version(version)
-            if scene.current_version_id is None:
-                self.repository.select_asset_version(project_id, scene_id, version_id)
             self._finish(scene_id, task_id)
         except Exception as exc:
             self._fail(scene_id, task_id, exc)
             raise
 
+    async def generate_tts_asset(
+        self,
+        project_id: str,
+        scene_id: str,
+        task_id: str,
+        narration_snapshot: str,
+        narration_fingerprint: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate and persist one audio asset without changing job status."""
+        self._require_scene(scene_id, project_id)
+        audio_relative = f"assets/scenes/{scene_id}/audio/{task_id}.mp3"
+        audio_path = self.media_store.resolve(project_id, audio_relative)
+        audio_path.parent.mkdir(parents=True, exist_ok=True)
+        result = await self.core.tts(
+            text=narration_snapshot,
+            output_path=str(audio_path),
+            scene_id=scene_id,
+        )
+        if result and Path(str(result)).resolve() != audio_path.resolve() and Path(str(result)).is_file():
+            shutil.copyfile(result, audio_path)
+        if not audio_path.is_file():
+            raise FileNotFoundError("TTS provider did not create an audio file")
+        duration = await self._audio_duration(audio_path)
+        changes = {
+            "narration": narration_snapshot,
+            "audio_relative_path": audio_relative,
+            "duration_seconds": duration,
+        }
+        if narration_fingerprint:
+            changes["audio_fingerprint"] = narration_fingerprint
+        self.repository.update_scene(scene_id, **changes)
+        return {
+            "audio_relative_path": audio_relative,
+            "duration_seconds": duration,
+        }
+
     async def run_tts_job(self, project_id: str, scene_id: str, task_id: str, narration_snapshot: str) -> None:
         self._require_scene(scene_id, project_id)
         self._start(scene_id, task_id)
         try:
-            audio_relative = f"assets/scenes/{scene_id}/audio/{task_id}.mp3"
-            audio_path = self.media_store.resolve(project_id, audio_relative)
-            audio_path.parent.mkdir(parents=True, exist_ok=True)
-            result = await self.core.tts(text=narration_snapshot, output_path=str(audio_path))
-            if result and Path(str(result)).resolve() != audio_path.resolve() and Path(str(result)).is_file():
-                shutil.copyfile(result, audio_path)
-            duration = await self._audio_duration(audio_path)
-            self.repository.update_scene(scene_id, narration=narration_snapshot,
-                                         audio_relative_path=audio_relative,
-                                         duration_seconds=duration, status="completed")
+            await self.generate_tts_asset(
+                project_id,
+                scene_id,
+                task_id,
+                narration_snapshot,
+            )
+            self.repository.update_scene(scene_id, status="completed")
             self._job_update(task_id, status=GenerationStatus.COMPLETED, progress=100)
         except Exception as exc:
             self._fail(scene_id, task_id, exc)
@@ -138,6 +220,15 @@ class WorkbenchJobService:
         if processor and hasattr(processor, "_get_audio_duration"):
             return float(await processor._get_audio_duration(str(path)))
         return 0.0
+
+    async def get_audio_duration(self, project_id: str, scene_id: str) -> float:
+        scene = self._require_scene(scene_id, project_id)
+        if not scene.audio_relative_path:
+            return 0.0
+        path = self.media_store.resolve(project_id, scene.audio_relative_path)
+        if not path.is_file():
+            return 0.0
+        return await self._audio_duration(path)
 
     def _workflow(self):
         return self.core.config.get("comfyui", {}).get("image", {}).get("default_workflow")

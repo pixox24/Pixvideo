@@ -168,8 +168,14 @@ export interface WorkbenchResources {
 
 export type WorkbenchJobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 export interface AssetVersion { versionId: string; source: "ai" | "upload"; imageUrl: string; thumbnailUrl?: string; promptSnapshot?: string; createdAt: string; }
-export interface WorkbenchScene { sceneId: string; position: number; narration: string; visualPrompt: string; currentVersionId: string | null; audioUrl?: string; durationSeconds: number; manualHoldSeconds: number; status: string; versions: AssetVersion[]; }
+export interface WorkbenchScene { sceneId: string; position: number; narration: string; visualPrompt: string; currentVersionId: string | null; audioUrl?: string; durationSeconds: number; manualHoldSeconds: number; status: string; versions: AssetVersion[]; generationState?: GenerationState; }
+export type GenerationRunStatus = "queued" | "running" | "paused" | "completed" | "completed_with_failures" | "cancelled" | "failed";
+export type GenerationRunItemStatus = "queued" | "running_tts" | "running_image" | "completed" | "skipped" | "failed" | "cancelled" | "candidate_review";
+export interface GenerationState { image: "ready" | "missing" | "stale"; audio: "ready" | "missing" | "stale"; candidateCount: number; }
+export interface GenerationRunItem { itemId: string; sceneId: string; position: number; status: GenerationRunItemStatus; phase: string; ttsStatus: string; imageStatus: string; skipReason?: string | null; candidateVersionId?: string | null; error?: string | null; updatedAt: string; }
+export interface GenerationRun { runId: string; projectId: string; taskId: string; status: GenerationRunStatus; currentSceneId?: string | null; totalCount: number; completedCount: number; skippedCount: number; failedCount: number; candidateReviewCount: number; pauseRequested: boolean; cancelRequested: boolean; error?: string | null; createdAt: string; updatedAt: string; items: GenerationRunItem[]; }
+export interface GenerationRunError { status?: number; detail?: unknown; currentRunId?: string; blockingScenes?: string[]; }
 export interface GenerationJob { jobId: string; taskId: string; sceneId?: string; kind: "scene" | "image" | "tts" | "export"; status: WorkbenchJobStatus; progress: number; error?: string; }
 export interface Project { projectId: string; title: string; source?: string; config: Record<string, unknown>; scenes: WorkbenchScene[]; jobs: GenerationJob[]; updatedAt: string; }
 export interface QuickCreateInput { title: string; scenes: Array<{ id?: number; ttsText: string; visualPrompt: string }>; [key: string]: unknown; }
-export interface ExportSubmission { exportId: string; jobId: string; taskId: string; status: WorkbenchJobStatus; blockingScenes: string[]; }
+export interface ExportSubmission { exportId: string; jobId: string; taskId: string; status: WorkbenchJobStatus; blockingScenes: string[]; candidateWarnings?: string[]; }

@@ -8,4 +8,6 @@ def test_export_dialog_mentions_blocking_and_incomplete_export():
     assert "二次确认" in source
     assert "blocking" in source
     assert "onLocateScene" in source
+    assert "未确认的 AI" in source
+    assert "当前版本" in source
 

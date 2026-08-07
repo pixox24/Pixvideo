@@ -37,6 +37,7 @@ class TaskType(str, Enum):
     WORKBENCH_IMAGE = "workbench_image"
     WORKBENCH_TTS = "workbench_tts"
     WORKBENCH_EXPORT = "workbench_export"
+    WORKBENCH_PROJECT_RUN = "workbench_project_run"
 
 
 class TaskProgress(BaseModel):

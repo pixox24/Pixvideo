@@ -1028,7 +1028,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     });
 
   // Trigger main generator callback
-  const handleTriggerRender = async () => {
+  const handleTriggerRender = async (directGenerate = false) => {
     if (submissionLockRef.current) return;
     submissionLockRef.current = true;
     try {
@@ -1081,7 +1081,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         scenes: renderScenes
       };
 
-      if (mode !== "batch" && onCreateProject) {
+      if (mode !== "batch" && onCreateProject && !directGenerate) {
         await onCreateProject({ title, scenes: renderScenes });
         setReviewConfirmed(false);
         return;
@@ -2543,19 +2543,34 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             onChange={(event) => setReviewConfirmed(event.target.checked)}
             className="mt-0.5 accent-amber-500"
           />
-          <span>我已核对以上配置，确认开始创建 {reviewVideoCount} 个视频任务。</span>
+          <span>
+            我已核对以上配置，确认
+            {mode === "batch" ? `创建 ${reviewVideoCount} 个视频任务` : "进入剪辑工作台或直接生成成片"}。
+          </span>
         </label>
       </section>
 
       {/* Primary Action Button */}
-      <div className="flex justify-end pt-2">
+      <div className="flex flex-wrap justify-end gap-2 pt-2">
+        {mode !== "batch" && onCreateProject && (
+          <button
+            type="button"
+            onClick={() => void handleTriggerRender(true)}
+            disabled={isSubmitting || !reviewConfirmed}
+            className="px-4 py-2.5 border border-zinc-700 text-zinc-200 font-semibold text-xs rounded hover:border-zinc-500 hover:bg-zinc-900 disabled:border-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+          >
+            <FileVideo className="w-4 h-4" />
+            直接生成成片
+          </button>
+        )}
         <button
-          onClick={handleTriggerRender}
+          type="button"
+          onClick={() => void handleTriggerRender(false)}
           disabled={isSubmitting || !reviewConfirmed}
           className="px-6 py-2.5 bg-amber-500 text-black font-semibold text-xs rounded hover:bg-amber-400 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed shadow-xl shadow-amber-500/10 flex items-center gap-2 transition-transform active:scale-[0.99]"
         >
-          {isSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-black" />}
-          {isSubmitting ? "正在提交任务…" : mode === "batch" ? `提交 ${reviewVideoCount} 个视频任务` : "立即开始生成视频 Generate Video"}
+          {isSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : mode === "batch" ? <Sparkles className="w-4 h-4 text-black" /> : <FolderOpen className="w-4 h-4 text-black" />}
+          {isSubmitting ? "正在提交任务…" : mode === "batch" ? `提交 ${reviewVideoCount} 个视频任务` : "进入剪辑工作台"}
         </button>
       </div>
     </div>

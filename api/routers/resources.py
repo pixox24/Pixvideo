@@ -52,6 +52,20 @@ SYSTEM_FONT_DIRS = (
 )
 
 
+def _user_font_dirs() -> tuple[Path, ...]:
+    """Return per-user font directories for the current platform."""
+    home = Path.home()
+    if platform.system() == "Windows":
+        return (
+            home / "AppData/Local/Microsoft/Windows/Fonts",
+            home / "AppData/Roaming/Microsoft/Windows/Fonts",
+        )
+    return (
+        home / ".local/share/fonts",
+        home / ".fonts",
+    )
+
+
 def _font_name(path: Path) -> str:
     """Return a readable font family name (prefer real font metadata)."""
     try:
@@ -89,6 +103,7 @@ def _font_candidates() -> list[tuple[Path, str]]:
         (Path(get_root_path("resources", "fonts")), "project"),
         (Path(get_data_path("fonts")), "data"),
         *[(path, "system") for path in SYSTEM_FONT_DIRS],
+        *[(path, "user") for path in _user_font_dirs()],
     ]
     custom_font_folder = str(config_manager.get("subtitle", {}).get("custom_font_folder") or "").strip()
     if custom_font_folder:
@@ -367,15 +382,30 @@ async def list_fonts():
     """
     try:
         font_map: dict[str, FontInfo] = {}
+        source_priority = {"custom-folder": 0, "project": 1, "data": 2, "user": 3, "system": 4}
         for base, source in _font_candidates():
             for font in _collect_fonts_from_dir(base, source):
-                font_map[font.path] = font
+                # Collapse Regular/Bold/Italic files into one family entry while
+                # retaining the highest-priority file as the preview/render source.
+                family_key = font.name.casefold().strip()
+                existing = font_map.get(family_key)
+                if existing is None or source_priority.get(source, 99) < source_priority.get(existing.source, 99):
+                    font_map[family_key] = font
+
+        chinese_markers = (
+            "yahei", "simhei", "simsun", "kaiti", "fangsong", "noto sans cjk", "noto sans sc",
+            "source han", "思源", "微软雅黑", "黑体", "宋体", "楷体", "仿宋", "阿里", "alibaba", "alimama",
+        )
+        def is_chinese_font(item: FontInfo) -> bool:
+            value = f"{item.name} {item.path}".casefold()
+            return any(marker.casefold() in value for marker in chinese_markers) or any("\u4e00" <= char <= "\u9fff" for char in item.name)
 
         fonts = sorted(
             font_map.values(),
             key=lambda item: (
-                0 if item.source == "custom-folder" else 1 if item.source in {"project", "data"} else 2,
-                item.name.lower(),
+                0 if is_chinese_font(item) else 1,
+                source_priority.get(item.source, 99),
+                item.name.casefold(),
             ),
         )
         return FontListResponse(fonts=fonts)

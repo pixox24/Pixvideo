@@ -13,6 +13,17 @@ type FontSelectProps = {
 
 const fontFamilyForPath = (path: string) =>
   `PixFont_${path.replace(/[^a-zA-Z0-9_-]/g, "_").slice(-48)}`;
+const RECENT_FONTS_KEY = "pixvideo.recent-fonts.v1";
+
+const readRecentFonts = (): string[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const value = JSON.parse(window.localStorage.getItem(RECENT_FONTS_KEY) || "[]");
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+};
 
 /**
  * Font picker that loads real font faces and previews them in the dropdown.
@@ -72,10 +83,27 @@ export const FontSelect: React.FC<FontSelectProps> = ({
 
   const selectedFamily = value ? loadedFamilies[value] : undefined;
   const selectedFont = fonts.find((font) => font.path === value);
+  const recentFonts = readRecentFonts();
+  const orderedFonts = useMemo(() => {
+    const recentIndex = new Map(recentFonts.map((path, index) => [path, index]));
+    return [...fonts].sort((a, b) => (recentIndex.get(a.path) ?? 9999) - (recentIndex.get(b.path) ?? 9999));
+  }, [fonts, recentFonts.join("\u0000")]);
+
+  const handleChange = (fontPath: string) => {
+    if (fontPath) {
+      const next = [fontPath, ...readRecentFonts().filter((path) => path !== fontPath)].slice(0, 8);
+      try {
+        window.localStorage.setItem(RECENT_FONTS_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore storage restrictions; selection still works.
+      }
+    }
+    onChange(fontPath);
+  };
 
   const options = useMemo(
     () =>
-      fonts.map((font) => {
+      orderedFonts.map((font) => {
         const family = loadedFamilies[font.path];
         return (
           <option key={font.path} value={font.path}>
@@ -97,14 +125,14 @@ export const FontSelect: React.FC<FontSelectProps> = ({
           </option>
         );
       }),
-    [fonts, loadedFamilies, previewText],
+    [orderedFonts, loadedFamilies, previewText],
   );
 
   return (
     <div className="space-y-2">
       <Select
         value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => handleChange(e.target.value)}
         className={className}
         aria-label="字幕字体"
       >

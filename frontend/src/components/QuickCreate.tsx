@@ -24,6 +24,7 @@ import {
   ChevronDown,
   ChevronUp,
   FolderOpen,
+  RefreshCw,
   XCircle,
 } from "lucide-react";
 import { Preset, QuickCreateInput, SubtitleStyle, WorkbenchResources } from "../types";
@@ -620,6 +621,15 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       addToast("已保存自定义字体文件夹，字体列表已刷新。", "success");
     } catch (err: any) {
       addToast(err.message || "无法选择自定义字体文件夹。", "error");
+    }
+  };
+
+  const refreshFonts = async () => {
+    try {
+      await onRefreshResources();
+      addToast("字体列表已刷新", "success");
+    } catch (err: any) {
+      addToast(err?.message || "刷新字体失败", "error");
     }
   };
 
@@ -2214,6 +2224,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                     自定义字体文件夹
+                  </button>
+                  <button
+                    type="button"
+                    onClick={refreshFonts}
+                    title="刷新字体列表"
+                    aria-label="刷新字体列表"
+                    className="self-end inline-flex items-center justify-center gap-1.5 bg-[#101114] border border-zinc-800 hover:border-amber-500/60 text-zinc-300 rounded px-3 py-1.5 text-xs transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    刷新字体
                   </button>
                 </div>
 

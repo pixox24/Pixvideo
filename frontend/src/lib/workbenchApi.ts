@@ -1,4 +1,4 @@
-import { Project, QuickCreateInput, ExportSubmission, GenerationJob, WorkbenchScene } from "../types";
+import { Project, QuickCreateInput, ExportSubmission, GenerationJob, WorkbenchScene, GenerationRun } from "../types";
 import { requestJson } from "./api";
 
 export async function createProject(input: QuickCreateInput): Promise<Project> {
@@ -29,3 +29,11 @@ export const updateTimeline = (projectId: string, sceneIds: string[], holds: Rec
 export const submitBatchImageGeneration = (projectId: string, sceneIds: string[], promptPrefix = "") => requestJson<{ jobs: GenerationJob[] }>(`/api/projects/${projectId}/batch/image-generations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds, promptPrefix }) });
 export const createExport = (projectId: string, allowIncomplete = false) => requestJson<ExportSubmission>(`/api/projects/${projectId}/exports`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allowIncomplete }) });
 export const cancelWorkbenchJob = (taskId: string) => requestJson(`/api/tasks/${taskId}`, { method: "DELETE" });
+
+export const startGenerationRun = (projectId: string, sceneIds?: string[], configOverride?: Record<string, unknown>) => requestJson<GenerationRun>(`/api/projects/${projectId}/generation-runs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds, configOverride }) });
+export const fetchGenerationRun = (projectId: string, runId: string) => requestJson<GenerationRun>(`/api/projects/${projectId}/generation-runs/${runId}`);
+const runAction = (projectId: string, runId: string, action: string) => requestJson<GenerationRun>(`/api/projects/${projectId}/generation-runs/${runId}/${action}`, { method: "POST" });
+export const pauseGenerationRun = (projectId: string, runId: string) => runAction(projectId, runId, "pause");
+export const resumeGenerationRun = (projectId: string, runId: string) => runAction(projectId, runId, "resume");
+export const cancelGenerationRun = (projectId: string, runId: string) => runAction(projectId, runId, "cancel");
+export const retryFailedGeneration = (projectId: string, runId: string) => runAction(projectId, runId, "retry-failed");

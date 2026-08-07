@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 from PIL import Image
 
@@ -52,4 +50,3 @@ async def test_history_task_materializes_once_without_deleting_original(tmp_path
     assert len(first.scenes) == 2
     assert (tmp_path / "image-0.png").is_file()
     core.workbench_repository.close()
-

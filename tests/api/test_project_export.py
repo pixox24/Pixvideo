@@ -3,7 +3,6 @@ from fastapi import HTTPException
 
 from api.routers.projects import create_export
 from api.schemas.workbench import ExportRequest
-from api.tasks import task_manager
 from pixelle_video.models.workbench import AssetSource, AssetVersion, Project, Scene
 from pixelle_video.services.workbench_media import WorkbenchMediaStore
 from pixelle_video.services.workbench_repository import WorkbenchRepository
@@ -48,4 +47,3 @@ async def test_incomplete_export_requires_explicit_confirmation(tmp_path):
 
     assert error.value.status_code == 409
     core.workbench_repository.close()
-

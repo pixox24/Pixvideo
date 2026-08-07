@@ -175,7 +175,8 @@ class WorkbenchRepository:
     def list_asset_versions(self, project_id: str, scene_id: str | None = None) -> list[AssetVersion]:
         query, args = "SELECT * FROM asset_versions WHERE project_id=?", [project_id]
         if scene_id is not None:
-            query += " AND scene_id=?"; args.append(scene_id)
+            query += " AND scene_id=?"
+            args.append(scene_id)
         rows = self._connection.execute(query + " ORDER BY created_at", args).fetchall()
         return [self._asset_from_row(row) for row in rows]
 
@@ -196,7 +197,8 @@ class WorkbenchRepository:
 
     def get_generation_job(self, job_id: str) -> GenerationJob | None:
         row = self._connection.execute("SELECT * FROM generation_jobs WHERE job_id=?", (job_id,)).fetchone()
-        if not row: return None
+        if not row:
+            return None
         return GenerationJob(row["project_id"], GenerationKind(row["kind"]), row["task_id"], json.loads(row["request_snapshot_json"]), row["scene_id"], row["job_id"], GenerationStatus(row["status"]), row["progress"], row["error"], _from_dt(row["created_at"]), _from_dt(row["updated_at"]))
 
     def get_generation_job_by_task_id(self, task_id: str) -> GenerationJob | None:
@@ -211,10 +213,14 @@ class WorkbenchRepository:
             self.update_generation_job(job.job_id, **changes)
 
     def update_generation_job(self, job_id: str, **changes: Any) -> None:
-        allowed = {"status", "progress", "error", "updated_at"}; values = {k:v for k,v in changes.items() if k in allowed}
-        if "status" in values: values["status"] = values["status"].value if isinstance(values["status"], GenerationStatus) else values["status"]
-        if "updated_at" in values: values["updated_at"] = _dt(values["updated_at"])
-        if not values: return
+        allowed = {"status", "progress", "error", "updated_at"}
+        values = {key: value for key, value in changes.items() if key in allowed}
+        if "status" in values:
+            values["status"] = values["status"].value if isinstance(values["status"], GenerationStatus) else values["status"]
+        if "updated_at" in values:
+            values["updated_at"] = _dt(values["updated_at"])
+        if not values:
+            return
         with self._connection:
             self._connection.execute(f"UPDATE generation_jobs SET {', '.join(f'{k}=?' for k in values)} WHERE job_id=?", (*values.values(), job_id))
 
@@ -223,10 +229,14 @@ class WorkbenchRepository:
             self._connection.execute("INSERT INTO export_revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (revision.export_id, revision.project_id, _json(revision.snapshot), revision.output_relative_path, revision.status.value, revision.error, _dt(revision.created_at), _dt(revision.updated_at)))
 
     def update_export_revision(self, export_id: str, **changes: Any) -> None:
-        allowed = {"output_relative_path", "status", "error", "updated_at"}; values = {k:v for k,v in changes.items() if k in allowed}
-        if "status" in values: values["status"] = values["status"].value if isinstance(values["status"], GenerationStatus) else values["status"]
-        if "updated_at" in values: values["updated_at"] = _dt(values["updated_at"])
-        if not values: return
+        allowed = {"output_relative_path", "status", "error", "updated_at"}
+        values = {key: value for key, value in changes.items() if key in allowed}
+        if "status" in values:
+            values["status"] = values["status"].value if isinstance(values["status"], GenerationStatus) else values["status"]
+        if "updated_at" in values:
+            values["updated_at"] = _dt(values["updated_at"])
+        if not values:
+            return
         with self._connection:
             self._connection.execute(f"UPDATE export_revisions SET {', '.join(f'{k}=?' for k in values)} WHERE export_id=?", (*values.values(), export_id))
 

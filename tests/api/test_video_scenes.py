@@ -3,6 +3,8 @@ from pydantic import ValidationError
 
 from api.routers.video import _build_video_params
 from api.schemas.video import VideoGenerateRequest
+from pixelle_video.pipelines.linear import PipelineContext
+from pixelle_video.pipelines.standard import StandardPipeline
 
 
 def test_video_request_accepts_100_explicit_scenes():
@@ -21,8 +23,6 @@ def test_video_request_rejects_101_explicit_scenes():
             mode="fixed",
             scenes=[{"narration": str(index)} for index in range(101)],
         )
-from pixelle_video.pipelines.linear import PipelineContext
-from pixelle_video.pipelines.standard import StandardPipeline
 
 
 class ScenePersistence:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
@@ -9,21 +9,27 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from api.dependencies import PixelleVideoDep
 from api.schemas.workbench import (
     AssetVersionResponse,
+    BatchImageRequest,
     CreateProjectRequest,
+    ExportRequest,
     GenerationJobResponse,
     ProjectResponse,
     ProjectSceneResponse,
     RegenerateImageRequest,
-    UpdateNarrationRequest,
-    UpdateSceneRequest,
     ReorderScenesRequest,
     TimelineUpdateRequest,
-    BatchImageRequest,
-    ExportRequest,
+    UpdateNarrationRequest,
+    UpdateSceneRequest,
 )
 from api.tasks import task_manager
 from api.tasks.models import TaskType
-from pixelle_video.models.workbench import GenerationJob, GenerationKind, Project, Scene, effective_scene_duration
+from pixelle_video.models.workbench import (
+    GenerationJob,
+    GenerationKind,
+    Project,
+    Scene,
+    effective_scene_duration,
+)
 
 router = APIRouter(prefix="/projects", tags=["Workbench Projects"])
 

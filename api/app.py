@@ -53,6 +53,7 @@ from api.routers import (
     history_router,
     image_router,
     llm_router,
+    projects_router,
     resources_router,
     specialist_router,
     tasks_router,
@@ -60,7 +61,6 @@ from api.routers import (
     uploads_router,
     video_router,
     workbench_router,
-    projects_router,
 )
 from api.tasks import task_manager
 

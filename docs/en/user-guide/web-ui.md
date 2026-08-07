@@ -1,5 +1,13 @@
 # Web UI Guide
 
+## Editing Workbench
+
+After confirming 1-100 scenes in Quick Create, the default action creates a project and opens the workbench. Direct generation remains available when refinement is unnecessary. The left pane contains scenes and project assets, the center previews the selected image, the right inspector edits narration, prompts, and candidates, and the bottom timeline controls order and extra visual hold.
+
+Image regeneration adds a candidate and never replaces the current version until **Use this version** is selected. Uploads remain local to the project. Saving narration does not automatically start TTS; voice regeneration is explicit. Batch operations are limited to prompt prefixes and image generation.
+
+Export preflight requires a selected image and audio for each scene and freezes an immutable revision. Incomplete export requires a second confirmation. Completed or failed history items can be opened as projects without modifying the original history.
+
 Detailed introduction to the Pixelle-Video Web interface features.
 
 ---

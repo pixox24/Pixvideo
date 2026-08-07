@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from pixelle_video.models.workbench import ExportRevision, GenerationStatus
+from pixelle_video.models.workbench import ExportRevision
 from pixelle_video.services.workbench_jobs import WorkbenchJobService
 
 
@@ -46,4 +46,3 @@ async def test_export_uses_frozen_existing_assets(tmp_path):
     core = FakeCore()
     await WorkbenchJobService(core, Repo(revision), Store(tmp_path / "projects")).run_export_job("p1", "e1", "t1")
     assert core.kwargs["existing_scene_assets"]["s1"]["image_path"].endswith("old.png")
-

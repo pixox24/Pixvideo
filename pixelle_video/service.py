@@ -37,9 +37,9 @@ from pixelle_video.services.persistence import PersistenceService
 from pixelle_video.services.tts_service import TTSService
 from pixelle_video.services.video import VideoService
 from pixelle_video.services.video_analysis import VideoAnalysisService
+from pixelle_video.services.workbench_jobs import WorkbenchJobService
 from pixelle_video.services.workbench_media import WorkbenchMediaStore
 from pixelle_video.services.workbench_repository import WorkbenchRepository
-from pixelle_video.services.workbench_jobs import WorkbenchJobService
 from pixelle_video.utils.os_util import get_data_path
 
 

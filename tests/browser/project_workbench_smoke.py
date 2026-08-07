@@ -6,7 +6,6 @@ release checks; this script keeps its required accessibility hooks stable.
 
 from pathlib import Path
 
-
 root = Path(__file__).parents[2]
 workbench = (root / "frontend/src/components/ProjectWorkbench.tsx").read_text(encoding="utf-8")
 timeline = (root / "frontend/src/components/WorkbenchTimeline.tsx").read_text(encoding="utf-8")
@@ -17,4 +16,3 @@ assert "lg:grid-cols" in workbench
 assert "overflow-x-auto" in timeline
 assert "导出" in workbench
 print("project workbench browser smoke passed")
-

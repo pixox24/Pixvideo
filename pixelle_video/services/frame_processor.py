@@ -20,7 +20,6 @@ Key Feature:
   to ensure perfect sync between audio and video (no padding, no trimming needed)
 """
 
-from pathlib import Path
 from typing import Callable, Optional
 
 from loguru import logger

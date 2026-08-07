@@ -154,6 +154,9 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
                 onChange={(e) => handleFieldChange("llm", "apiKey", e.target.value)}
                 className="w-full bg-[#17181c] border border-zinc-800 rounded pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
               />
+              {settings.llm.apiKeyMasked && !settings.llm.apiKey && (
+                <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.llm.apiKeyMasked}，输入新值可替换</span>
+              )}
               <Key className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
             </div>
           </div>
@@ -219,6 +222,9 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
               onChange={(e) => handleFieldChange("imageGeneration", "apiKey", e.target.value)}
               className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
             />
+            {settings.imageGeneration.apiKeyMasked && !settings.imageGeneration.apiKey && (
+              <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.imageGeneration.apiKeyMasked}，输入新值可替换</span>
+            )}
           </div>
 
           <div>
@@ -276,6 +282,9 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
               onChange={(e) => handleFieldChange("comfy", "apiKey", e.target.value)}
               className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
             />
+            {settings.comfy.apiKeyMasked && !settings.comfy.apiKey && (
+              <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.comfy.apiKeyMasked}，输入新值可替换</span>
+            )}
           </div>
         </div>
 
@@ -311,10 +320,13 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
               <input
                 type="password"
                 placeholder="请输入 RunningHub Key"
-                value={settings.runninghub.apiKey}
-                onChange={(e) => handleFieldChange("runninghub", "apiKey", e.target.value)}
-                className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-              />
+              value={settings.runninghub.apiKey}
+              onChange={(e) => handleFieldChange("runninghub", "apiKey", e.target.value)}
+              className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+            />
+            {settings.runninghub.apiKeyMasked && !settings.runninghub.apiKey && (
+              <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.runninghub.apiKeyMasked}，输入新值可替换</span>
+            )}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -361,6 +373,9 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
                 onChange={(e) => handleFieldChange("bizyairKey", "", e.target.value)}
                 className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
               />
+              {settings.bizyairKeyMasked && !settings.bizyairKey && (
+                <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.bizyairKeyMasked}，输入新值可替换</span>
+              )}
             </div>
             <div>
               <label className="block text-[10px] text-zinc-500 mb-1">MiniMax API Key</label>
@@ -371,6 +386,9 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
                 onChange={(e) => handleFieldChange("minimaxKey", "", e.target.value)}
                 className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
               />
+              {settings.minimaxKeyMasked && !settings.minimaxKey && (
+                <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.minimaxKeyMasked}，输入新值可替换</span>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <button

@@ -70,12 +70,14 @@ export interface Task {
 export interface LLMConfig {
   provider: "gemini" | "openai" | "deepseek" | "anthropic";
   apiKey: string;
+  apiKeyMasked?: string;
   baseUrl: string;
   model: string;
 }
 
 export interface ImageGenerationConfig {
   apiKey: string;
+  apiKeyMasked?: string;
   baseUrl: string;
   model: string;
 }
@@ -83,10 +85,12 @@ export interface ImageGenerationConfig {
 export interface ComfyConfig {
   url: string;
   apiKey: string;
+  apiKeyMasked?: string;
 }
 
 export interface RunningHubConfig {
   apiKey: string;
+  apiKeyMasked?: string;
   concurrency: number;
   instanceType: "24G" | "48G";
 }
@@ -97,7 +101,9 @@ export interface SystemSettings {
   comfy: ComfyConfig;
   runninghub: RunningHubConfig;
   bizyairKey: string;
+  bizyairKeyMasked?: string;
   minimaxKey: string;
+  minimaxKeyMasked?: string;
 }
 
 export interface WorkflowOption {

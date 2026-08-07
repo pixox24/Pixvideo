@@ -43,6 +43,7 @@ def _sanitized_config() -> dict:
         "success": True,
         "configured": config_manager.validate(),
         "llm": {
+            "provider": llm.get("provider", "gemini"),
             "api_key_set": bool(llm.get("api_key")),
             "api_key_masked": _mask_secret(llm.get("api_key")),
             "base_url": llm.get("base_url", ""),
@@ -57,11 +58,15 @@ def _sanitized_config() -> dict:
         "comfyui": {
             "comfyui_url": comfyui.get("comfyui_url", ""),
             "comfyui_api_key_set": bool(comfyui.get("comfyui_api_key")),
+            "comfyui_api_key_masked": _mask_secret(comfyui.get("comfyui_api_key")),
             "runninghub_api_key_set": bool(comfyui.get("runninghub_api_key")),
+            "runninghub_api_key_masked": _mask_secret(comfyui.get("runninghub_api_key")),
             "runninghub_concurrent_limit": comfyui.get("runninghub_concurrent_limit", 1),
             "runninghub_instance_type": comfyui.get("runninghub_instance_type"),
             "bizyair_api_key_set": bool(comfyui.get("bizyair_api_key")),
+            "bizyair_api_key_masked": _mask_secret(comfyui.get("bizyair_api_key")),
             "minimax_api_key_set": bool(minimax.get("api_key")),
+            "minimax_api_key_masked": _mask_secret(minimax.get("api_key")),
         },
         "quick_create": config_manager.get("quick_create", {}),
         "template": config_manager.get("template", {}),
@@ -92,6 +97,8 @@ async def update_config(request: ConfigUpdateRequest):
     try:
         if request.llm:
             current = config_manager.get_llm_config()
+            if request.llm.provider is not None:
+                config_manager.update({"llm": {"provider": request.llm.provider}})
             api_key = request.llm.api_key if request.llm.api_key is not None else current["api_key"]
             base_url = request.llm.base_url if request.llm.base_url is not None else current["base_url"]
             model = request.llm.model if request.llm.model is not None else current["model"]

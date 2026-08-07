@@ -138,6 +138,7 @@ export async function fetchQuickCreateResources(): Promise<WorkbenchResources> {
 export function buildConfigPayload(settings: SystemSettings) {
   return {
     llm: {
+      provider: settings.llm.provider,
       api_key: settings.llm.apiKey || undefined,
       base_url: settings.llm.baseUrl || undefined,
       model: settings.llm.model || undefined,
@@ -164,13 +165,16 @@ export function mapBackendConfigToSettings(data: any, fallback: SystemSettings):
     ...fallback,
     llm: {
       ...fallback.llm,
+      provider: data.llm?.provider || fallback.llm.provider,
       apiKey: data.llm?.api_key_set ? fallback.llm.apiKey : "",
+      apiKeyMasked: data.llm?.api_key_masked || "",
       baseUrl: data.llm?.base_url || fallback.llm.baseUrl,
       model: data.llm?.model || fallback.llm.model,
     },
     imageGeneration: {
       ...fallback.imageGeneration,
       apiKey: data.image_generation?.api_key_set ? fallback.imageGeneration.apiKey : "",
+      apiKeyMasked: data.image_generation?.api_key_masked || "",
       baseUrl: data.image_generation?.base_url || fallback.imageGeneration.baseUrl,
       model: data.image_generation?.model || fallback.imageGeneration.model,
     },
@@ -178,15 +182,19 @@ export function mapBackendConfigToSettings(data: any, fallback: SystemSettings):
       ...fallback.comfy,
       url: data.comfyui?.comfyui_url || fallback.comfy.url,
       apiKey: data.comfyui?.comfyui_api_key_set ? fallback.comfy.apiKey : "",
+      apiKeyMasked: data.comfyui?.comfyui_api_key_masked || "",
     },
     runninghub: {
       ...fallback.runninghub,
       apiKey: data.comfyui?.runninghub_api_key_set ? fallback.runninghub.apiKey : "",
+      apiKeyMasked: data.comfyui?.runninghub_api_key_masked || "",
       concurrency: data.comfyui?.runninghub_concurrent_limit || fallback.runninghub.concurrency,
       instanceType: data.comfyui?.runninghub_instance_type || fallback.runninghub.instanceType,
     },
     bizyairKey: data.comfyui?.bizyair_api_key_set ? fallback.bizyairKey : "",
+    bizyairKeyMasked: data.comfyui?.bizyair_api_key_masked || "",
     minimaxKey: data.comfyui?.minimax_api_key_set ? fallback.minimaxKey : "",
+    minimaxKeyMasked: data.comfyui?.minimax_api_key_masked || "",
   };
 }
 

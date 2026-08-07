@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 class LLMConfig(BaseModel):
     """LLM configuration"""
+    provider: str = Field(default="gemini", description="LLM provider preset")
     api_key: str = Field(default="", description="LLM API Key")
     base_url: str = Field(default="", description="LLM API Base URL")
     model: str = Field(default="", description="LLM Model Name")

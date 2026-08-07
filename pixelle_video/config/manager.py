@@ -111,6 +111,7 @@ class ConfigManager:
     def get_llm_config(self) -> dict:
         """Get LLM configuration as dict"""
         return {
+            "provider": self.config.llm.provider,
             "api_key": self.config.llm.api_key,
             "base_url": self.config.llm.base_url,
             "model": self.config.llm.model,

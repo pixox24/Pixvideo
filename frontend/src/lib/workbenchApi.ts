@@ -9,6 +9,7 @@ export async function createProject(input: QuickCreateInput): Promise<Project> {
 }
 
 export const fetchProject = (projectId: string) => requestJson<Project>(`/api/projects/${projectId}`);
+export const createProjectFromHistory = (taskId: string) => requestJson<Project>(`/api/projects/from-history/${taskId}`, { method: "POST" });
 
 export async function patchScene(projectId: string, sceneId: string, patch: Partial<Pick<WorkbenchScene, "narration" | "visualPrompt" | "manualHoldSeconds" | "durationSeconds">>) {
   return requestJson(`/api/projects/${projectId}/scenes/${sceneId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });

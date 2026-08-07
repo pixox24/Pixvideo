@@ -23,6 +23,7 @@ interface HistoryListProps {
   onDeleteTask: (id: string) => void;
   onResumeTask: (task: Task) => void;
   onCancelTask: (task: Task) => void;
+  onOpenWorkbench: (task: Task) => void;
   addToast: (text: string, type: "success" | "error" | "info") => void;
 }
 
@@ -31,6 +32,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   onDeleteTask,
   onResumeTask,
   onCancelTask,
+  onOpenWorkbench,
   addToast,
 }) => {
   const [filter, setFilter] = useState<string>("all");
@@ -203,6 +205,9 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 
                   {/* Actions right */}
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {(task.status === "completed" || task.status === "failed") && (
+                      <button type="button" onClick={() => onOpenWorkbench(task)} className="px-2 py-1 border border-amber-500/20 text-amber-400 hover:bg-amber-500/10 rounded text-[10px]">打开工作台</button>
+                    )}
                     <button
                       onClick={() => toggleExpand(task.id)}
                       className="px-2.5 py-1 text-xs rounded border border-zinc-800 text-zinc-300 hover:bg-zinc-850 flex items-center gap-1 font-mono"

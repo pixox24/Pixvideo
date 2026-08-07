@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
@@ -93,6 +94,43 @@ async def get_project(project_id: str, core: PixelleVideoDep, request: Request):
         raise HTTPException(status_code=404, detail="project not found")
     scenes = core.workbench_repository.list_project_scenes(project_id)
     return _response(project, scenes, core.workbench_repository, core.workbench_media, request)
+
+
+@router.post("/from-history/{task_id}", response_model=ProjectResponse, status_code=201)
+async def create_project_from_history(task_id: str, core: PixelleVideoDep, request: Request):
+    existing = core.workbench_repository.get_project_by_source_history_task_id(task_id)
+    if existing:
+        scenes = core.workbench_repository.list_project_scenes(existing.project_id)
+        return _response(existing, scenes, core.workbench_repository, core.workbench_media, request)
+    detail = await core.history.get_task_detail(task_id)
+    if not detail or not detail.get("storyboard"):
+        raise HTTPException(status_code=404, detail="history task not found")
+    storyboard = detail["storyboard"]
+    metadata = detail.get("metadata") or {}
+    project = Project(title=storyboard.title or metadata.get("title") or task_id,
+                      config=dict(metadata.get("input") or {}), source="history",
+                      source_history_task_id=task_id)
+    frames = list(storyboard.frames or [])
+    scenes = [Scene(project.project_id, index, frame.narration or "", frame.image_prompt or "",
+                    duration_seconds=float(frame.duration or 0), status=frame.status or "completed")
+              for index, frame in enumerate(frames)]
+    if not scenes:
+        raise HTTPException(status_code=422, detail="history task has no scenes")
+    core.workbench_repository.create_project(project, scenes)
+    from pixelle_video.models.workbench import AssetSource, AssetVersion
+    for scene, frame in zip(scenes, frames):
+        if frame.image_path and Path(frame.image_path).is_file():
+            relative = core.workbench_media.copy_upload(project.project_id, scene.scene_id, Path(frame.image_path), Path(frame.image_path).name)
+            version = AssetVersion(project.project_id, scene.scene_id, AssetSource.UPLOAD, relative, prompt_snapshot=frame.image_prompt)
+            core.workbench_repository.create_asset_version(version)
+            core.workbench_repository.select_asset_version(project.project_id, scene.scene_id, version.version_id)
+        if frame.audio_path and Path(frame.audio_path).is_file():
+            audio_relative = f"assets/scenes/{scene.scene_id}/audio/legacy{Path(frame.audio_path).suffix or '.mp3'}"
+            audio_destination = core.workbench_media.resolve(project.project_id, audio_relative)
+            audio_destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(frame.audio_path, audio_destination)
+            core.workbench_repository.update_scene(scene.scene_id, audio_relative_path=audio_relative)
+    return _response(project, core.workbench_repository.list_project_scenes(project.project_id), core.workbench_repository, core.workbench_media, request)
 
 
 @router.post("/{project_id}/scenes/{scene_id}/generate", response_model=GenerationJobResponse, status_code=202)

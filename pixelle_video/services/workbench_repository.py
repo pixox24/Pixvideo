@@ -111,6 +111,10 @@ class WorkbenchRepository:
         return Project(row["title"], json.loads(row["config_json"]), row["project_id"], row["source"],
                        row["source_history_task_id"], _from_dt(row["created_at"]), _from_dt(row["updated_at"]))
 
+    def get_project_by_source_history_task_id(self, task_id: str) -> Project | None:
+        row = self._connection.execute("SELECT project_id FROM projects WHERE source_history_task_id=?", (task_id,)).fetchone()
+        return self.get_project(row["project_id"]) if row else None
+
     def get_scene(self, scene_id: str) -> Scene | None:
         row = self._connection.execute("SELECT * FROM scenes WHERE scene_id=?", (scene_id,)).fetchone()
         return self._scene_from_row(row) if row else None

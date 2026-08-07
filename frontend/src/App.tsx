@@ -42,6 +42,7 @@ import {
   submitVideoTask,
 } from "./lib/api";
 import { createProject } from "./lib/workbenchApi";
+import { createProjectFromHistory } from "./lib/workbenchApi";
 
 const PENDING_TASK_ID_PREFIX = "pending-";
 
@@ -547,6 +548,17 @@ export default function App() {
     }
   };
 
+  const handleOpenHistoryWorkbench = async (task: Task) => {
+    try {
+      const project = await createProjectFromHistory(task.id);
+      setActiveProjectId(project.projectId);
+      setActiveTab("project-workbench");
+      addToast("历史任务已打开为可编辑项目。", "success");
+    } catch (error) {
+      addToast(error, "error");
+    }
+  };
+
   // Sidebar connectivity widgets indicator
   const hasLlmKey = serviceStatus.llm || settings.llm.apiKey !== "";
   const hasComfyUrl = serviceStatus.comfyui || settings.comfy.url !== "";
@@ -844,6 +856,7 @@ export default function App() {
               onDeleteTask={handleDeleteTask}
               onResumeTask={handleResumeTask}
               onCancelTask={handleCancelTask}
+              onOpenWorkbench={handleOpenHistoryWorkbench}
               addToast={addToast}
             />
           )}

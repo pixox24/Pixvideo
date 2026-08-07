@@ -226,5 +226,11 @@ class WorkbenchRepository:
         with self._connection:
             self._connection.execute(f"UPDATE export_revisions SET {', '.join(f'{k}=?' for k in values)} WHERE export_id=?", (*values.values(), export_id))
 
+    def get_export_revision(self, export_id: str) -> ExportRevision | None:
+        row = self._connection.execute("SELECT * FROM export_revisions WHERE export_id=?", (export_id,)).fetchone()
+        if not row:
+            return None
+        return ExportRevision(row["project_id"], json.loads(row["snapshot_json"]), row["export_id"], row["output_relative_path"], GenerationStatus(row["status"]), row["error"], _from_dt(row["created_at"]), _from_dt(row["updated_at"]))
+
     def close(self) -> None:
         self._connection.close()

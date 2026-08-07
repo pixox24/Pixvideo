@@ -77,7 +77,38 @@ class WorkbenchJobService:
             raise
 
     async def run_export_job(self, project_id: str, export_id: str, task_id: str) -> None:
-        raise NotImplementedError("export jobs are implemented in the export milestone")
+        revision = self.repository.get_export_revision(export_id)
+        if revision is None or revision.project_id != project_id:
+            raise ValueError("export revision not found")
+        self.repository.update_export_revision(export_id, status=GenerationStatus.RUNNING)
+        try:
+            existing_assets = {}
+            for item in revision.snapshot.get("scenes", []):
+                image_path = item.get("imagePath")
+                audio_path = item.get("audioPath")
+                if image_path:
+                    image_absolute = self.media_store.resolve(project_id, image_path)
+                    if not image_absolute.is_file():
+                        raise ValueError("export image is missing")
+                if audio_path:
+                    audio_absolute = self.media_store.resolve(project_id, audio_path)
+                    if not audio_absolute.is_file():
+                        raise ValueError("export audio is missing")
+                existing_assets[item["sceneId"]] = {"image_path": str(image_absolute) if image_path else None, "audio_path": str(audio_absolute) if audio_path else None}
+            if not hasattr(self.core, "generate_video") or self.core.generate_video is None:
+                raise ValueError("video pipeline is unavailable")
+            result = await self.core.generate_video(
+                text=revision.snapshot.get("config", {}).get("title", project_id),
+                scenes=revision.snapshot.get("scenes", []),
+                existing_scene_assets=existing_assets,
+                task_id=task_id,
+                **revision.snapshot.get("config", {}),
+            )
+            output_path = getattr(result, "video_path", None) or (result.get("video_path") if isinstance(result, dict) else None)
+            self.repository.update_export_revision(export_id, status=GenerationStatus.COMPLETED, output_relative_path=output_path)
+        except Exception as exc:
+            self.repository.update_export_revision(export_id, status=GenerationStatus.FAILED, error=str(exc))
+            raise
 
     def _require_scene(self, scene_id, project_id):
         scene = self.repository.get_scene(scene_id)

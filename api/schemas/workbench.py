@@ -110,6 +110,11 @@ class BatchImageRequest(BaseModel):
         return value
 
 
+class ExportRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    allow_incomplete: bool = Field(default=False, alias="allowIncomplete")
+
+
 class AssetVersionResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     version_id: str = Field(alias="versionId")

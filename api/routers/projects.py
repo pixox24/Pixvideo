@@ -18,6 +18,7 @@ from api.schemas.workbench import (
     ReorderScenesRequest,
     TimelineUpdateRequest,
     BatchImageRequest,
+    ExportRequest,
 )
 from api.tasks import task_manager
 from api.tasks.models import TaskType
@@ -197,6 +198,40 @@ async def batch_image_generations(project_id: str, body: BatchImageRequest, core
         jobs.append({"jobId": job.job_id, "taskId": job.task_id, "sceneId": scene_id,
                      "kind": job.kind.value, "status": job.status.value, "progress": job.progress})
     return {"jobs": jobs}
+
+
+@router.post("/{project_id}/exports", status_code=202)
+async def create_export(project_id: str, core: PixelleVideoDep, body: ExportRequest = ExportRequest()):
+    project = core.workbench_repository.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    scenes = core.workbench_repository.list_project_scenes(project_id)
+    snapshot_scenes = []
+    blocking = []
+    for scene in scenes:
+        version = (core.workbench_repository.get_asset_version(scene.current_version_id)
+                   if scene.current_version_id else None)
+        audio_path = scene.audio_relative_path
+        if version is None or not audio_path:
+            blocking.append(scene.scene_id)
+        snapshot_scenes.append({
+            "sceneId": scene.scene_id, "position": scene.position,
+            "durationSeconds": scene.duration_seconds, "manualHoldSeconds": scene.manual_hold_seconds,
+            "versionId": version.version_id if version else None,
+            "imagePath": version.relative_path if version else None,
+            "audioPath": audio_path,
+        })
+    if blocking and not body.allow_incomplete:
+        raise HTTPException(status_code=409, detail={"blockingScenes": blocking, "message": "project is incomplete"})
+    from api.tasks import task_manager
+    from api.tasks.models import TaskType
+    from pixelle_video.models.workbench import ExportRevision
+    task = task_manager.create_task(TaskType.WORKBENCH_EXPORT, request_params={"project_id": project_id, "allowIncomplete": body.allow_incomplete})
+    revision = ExportRevision(project_id, {"projectId": project_id, "sceneOrder": [scene.scene_id for scene in scenes], "scenes": snapshot_scenes, "config": project.config, "allowIncomplete": body.allow_incomplete})
+    core.workbench_repository.create_export_revision(revision)
+    if core.workbench_jobs and hasattr(core.workbench_jobs, "run_export_job"):
+        await task_manager.execute_task(task.task_id, core.workbench_jobs.run_export_job, project_id, revision.export_id, task.task_id)
+    return {"exportId": revision.export_id, "jobId": task.task_id, "taskId": task.task_id, "status": revision.status.value, "blockingScenes": blocking}
 
 
 @router.post("/{project_id}/scenes/{scene_id}/uploads", status_code=201)

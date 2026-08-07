@@ -13,6 +13,9 @@ from api.schemas.workbench import (
     CreateProjectRequest,
     ExportRequest,
     GenerationJobResponse,
+    GenerationRunCreateRequest,
+    GenerationRunItemResponse,
+    GenerationRunResponse,
     ProjectResponse,
     ProjectSceneResponse,
     RegenerateImageRequest,
@@ -30,6 +33,10 @@ from pixelle_video.models.workbench import (
     Scene,
     effective_scene_duration,
 )
+from pixelle_video.services.project_generation_service import (
+    ActiveGenerationRunError,
+    ActiveSceneLockedError,
+)
 
 router = APIRouter(prefix="/projects", tags=["Workbench Projects"])
 
@@ -41,6 +48,16 @@ def _scene_or_404(core, project_id: str, scene_id: str):
     if scene is None or scene.project_id != project_id:
         raise HTTPException(status_code=404, detail="scene not found")
     return scene
+
+
+def _assert_scene_editable(core, project_id: str, scene_id: str) -> None:
+    service = getattr(core, "project_generation", None)
+    if service is None:
+        return
+    try:
+        service.assert_scene_editable(project_id, scene_id)
+    except ActiveSceneLockedError as exc:
+        raise HTTPException(status_code=409, detail={"message": str(exc), "runId": exc.run_id}) from exc
 
 
 async def _enqueue(core, project_id: str, scene_id: str | None, kind: GenerationKind,
@@ -70,17 +87,55 @@ def _response(project, scenes, repository, media, request: Request) -> ProjectRe
         ]
         audio_url = (media.to_api_url(project.project_id, scene.audio_relative_path, request)
                      if scene.audio_relative_path else None)
+        current = repository.get_asset_version(scene.current_version_id) if scene.current_version_id else None
+        image_state = "missing"
+        if current:
+            image_state = "ready" if media.resolve(project.project_id, current.relative_path).is_file() else "missing"
+            if current.source.value == "ai" and current.parameters.get("imageFingerprint") != scene.image_fingerprint:
+                image_state = "stale"
+        audio_state = "missing"
+        if scene.audio_relative_path:
+            audio_state = "ready" if media.resolve(project.project_id, scene.audio_relative_path).is_file() else "missing"
+        candidate_count = max(0, len(versions) - (1 if scene.current_version_id else 0))
         scene_responses.append(ProjectSceneResponse(
             sceneId=scene.scene_id, position=scene.position, narration=scene.narration,
             visualPrompt=scene.visual_prompt, currentVersionId=scene.current_version_id,
             audioUrl=audio_url, durationSeconds=scene.duration_seconds,
             manualHoldSeconds=scene.manual_hold_seconds, status=scene.status,
             versions=version_responses,
+            generationState={"image": image_state, "audio": audio_state, "candidateCount": candidate_count},
         ))
+    jobs = [GenerationJobResponse(jobId=job.job_id, taskId=job.task_id, sceneId=job.scene_id,
+                                  kind=job.kind.value, status=job.status.value, progress=job.progress,
+                                  error=job.error)
+            for job in repository.list_generation_jobs(project.project_id)]
     return ProjectResponse(
         projectId=project.project_id, title=project.title, source=project.source,
         sourceHistoryTaskId=project.source_history_task_id, config=project.config,
-        scenes=scene_responses, jobs=[], updatedAt=project.updated_at.isoformat(),
+        scenes=scene_responses, jobs=jobs, updatedAt=project.updated_at.isoformat(),
+    )
+
+
+def _run_response(core, run_id: str) -> GenerationRunResponse:
+    run = core.workbench_repository.get_generation_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="generation run not found")
+    items = core.workbench_repository.list_generation_run_items(run_id)
+    return GenerationRunResponse(
+        runId=run.run_id, projectId=run.project_id, taskId=run.task_id, status=run.status.value,
+        currentSceneId=run.current_scene_id, totalCount=run.total_count,
+        completedCount=run.completed_count, skippedCount=run.skipped_count,
+        failedCount=run.failed_count, candidateReviewCount=run.candidate_review_count,
+        pauseRequested=run.pause_requested, cancelRequested=run.cancel_requested,
+        error=run.error, createdAt=run.created_at.isoformat(), updatedAt=run.updated_at.isoformat(),
+        items=[GenerationRunItemResponse(
+            itemId=item.item_id, sceneId=item.scene_id, position=item.position,
+            status=item.status.value,
+            phase=("tts" if item.status.value == "running_tts" else "image" if item.status.value == "running_image" else "idle"),
+            ttsStatus=item.tts_status.value, imageStatus=item.image_status.value,
+            skipReason=item.skip_reason, candidateVersionId=item.candidate_version_id,
+            error=item.error, updatedAt=item.updated_at.isoformat(),
+        ) for item in items],
     )
 
 
@@ -100,6 +155,66 @@ async def get_project(project_id: str, core: PixelleVideoDep, request: Request):
         raise HTTPException(status_code=404, detail="project not found")
     scenes = core.workbench_repository.list_project_scenes(project_id)
     return _response(project, scenes, core.workbench_repository, core.workbench_media, request)
+
+
+@router.post("/{project_id}/generation-runs", response_model=GenerationRunResponse, status_code=202)
+async def start_generation_run(project_id: str, body: GenerationRunCreateRequest, core: PixelleVideoDep):
+    if core.workbench_repository.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    try:
+        run = await core.project_generation.start(project_id, body.config_override, body.scene_ids)
+    except ActiveGenerationRunError as exc:
+        raise HTTPException(status_code=409, detail={"message": str(exc), "currentRunId": exc.run.run_id}) from exc
+    return _run_response(core, run.run_id)
+
+
+@router.get("/{project_id}/generation-runs/{run_id}", response_model=GenerationRunResponse)
+async def get_generation_run(project_id: str, run_id: str, core: PixelleVideoDep):
+    run = core.workbench_repository.get_generation_run(run_id)
+    if run is None or run.project_id != project_id:
+        raise HTTPException(status_code=404, detail="generation run not found")
+    return _run_response(core, run_id)
+
+
+async def _generation_action(project_id: str, run_id: str, core, action: str):
+    run = core.workbench_repository.get_generation_run(run_id)
+    if run is None or run.project_id != project_id:
+        raise HTTPException(status_code=404, detail="generation run not found")
+    try:
+        result = await getattr(core.project_generation, f"request_{action}")(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"message": str(exc), "allowedActions": []}) from exc
+    return _run_response(core, result.run_id)
+
+
+@router.post("/{project_id}/generation-runs/{run_id}/pause", response_model=GenerationRunResponse)
+async def pause_generation_run(project_id: str, run_id: str, core: PixelleVideoDep):
+    return await _generation_action(project_id, run_id, core, "pause")
+
+
+@router.post("/{project_id}/generation-runs/{run_id}/resume", response_model=GenerationRunResponse)
+async def resume_generation_run(project_id: str, run_id: str, core: PixelleVideoDep):
+    return await _generation_action(project_id, run_id, core, "resume")
+
+
+@router.post("/{project_id}/generation-runs/{run_id}/cancel", response_model=GenerationRunResponse)
+async def cancel_generation_run(project_id: str, run_id: str, core: PixelleVideoDep):
+    return await _generation_action(project_id, run_id, core, "cancel")
+
+
+@router.post("/{project_id}/generation-runs/{run_id}/retry-failed", response_model=GenerationRunResponse, status_code=202)
+async def retry_failed_generation(project_id: str, run_id: str, core: PixelleVideoDep):
+    run = core.workbench_repository.get_generation_run(run_id)
+    if run is None or run.project_id != project_id:
+        raise HTTPException(status_code=404, detail="generation run not found")
+    try:
+        retry = await core.project_generation.retry_failed(run_id)
+    except (ValueError, ActiveGenerationRunError) as exc:
+        detail = {"message": str(exc)}
+        if isinstance(exc, ActiveGenerationRunError):
+            detail["currentRunId"] = exc.run.run_id
+        raise HTTPException(status_code=409, detail=detail) from exc
+    return _run_response(core, retry.run_id)
 
 
 @router.post("/from-history/{task_id}", response_model=ProjectResponse, status_code=201)
@@ -142,6 +257,7 @@ async def create_project_from_history(task_id: str, core: PixelleVideoDep, reque
 @router.post("/{project_id}/scenes/{scene_id}/generate", response_model=GenerationJobResponse, status_code=202)
 async def generate_scene(project_id: str, scene_id: str, core: PixelleVideoDep):
     scene = _scene_or_404(core, project_id, scene_id)
+    _assert_scene_editable(core, project_id, scene_id)
     job = await _enqueue(core, project_id, scene_id, GenerationKind.SCENE, TaskType.WORKBENCH_SCENE,
                          {"narration": scene.narration, "prompt": scene.visual_prompt},
                          core.workbench_jobs.run_scene_job)
@@ -152,6 +268,7 @@ async def generate_scene(project_id: str, scene_id: str, core: PixelleVideoDep):
 @router.post("/{project_id}/scenes/{scene_id}/image-generations", response_model=GenerationJobResponse, status_code=202)
 async def regenerate_image(project_id: str, scene_id: str, body: RegenerateImageRequest, core: PixelleVideoDep):
     _scene_or_404(core, project_id, scene_id)
+    _assert_scene_editable(core, project_id, scene_id)
     job = await _enqueue(core, project_id, scene_id, GenerationKind.IMAGE, TaskType.WORKBENCH_IMAGE,
                          {"prompt": body.prompt}, core.workbench_jobs.run_image_job, body.prompt)
     return GenerationJobResponse(jobId=job.job_id, taskId=job.task_id, sceneId=scene_id,
@@ -161,6 +278,7 @@ async def regenerate_image(project_id: str, scene_id: str, body: RegenerateImage
 @router.post("/{project_id}/scenes/{scene_id}/tts", response_model=GenerationJobResponse, status_code=202)
 async def regenerate_tts(project_id: str, scene_id: str, body: UpdateNarrationRequest, core: PixelleVideoDep):
     _scene_or_404(core, project_id, scene_id)
+    _assert_scene_editable(core, project_id, scene_id)
     job = await _enqueue(core, project_id, scene_id, GenerationKind.TTS, TaskType.WORKBENCH_TTS,
                          {"narration": body.narration}, core.workbench_jobs.run_tts_job, body.narration)
     return GenerationJobResponse(jobId=job.job_id, taskId=job.task_id, sceneId=scene_id,
@@ -170,6 +288,7 @@ async def regenerate_tts(project_id: str, scene_id: str, body: UpdateNarrationRe
 @router.patch("/{project_id}/scenes/{scene_id}")
 async def update_scene(project_id: str, scene_id: str, body: UpdateSceneRequest, core: PixelleVideoDep):
     scene = _scene_or_404(core, project_id, scene_id)
+    _assert_scene_editable(core, project_id, scene_id)
     changes = body.model_dump(exclude_none=True, by_alias=False)
     if "duration_seconds" in changes and changes["duration_seconds"] < scene.duration_seconds:
         raise HTTPException(status_code=422, detail="duration cannot be shorter than audio duration")
@@ -188,6 +307,7 @@ async def update_scene(project_id: str, scene_id: str, body: UpdateSceneRequest,
 @router.post("/{project_id}/scenes/{scene_id}/versions/{version_id}/select")
 async def select_asset_version(project_id: str, scene_id: str, version_id: str, core: PixelleVideoDep):
     _scene_or_404(core, project_id, scene_id)
+    _assert_scene_editable(core, project_id, scene_id)
     if core.workbench_repository.get_asset_version(version_id) is None:
         raise HTTPException(status_code=404, detail="version not found")
     try:
@@ -281,6 +401,7 @@ async def create_export(project_id: str, core: PixelleVideoDep, body: ExportRequ
 @router.post("/{project_id}/scenes/{scene_id}/uploads", status_code=201)
 async def upload_scene_asset(project_id: str, scene_id: str, core: PixelleVideoDep, file: UploadFile = File(...)):
     _scene_or_404(core, project_id, scene_id)
+    _assert_scene_editable(core, project_id, scene_id)
     extension = Path(file.filename or "").suffix.lower()
     if file.content_type not in {"image/png", "image/jpeg", "image/webp", "image/gif"} or extension not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
         raise HTTPException(status_code=415, detail="only image uploads are supported")

@@ -115,6 +115,12 @@ class ExportRequest(BaseModel):
     allow_incomplete: bool = Field(default=False, alias="allowIncomplete")
 
 
+class GenerationRunCreateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    scene_ids: list[str] | None = Field(default=None, alias="sceneIds")
+    config_override: dict[str, Any] = Field(default_factory=dict, alias="configOverride")
+
+
 class AssetVersionResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     version_id: str = Field(alias="versionId")
@@ -137,6 +143,42 @@ class ProjectSceneResponse(BaseModel):
     manual_hold_seconds: float = Field(alias="manualHoldSeconds")
     status: str
     versions: list[AssetVersionResponse]
+    generation_state: dict[str, Any] = Field(default_factory=dict, alias="generationState")
+
+
+class GenerationRunItemResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    item_id: str = Field(alias="itemId")
+    scene_id: str = Field(alias="sceneId")
+    position: int
+    status: str
+    phase: str
+    tts_status: str = Field(alias="ttsStatus")
+    image_status: str = Field(alias="imageStatus")
+    skip_reason: str | None = Field(default=None, alias="skipReason")
+    candidate_version_id: str | None = Field(default=None, alias="candidateVersionId")
+    error: str | None = None
+    updated_at: str = Field(alias="updatedAt")
+
+
+class GenerationRunResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    run_id: str = Field(alias="runId")
+    project_id: str = Field(alias="projectId")
+    task_id: str = Field(alias="taskId")
+    status: str
+    current_scene_id: str | None = Field(default=None, alias="currentSceneId")
+    total_count: int = Field(alias="totalCount")
+    completed_count: int = Field(alias="completedCount")
+    skipped_count: int = Field(alias="skippedCount")
+    failed_count: int = Field(alias="failedCount")
+    candidate_review_count: int = Field(alias="candidateReviewCount")
+    pause_requested: bool = Field(alias="pauseRequested")
+    cancel_requested: bool = Field(alias="cancelRequested")
+    error: str | None = None
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+    items: list[GenerationRunItemResponse]
 
 
 class GenerationJobResponse(BaseModel):

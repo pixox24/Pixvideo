@@ -37,6 +37,11 @@ from pixelle_video.services.project_generation_service import (
     ActiveGenerationRunError,
     ActiveSceneLockedError,
 )
+from pixelle_video.services.workbench_generation import (
+    build_parameter_snapshot,
+    compute_image_fingerprint,
+    compute_narration_fingerprint,
+)
 
 router = APIRouter(prefix="/projects", tags=["Workbench Projects"])
 
@@ -69,8 +74,12 @@ async def _enqueue(core, project_id: str, scene_id: str | None, kind: Generation
     return job
 
 
-def _response(project, scenes, repository, media, request: Request) -> ProjectResponse:
+def _response(project, scenes, repository, media, request: Request, runtime_config=None) -> ProjectResponse:
     scene_responses = []
+    parameter_snapshot = build_parameter_snapshot(
+        project,
+        runtime_config=runtime_config or {},
+    )
     for scene in scenes:
         versions = repository.list_asset_versions(project.project_id, scene.scene_id)
         version_responses = [
@@ -88,14 +97,43 @@ def _response(project, scenes, repository, media, request: Request) -> ProjectRe
         audio_url = (media.to_api_url(project.project_id, scene.audio_relative_path, request)
                      if scene.audio_relative_path else None)
         current = repository.get_asset_version(scene.current_version_id) if scene.current_version_id else None
+        expected_image_fingerprint = compute_image_fingerprint(
+            scene.visual_prompt,
+            parameter_snapshot,
+        )
+        expected_audio_fingerprint = compute_narration_fingerprint(
+            scene.narration,
+            parameter_snapshot,
+        )
         image_state = "missing"
         if current:
-            image_state = "ready" if media.resolve(project.project_id, current.relative_path).is_file() else "missing"
-            if current.source.value == "ai" and current.parameters.get("imageFingerprint") != scene.image_fingerprint:
+            try:
+                image_exists = media.resolve(project.project_id, current.relative_path).is_file()
+            except (OSError, ValueError):
+                image_exists = False
+            image_state = "ready" if image_exists else "missing"
+            stored_image_fingerprint = (
+                current.parameters.get("imageFingerprint")
+                or current.parameters.get("image_fingerprint")
+                or scene.image_fingerprint
+            )
+            if image_exists and not (
+                stored_image_fingerprint == expected_image_fingerprint
+                or (current.source.value == "upload" and stored_image_fingerprint is None)
+            ):
                 image_state = "stale"
         audio_state = "missing"
         if scene.audio_relative_path:
-            audio_state = "ready" if media.resolve(project.project_id, scene.audio_relative_path).is_file() else "missing"
+            try:
+                audio_exists = media.resolve(project.project_id, scene.audio_relative_path).is_file()
+            except (OSError, ValueError):
+                audio_exists = False
+            if audio_exists:
+                audio_state = (
+                    "ready"
+                    if scene.audio_fingerprint == expected_audio_fingerprint
+                    else "stale"
+                )
         candidate_count = max(0, len(versions) - (1 if scene.current_version_id else 0))
         scene_responses.append(ProjectSceneResponse(
             sceneId=scene.scene_id, position=scene.position, narration=scene.narration,
@@ -145,7 +183,7 @@ async def create_project(body: CreateProjectRequest, core: PixelleVideoDep, requ
     scenes = [Scene(project.project_id, position, item.narration, item.visual_prompt)
               for position, item in enumerate(body.scenes)]
     core.workbench_repository.create_project(project, scenes)
-    return _response(project, scenes, core.workbench_repository, core.workbench_media, request)
+    return _response(project, scenes, core.workbench_repository, core.workbench_media, request, getattr(core, "config", {}))
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -154,7 +192,7 @@ async def get_project(project_id: str, core: PixelleVideoDep, request: Request):
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
     scenes = core.workbench_repository.list_project_scenes(project_id)
-    return _response(project, scenes, core.workbench_repository, core.workbench_media, request)
+    return _response(project, scenes, core.workbench_repository, core.workbench_media, request, getattr(core, "config", {}))
 
 
 @router.post("/{project_id}/generation-runs", response_model=GenerationRunResponse, status_code=202)
@@ -166,6 +204,14 @@ async def start_generation_run(project_id: str, body: GenerationRunCreateRequest
     except ActiveGenerationRunError as exc:
         raise HTTPException(status_code=409, detail={"message": str(exc), "currentRunId": exc.run.run_id}) from exc
     return _run_response(core, run.run_id)
+
+
+@router.get("/{project_id}/generation-runs/active", response_model=GenerationRunResponse | None)
+async def get_active_generation_run(project_id: str, core: PixelleVideoDep):
+    if core.workbench_repository.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    run = core.workbench_repository.get_active_generation_run(project_id)
+    return _run_response(core, run.run_id) if run else None
 
 
 @router.get("/{project_id}/generation-runs/{run_id}", response_model=GenerationRunResponse)
@@ -222,7 +268,7 @@ async def create_project_from_history(task_id: str, core: PixelleVideoDep, reque
     existing = core.workbench_repository.get_project_by_source_history_task_id(task_id)
     if existing:
         scenes = core.workbench_repository.list_project_scenes(existing.project_id)
-        return _response(existing, scenes, core.workbench_repository, core.workbench_media, request)
+        return _response(existing, scenes, core.workbench_repository, core.workbench_media, request, getattr(core, "config", {}))
     detail = await core.history.get_task_detail(task_id)
     if not detail or not detail.get("storyboard"):
         raise HTTPException(status_code=404, detail="history task not found")
@@ -251,7 +297,7 @@ async def create_project_from_history(task_id: str, core: PixelleVideoDep, reque
             audio_destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(frame.audio_path, audio_destination)
             core.workbench_repository.update_scene(scene.scene_id, audio_relative_path=audio_relative)
-    return _response(project, core.workbench_repository.list_project_scenes(project.project_id), core.workbench_repository, core.workbench_media, request)
+    return _response(project, core.workbench_repository.list_project_scenes(project.project_id), core.workbench_repository, core.workbench_media, request, getattr(core, "config", {}))
 
 
 @router.post("/{project_id}/scenes/{scene_id}/generate", response_model=GenerationJobResponse, status_code=202)
@@ -352,6 +398,8 @@ async def batch_image_generations(project_id: str, body: BatchImageRequest, core
     scenes = {scene.scene_id: scene for scene in core.workbench_repository.list_project_scenes(project_id)}
     if any(scene_id not in scenes for scene_id in body.scene_ids):
         raise HTTPException(status_code=404, detail="scene not found")
+    for scene_id in body.scene_ids:
+        _assert_scene_editable(core, project_id, scene_id)
     jobs = []
     for scene_id in body.scene_ids:
         scene = scenes[scene_id]

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Download, List, PanelRight, RefreshCw } from "lucide-react";
 import { GenerationRun, Project } from "../types";
-import { cancelGenerationRun, createExport, fetchGenerationRun, fetchProject, pauseGenerationRun, patchScene, regenerateImage, regenerateTts, retryFailedGeneration, resumeGenerationRun, selectAssetVersion, startGenerationRun, submitBatchImageGeneration, updateTimeline, uploadSceneAsset } from "../lib/workbenchApi";
+import { cancelGenerationRun, createExport, fetchActiveGenerationRun, fetchGenerationRun, fetchProject, pauseGenerationRun, patchScene, regenerateImage, regenerateTts, retryFailedGeneration, resumeGenerationRun, selectAssetVersion, startGenerationRun, submitBatchImageGeneration, updateTimeline, uploadSceneAsset } from "../lib/workbenchApi";
 import { initialGenerationState, reduceRunActionFailed, reduceRunActionFinished, reduceRunFetched, reduceRunStarted, ProjectGenerationState } from "../lib/projectGenerationState";
 import { SceneList } from "./SceneList";
 import { SceneInspector } from "./SceneInspector";
@@ -21,7 +21,16 @@ export const ProjectWorkbench: React.FC<{ projectId: string; addToast: (text: un
   const [generation, setGeneration] = useState<ProjectGenerationState>(initialGenerationState);
 
   const load = async () => { try { const next = await fetchProject(projectId); setProject(next); setSelectedSceneId((current) => current || next.scenes[0]?.sceneId || null); } catch (error) { addToast(error, "error"); } };
-  useEffect(() => { void load(); }, [projectId]);
+  useEffect(() => {
+    setGeneration(initialGenerationState);
+    void (async () => {
+      await load();
+      try {
+        const activeRun = await fetchActiveGenerationRun(projectId);
+        if (activeRun) setGeneration((current) => reduceRunStarted(current, activeRun));
+      } catch (error) { addToast(error, "error"); }
+    })();
+  }, [projectId]);
   useEffect(() => {
     const runId = generation.run?.runId;
     if (!runId || !generation.polling) return;

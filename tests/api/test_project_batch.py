@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from pydantic import ValidationError
 
@@ -5,6 +7,7 @@ from api.routers.projects import batch_image_generations
 from api.schemas.workbench import BatchImageRequest
 from api.tasks import task_manager
 from pixelle_video.models.workbench import Project, Scene
+from pixelle_video.services.project_generation_service import ActiveSceneLockedError
 from pixelle_video.services.workbench_media import WorkbenchMediaStore
 from pixelle_video.services.workbench_repository import WorkbenchRepository
 
@@ -42,5 +45,35 @@ async def test_batch_creates_one_job_per_scene(tmp_path, monkeypatch):
     assert len(response["jobs"]) == 2
     assert all(job["kind"] == "image" for job in response["jobs"])
     assert core.workbench_repository.get_generation_job(response["jobs"][0]["jobId"]).request_snapshot["prompt"].startswith("warm")
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_batch_rejects_locked_active_scene_before_creating_jobs(tmp_path, monkeypatch):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scene = Scene(project.project_id, 0, "0", "prompt")
+    core.workbench_repository.create_project(project, [scene])
+
+    def assert_scene_editable(project_id, scene_id):
+        raise ActiveSceneLockedError("run-1", scene_id)
+
+    core.project_generation = SimpleNamespace(assert_scene_editable=assert_scene_editable)
+    executed = False
+
+    async def should_not_execute(*args, **kwargs):
+        nonlocal executed
+        executed = True
+
+    monkeypatch.setattr(task_manager, "execute_task", should_not_execute)
+    with pytest.raises(Exception) as error:
+        await batch_image_generations(
+            project.project_id,
+            BatchImageRequest(sceneIds=[scene.scene_id]),
+            core,
+        )
+    assert getattr(error.value, "status_code", None) == 409
+    assert executed is False
+    assert core.workbench_repository.list_generation_jobs(project.project_id) == []
     core.workbench_repository.close()
 

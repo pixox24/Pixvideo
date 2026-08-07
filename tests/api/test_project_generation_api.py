@@ -1,8 +1,10 @@
 from types import SimpleNamespace
 
 import pytest
+from PIL import Image
 
 from api.routers.projects import (
+    get_active_generation_run,
     get_generation_run,
     get_project,
     pause_generation_run,
@@ -11,6 +13,8 @@ from api.routers.projects import (
 from api.schemas.workbench import GenerationRunCreateRequest
 from api.tasks import task_manager
 from pixelle_video.models.workbench import (
+    AssetSource,
+    AssetVersion,
     GenerationRun,
     GenerationRunItem,
     Project,
@@ -56,6 +60,23 @@ async def test_start_and_get_generation_run_response(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_active_generation_run_can_be_restored_after_page_reload(tmp_path):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scene = Scene(project.project_id, 0, "narration", "prompt")
+    core.workbench_repository.create_project(project, [scene])
+    run = GenerationRun(project.project_id, "task-1", {})
+    core.workbench_repository.create_generation_run(
+        run,
+        [GenerationRunItem(run.run_id, scene.scene_id, 0, "narration", "prompt", "tts", "image")],
+    )
+    active = await get_active_generation_run(project.project_id, core)
+    assert active is not None
+    assert active.run_id == run.run_id
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
 async def test_project_response_includes_jobs_and_generation_state(tmp_path):
     core = Core(tmp_path)
     project = Project("p", {})
@@ -64,4 +85,38 @@ async def test_project_response_includes_jobs_and_generation_state(tmp_path):
     response = await get_project(project.project_id, core, None)
     assert response.scenes[0].generation_state["image"] == "missing"
     assert response.jobs == []
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_project_response_marks_fingerprint_mismatches_stale(tmp_path):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scene = Scene(project.project_id, 0, "narration", "prompt")
+    core.workbench_repository.create_project(project, [scene])
+    image_relative = "assets/scenes/scene-0/generated/current.png"
+    image_path = core.workbench_media.resolve(project.project_id, image_relative)
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (2, 2), "blue").save(image_path)
+    version = AssetVersion(
+        project.project_id,
+        scene.scene_id,
+        AssetSource.AI,
+        image_relative,
+        parameters={"imageFingerprint": "old-image"},
+    )
+    core.workbench_repository.create_asset_version(version)
+    core.workbench_repository.select_asset_version(project.project_id, scene.scene_id, version.version_id)
+    audio_relative = "assets/scenes/scene-0/audio/current.mp3"
+    audio_path = core.workbench_media.resolve(project.project_id, audio_relative)
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    audio_path.write_bytes(b"audio")
+    core.workbench_repository.update_scene(
+        scene.scene_id,
+        audio_relative_path=audio_relative,
+        audio_fingerprint="old-audio",
+    )
+    response = await get_project(project.project_id, core, None)
+    assert response.scenes[0].generation_state["image"] == "stale"
+    assert response.scenes[0].generation_state["audio"] == "stale"
     core.workbench_repository.close()

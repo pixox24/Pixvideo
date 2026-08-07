@@ -286,6 +286,19 @@ class ProjectGenerationService:
         elif item.tts_status == GenerationPhase.SKIPPED:
             await self._sync_existing_scene_duration(run.project_id, item.scene_id)
 
+        # A cancellation may arrive while TTS is in flight. Let that provider
+        # call return, but do not start the next phase for the same scene.
+        current_run = self._require_run(run_id)
+        if current_run.cancel_requested:
+            self.repository.update_generation_run_item(
+                item.item_id,
+                tts_status=GenerationPhase.COMPLETED,
+                image_status=GenerationPhase.CANCELLED,
+                status=GenerationRunItemStatus.CANCELLED,
+            )
+            self.repository.update_scene(item.scene_id, status="cancelled")
+            return
+
         current = self.repository.get_generation_run_item(item.item_id)
         if current is None:
             raise ValueError("generation run item not found")

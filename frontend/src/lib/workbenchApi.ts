@@ -32,6 +32,7 @@ export const cancelWorkbenchJob = (taskId: string) => requestJson(`/api/tasks/${
 
 export const startGenerationRun = (projectId: string, sceneIds?: string[], configOverride?: Record<string, unknown>) => requestJson<GenerationRun>(`/api/projects/${projectId}/generation-runs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds, configOverride }) });
 export const fetchGenerationRun = (projectId: string, runId: string) => requestJson<GenerationRun>(`/api/projects/${projectId}/generation-runs/${runId}`);
+export const fetchActiveGenerationRun = (projectId: string) => requestJson<GenerationRun | null>(`/api/projects/${projectId}/generation-runs/active`);
 const runAction = (projectId: string, runId: string, action: string) => requestJson<GenerationRun>(`/api/projects/${projectId}/generation-runs/${runId}/${action}`, { method: "POST" });
 export const pauseGenerationRun = (projectId: string, runId: string) => runAction(projectId, runId, "pause");
 export const resumeGenerationRun = (projectId: string, runId: string) => runAction(projectId, runId, "resume");

@@ -155,6 +155,22 @@ async def test_pause_resume_and_cooperative_cancel(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_cancel_after_tts_does_not_start_image_phase(tmp_path):
+    provider, _, repository, _, service, _ = _setup(
+        tmp_path,
+        {"scene-0": FakeSceneBehavior(wait_for_release=True)},
+        scene_count=1,
+    )
+    run = await service.start("project-1")
+    await provider.wait_until_started("tts", "scene-0")
+    await service.request_cancel(run.run_id)
+    provider.release("scene-0")
+    cancelled = await _wait_for_terminal(repository, run.run_id)
+    assert cancelled.status == GenerationRunStatus.CANCELLED
+    assert [(call.operation, call.scene_id) for call in provider.completed_calls] == [("tts", "scene-0")]
+
+
+@pytest.mark.asyncio
 async def test_active_run_conflict_and_resume_after_restart(tmp_path):
     behavior = {"scene-0": FakeSceneBehavior(wait_for_release=True)}
     provider, _, repository, manager, service, _ = _setup(tmp_path, behavior, scene_count=1)

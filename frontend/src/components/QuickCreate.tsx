@@ -26,12 +26,13 @@ import {
   FolderOpen,
   XCircle,
 } from "lucide-react";
-import { Preset, SubtitleStyle, WorkbenchResources } from "../types";
+import { Preset, QuickCreateInput, SubtitleStyle, WorkbenchResources } from "../types";
 import { VOICE_OPTIONS } from "../data";
 import { extractHighlightKeywords, formatApiErrorValue } from "../lib/api";
 
 interface QuickCreateProps {
   onGenerateTask: (taskInput: any) => Promise<string | null>;
+  onCreateProject?: (input: QuickCreateInput) => Promise<void>;
   latestCompletedTaskId?: string | null;
   presets: Preset[];
   activePreset: Preset | null;
@@ -150,6 +151,7 @@ const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
 
 export const QuickCreate: React.FC<QuickCreateProps> = ({
   onGenerateTask,
+  onCreateProject,
   latestCompletedTaskId,
   presets,
   activePreset,
@@ -1057,7 +1059,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       return;
     }
 
-    const taskInput = {
+      const taskInput = {
       title,
       tabType: "quick-create",
       workflowId,
@@ -1076,10 +1078,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       subtitleStyle,
       splitType,
       reuseTaskId: mode === "batch" ? undefined : effectiveReuseSourceTaskId,
-      scenes: renderScenes
-    };
+        scenes: renderScenes
+      };
 
-    const requestGroupKey = crypto.randomUUID();
+      if (mode !== "batch" && onCreateProject) {
+        await onCreateProject({ title, scenes: renderScenes });
+        setReviewConfirmed(false);
+        return;
+      }
+
+      const requestGroupKey = crypto.randomUUID();
     setIsSubmitting(true);
     try {
       if (mode === "batch") {

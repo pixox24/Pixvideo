@@ -1,4 +1,4 @@
-import { Project, QuickCreateInput, GenerationJob, WorkbenchScene } from "../types";
+import { Project, QuickCreateInput, ExportSubmission, GenerationJob, WorkbenchScene } from "../types";
 import { requestJson } from "./api";
 
 export async function createProject(input: QuickCreateInput): Promise<Project> {
@@ -26,5 +26,5 @@ export const selectAssetVersion = (projectId: string, sceneId: string, versionId
 export const reorderScenes = (projectId: string, sceneIds: string[]) => requestJson(`/api/projects/${projectId}/scenes/reorder`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds }) });
 export const updateTimeline = (projectId: string, sceneIds: string[], holds: Record<string, number>) => requestJson(`/api/projects/${projectId}/timeline`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds, holds }) });
 export const submitBatchImageGeneration = (projectId: string, sceneIds: string[], promptPrefix = "") => requestJson<{ jobs: GenerationJob[] }>(`/api/projects/${projectId}/batch/image-generations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds, promptPrefix }) });
-export const createExport = (projectId: string) => requestJson<GenerationJob>(`/api/projects/${projectId}/exports`, { method: "POST" });
+export const createExport = (projectId: string, allowIncomplete = false) => requestJson<ExportSubmission>(`/api/projects/${projectId}/exports`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allowIncomplete }) });
 export const cancelWorkbenchJob = (taskId: string) => requestJson(`/api/tasks/${taskId}`, { method: "DELETE" });

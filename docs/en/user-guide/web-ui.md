@@ -2,6 +2,16 @@
 
 ## Editing Workbench
 
+### Project Generation Run
+
+The workbench has one project-level **Start generation** action. It scans all scenes in timeline order and skips assets whose fingerprints and files are still valid. Each missing or stale scene runs TTS first, writes the measured audio duration back to the timeline, and then generates the image.
+
+The run panel shows the current scene, phase, aggregate progress, and terminal counts. **Pause** and **Cancel** are cooperative signals: an in-flight provider request is allowed to return before the next scene is scheduled. A failed scene is recorded and later scenes continue. For a run with failures, **Retry failed only** creates a new run from the current project settings.
+
+When a scene already has a current image, a regenerated image is stored as a candidate version. It does not replace the current preview or export snapshot until the user explicitly selects it. The active scene is locked while it is being generated; waiting scenes remain editable.
+
+Queued, running, and paused runs are persisted in the project database. If the API restarts, the run is restored and resumes from its last unfinished phase. The browser polls the run once per second while it is active and stops polling at a terminal state.
+
 After confirming 1-100 scenes in Quick Create, the default action creates a project and opens the workbench. Direct generation remains available when refinement is unnecessary. The left pane contains scenes and project assets, the center previews the selected image, the right inspector edits narration, prompts, and candidates, and the bottom timeline controls order and extra visual hold.
 
 Image regeneration adds a candidate and never replaces the current version until **Use this version** is selected. Uploads remain local to the project. Saving narration does not automatically start TTS; voice regeneration is explicit. Batch operations are limited to prompt prefixes and image generation.

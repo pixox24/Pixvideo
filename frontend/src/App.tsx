@@ -24,6 +24,7 @@ import { QuickCreate } from "./components/QuickCreate";
 import { HistoryList } from "./components/HistoryList";
 import { SystemSettingsTab } from "./components/SystemSettingsTab";
 import { ConsolePanel } from "./components/ConsolePanel";
+import { ProjectWorkbench } from "./components/ProjectWorkbench";
 import {
   buildConfigPayload,
   cancelTask,
@@ -835,12 +836,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === "project-workbench" && activeProjectId && (
-            <div className="min-h-[420px] border border-zinc-800 bg-[#101114] p-6">
-              <h2 className="text-lg font-semibold text-zinc-100">项目工作台</h2>
-              <p className="mt-2 text-sm text-zinc-400">项目 {activeProjectId} 已创建，工作台界面即将加载。</p>
-            </div>
-          )}
+          {activeTab === "project-workbench" && activeProjectId && <ProjectWorkbench projectId={activeProjectId} addToast={addToast} />}
 
           {activeTab === "history" && (
             <HistoryList

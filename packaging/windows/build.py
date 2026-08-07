@@ -473,7 +473,7 @@ class WindowsPackageBuilder:
         exclude_patterns = self.config['build']['exclude_patterns']
         
         def should_exclude(path: Path) -> bool:
-            path_str = str(path.relative_to(self.project_root))
+            path_str = path.relative_to(self.project_root).as_posix()
             for pattern in exclude_patterns:
                 if pattern.endswith('/*'):
                     # Directory content exclusion - must match exact directory name or start with "dirname/"

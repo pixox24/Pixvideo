@@ -29,7 +29,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -37,7 +37,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -777,6 +777,34 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#editing-workbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Editing Workbench
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Editing Workbench">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#project-generation-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Generation Run
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#interface-layout" class="md-nav__link">
@@ -1537,6 +1565,34 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#editing-workbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Editing Workbench
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Editing Workbench">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#project-generation-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Generation Run
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#interface-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1729,6 +1785,15 @@
 
 
 <h1 id="web-ui-guide">Web UI Guide<a class="headerlink" href="#web-ui-guide" title="Permanent link">&para;</a></h1>
+<h2 id="editing-workbench">Editing Workbench<a class="headerlink" href="#editing-workbench" title="Permanent link">&para;</a></h2>
+<h3 id="project-generation-run">Project Generation Run<a class="headerlink" href="#project-generation-run" title="Permanent link">&para;</a></h3>
+<p>The workbench has one project-level <strong>Start generation</strong> action. It scans all scenes in timeline order and skips assets whose fingerprints and files are still valid. Each missing or stale scene runs TTS first, writes the measured audio duration back to the timeline, and then generates the image.</p>
+<p>The run panel shows the current scene, phase, aggregate progress, and terminal counts. <strong>Pause</strong> and <strong>Cancel</strong> are cooperative signals: an in-flight provider request is allowed to return before the next scene is scheduled. A failed scene is recorded and later scenes continue. For a run with failures, <strong>Retry failed only</strong> creates a new run from the current project settings.</p>
+<p>When a scene already has a current image, a regenerated image is stored as a candidate version. It does not replace the current preview or export snapshot until the user explicitly selects it. The active scene is locked while it is being generated; waiting scenes remain editable.</p>
+<p>Queued, running, and paused runs are persisted in the project database. If the API restarts, the run is restored and resumes from its last unfinished phase. The browser polls the run once per second while it is active and stops polling at a terminal state.</p>
+<p>After confirming 1-100 scenes in Quick Create, the default action creates a project and opens the workbench. Direct generation remains available when refinement is unnecessary. The left pane contains scenes and project assets, the center previews the selected image, the right inspector edits narration, prompts, and candidates, and the bottom timeline controls order and extra visual hold.</p>
+<p>Image regeneration adds a candidate and never replaces the current version until <strong>Use this version</strong> is selected. Uploads remain local to the project. Saving narration does not automatically start TTS; voice regeneration is explicit. Batch operations are limited to prompt prefixes and image generation.</p>
+<p>Export preflight requires a selected image and audio for each scene and freezes an immutable revision. Incomplete export requires a second confirmation. Completed or failed history items can be opened as projects without modifying the original history.</p>
 <p>Detailed introduction to the Pixelle-Video Web interface features.</p>
 <hr />
 <h2 id="interface-layout">Interface Layout<a class="headerlink" href="#interface-layout" title="Permanent link">&para;</a></h2>
@@ -1831,7 +1896,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="July 14, 2026 02:05:51 UTC">July 14, 2026 02:05:51</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="August 7, 2026 09:46:00 UTC">August 7, 2026 09:46:00</span>
   </span>
 
     
@@ -1958,7 +2023,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

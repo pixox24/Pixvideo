@@ -16,6 +16,7 @@ from api.schemas.workbench import (
     UpdateNarrationRequest,
     UpdateSceneRequest,
     ReorderScenesRequest,
+    TimelineUpdateRequest,
 )
 from api.tasks import task_manager
 from api.tasks.models import TaskType
@@ -160,6 +161,22 @@ async def reorder_scenes(project_id: str, body: ReorderScenesRequest, core: Pixe
         raise HTTPException(status_code=422, detail="sceneIds must contain every project scene exactly once")
     core.workbench_repository.reorder_scenes(project_id, body.scene_ids)
     return {"sceneIds": body.scene_ids}
+
+
+@router.patch("/{project_id}/timeline")
+async def update_timeline(project_id: str, body: TimelineUpdateRequest, core: PixelleVideoDep):
+    if core.workbench_repository.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    scenes = core.workbench_repository.list_project_scenes(project_id)
+    expected = {scene.scene_id for scene in scenes}
+    if len(body.scene_ids) != len(set(body.scene_ids)) or set(body.scene_ids) != expected:
+        raise HTTPException(status_code=422, detail="sceneIds must contain every project scene exactly once")
+    if not set(body.holds).issubset(expected):
+        raise HTTPException(status_code=422, detail="holds contains an unknown scene")
+    core.workbench_repository.reorder_scenes(project_id, body.scene_ids)
+    for scene_id, hold in body.holds.items():
+        core.workbench_repository.update_scene(scene_id, manual_hold_seconds=hold)
+    return {"sceneIds": body.scene_ids, "scenes": [scene.__dict__ for scene in core.workbench_repository.list_project_scenes(project_id)]}
 
 
 @router.post("/{project_id}/scenes/{scene_id}/uploads", status_code=201)

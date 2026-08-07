@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 
 from api.routers.projects import reorder_scenes, select_asset_version, update_scene
-from api.schemas.workbench import ReorderScenesRequest, UpdateSceneRequest
+from api.schemas.workbench import ReorderScenesRequest, TimelineUpdateRequest, UpdateSceneRequest
 from pixelle_video.models.workbench import AssetSource, AssetVersion, Project, Scene
 from pixelle_video.services.workbench_media import WorkbenchMediaStore
 from pixelle_video.services.workbench_repository import WorkbenchRepository
@@ -59,3 +59,7 @@ async def test_reorder_requires_exact_scene_set(tmp_path):
     assert error.value.status_code == 422
     core.workbench_repository.close()
 
+
+def test_timeline_rejects_negative_hold():
+    with pytest.raises(Exception):
+        TimelineUpdateRequest(sceneIds=["s1"], holds={"s1": -1})

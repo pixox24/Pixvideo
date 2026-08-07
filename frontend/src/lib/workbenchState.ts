@@ -10,6 +10,10 @@ export function clampManualHold(audioSeconds: number, requestedHold: number): nu
   return Math.max(0, Number.isFinite(requestedHold) ? requestedHold : 0);
 }
 
+export function effectiveSceneDuration(audioSeconds: number, manualHoldSeconds: number): number {
+  return Math.max(audioSeconds, audioSeconds + Math.max(0, manualHoldSeconds));
+}
+
 export function selectAssetVersion(project: Project, sceneId: string, versionId: string): Project {
   return {
     ...project,
@@ -18,4 +22,3 @@ export function selectAssetVersion(project: Project, sceneId: string, versionId:
     ),
   };
 }
-

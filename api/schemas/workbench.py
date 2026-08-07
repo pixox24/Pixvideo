@@ -83,6 +83,20 @@ class ReorderScenesRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class TimelineUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    scene_ids: list[str] = Field(..., min_length=1, alias="sceneIds")
+    holds: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("holds")
+    @classmethod
+    def holds_are_finite_non_negative(cls, value: dict[str, float]) -> dict[str, float]:
+        import math
+        if any(not math.isfinite(number) or number < 0 for number in value.values()):
+            raise ValueError("holds must be finite and non-negative")
+        return value
+
+
 class AssetVersionResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     version_id: str = Field(alias="versionId")

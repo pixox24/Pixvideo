@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from api.routers.projects import reorder_scenes, select_asset_version, update_scene
+from api.routers.projects import reorder_scenes, select_asset_version, update_scene, update_timeline
 from api.schemas.workbench import ReorderScenesRequest, TimelineUpdateRequest, UpdateSceneRequest
 from pixelle_video.models.workbench import AssetSource, AssetVersion, Project, Scene
 from pixelle_video.services.workbench_media import WorkbenchMediaStore
@@ -57,6 +57,34 @@ async def test_reorder_requires_exact_scene_set(tmp_path):
         await reorder_scenes(project.project_id, ReorderScenesRequest(sceneIds=[scenes[0].scene_id]), core)
 
     assert error.value.status_code == 422
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_timeline_persists_order_and_hold_without_shortening_audio(tmp_path):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scenes = [Scene(project.project_id, i, str(i), str(i), duration_seconds=2) for i in range(2)]
+    core.workbench_repository.create_project(project, scenes)
+
+    response = await update_timeline(
+        project.project_id,
+        TimelineUpdateRequest(sceneIds=[scenes[1].scene_id, scenes[0].scene_id], holds={scenes[0].scene_id: 1.5}),
+        core,
+    )
+
+    assert response["sceneIds"] == [scenes[1].scene_id, scenes[0].scene_id]
+    updated = core.workbench_repository.get_scene(scenes[0].scene_id)
+    assert updated.manual_hold_seconds == 1.5
+    assert updated.duration_seconds == 3.5
+    await update_timeline(
+        project.project_id,
+        TimelineUpdateRequest(sceneIds=response["sceneIds"], holds={scenes[0].scene_id: 0.5}),
+        core,
+    )
+    updated = core.workbench_repository.get_scene(scenes[0].scene_id)
+    assert updated.duration_seconds == 2.5
+    assert [scene.scene_id for scene in core.workbench_repository.list_project_scenes(project.project_id)] == response["sceneIds"]
     core.workbench_repository.close()
 
 

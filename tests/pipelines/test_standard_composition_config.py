@@ -45,6 +45,36 @@ async def test_standard_pipeline_passes_composition_settings_to_storyboard_confi
 
 
 @pytest.mark.asyncio
+async def test_existing_workbench_assets_set_effective_frame_duration():
+    pipeline = StandardPipeline(DummyCore())
+    ctx = PipelineContext(
+        input_text="topic",
+        params={
+            "scenes": [{"sceneId": "scene-1"}],
+            "existing_scene_assets": {
+                "scene-1": {
+                    "audio_path": "/tmp/audio.mp3",
+                    "image_path": "/tmp/image.png",
+                    "duration_seconds": 2.0,
+                    "manual_hold_seconds": 1.5,
+                },
+            },
+        },
+    )
+    ctx.task_id = "task-1"
+    ctx.title = "Title"
+    ctx.narrations = ["第一段"]
+    ctx.image_prompts = ["prompt 1"]
+
+    await pipeline.initialize_storyboard(ctx)
+
+    frame = ctx.storyboard.frames[0]
+    assert frame.audio_path == "/tmp/audio.mp3"
+    assert frame.image_path == "/tmp/image.png"
+    assert frame.duration == 3.5
+
+
+@pytest.mark.asyncio
 async def test_plain_image_mode_requires_visual_prompts_even_with_static_template(monkeypatch):
     pipeline = StandardPipeline(DummyCore())
     ctx = PipelineContext(

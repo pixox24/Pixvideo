@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import httpx
 import pytest
 
@@ -6,6 +8,27 @@ from pixelle_video.services.media import MediaService
 
 class DummyCore:
     pass
+
+
+@pytest.fixture(autouse=True)
+def enable_mocked_image_provider(monkeypatch):
+    monkeypatch.setenv("PIXELLE_USE_REAL_IMAGE_API", "1")
+
+
+@pytest.mark.asyncio
+async def test_media_service_uses_existing_local_image_by_default(monkeypatch):
+    monkeypatch.delenv("PIXELLE_USE_REAL_IMAGE_API")
+    monkeypatch.delenv("PIXELLE_TEST_IMAGE_PATH", raising=False)
+    monkeypatch.setattr(
+        "pixelle_video.services.media.config_manager.get_image_generation_config",
+        lambda: {"api_key": "must-not-run", "base_url": "https://api.example.com", "model": "test"},
+    )
+
+    service = MediaService({}, core=DummyCore())
+    result = await service(prompt="must stay offline")
+
+    assert result.media_type == "image"
+    assert result.url == str((Path(__file__).parents[2] / "resources" / "example.png").resolve())
 
 
 @pytest.mark.asyncio

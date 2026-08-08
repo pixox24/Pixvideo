@@ -738,8 +738,6 @@ class SubtitleRenderer:
         if not color_map:
             return self.escape_ass_text(text)
 
-        # Longest match first to prefer multi-char keywords.
-        words = sorted(color_map.keys(), key=len, reverse=True)
         # Build matcher from original highlightWords for display casing.
         display_words = list(style.get("highlightWords") or [])
         for key in color_map:

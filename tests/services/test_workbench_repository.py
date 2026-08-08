@@ -1,6 +1,7 @@
 from pixelle_video.models.workbench import (
     AssetSource,
     AssetVersion,
+    ExportRevision,
     GenerationJob,
     GenerationKind,
     GenerationStatus,
@@ -101,3 +102,23 @@ def test_generation_job_round_trip_and_update(tmp_path):
         project.project_id,
         include_terminal=False,
     ) == []
+
+
+def test_active_export_revisions_exclude_terminal_statuses(tmp_path):
+    repository = WorkbenchRepository(tmp_path / "workbench.sqlite3")
+    project = Project(title="导出项目", config={})
+    repository.create_project(project, [])
+    revisions = [
+        ExportRevision(project.project_id, {}, status=status)
+        for status in GenerationStatus
+    ]
+    for revision in revisions:
+        repository.create_export_revision(revision)
+
+    active = repository.list_active_export_revisions()
+
+    assert {revision.export_id for revision in active} == {
+        revision.export_id
+        for revision in revisions
+        if revision.status in {GenerationStatus.PENDING, GenerationStatus.RUNNING}
+    }

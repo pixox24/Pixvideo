@@ -76,6 +76,36 @@ async def test_serial_tts_then_image_and_duration(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_completed_run_creates_one_initial_export_and_is_idempotent(tmp_path):
+    _, _, repository, manager, service, _ = _setup(tmp_path, scene_count=1)
+    output = tmp_path / "pipeline" / "final.mp4"
+
+    async def generate_video(**_kwargs):
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"fake-video")
+        return {"video_path": str(output)}
+
+    service.core.generate_video = generate_video
+    run = await service.start("project-1")
+    result = await _wait_for_terminal(repository, run.run_id)
+    for _ in range(100):
+        revisions = repository.list_export_revisions("project-1")
+        if revisions and revisions[0].status.value in {"completed", "failed"}:
+            break
+        await asyncio.sleep(0.005)
+
+    revisions = repository.list_export_revisions("project-1")
+    assert len(revisions) == 1
+    assert revisions[0].snapshot["purpose"] == "initial"
+    assert revisions[0].snapshot["createdFromRunId"] == result.run_id
+    assert revisions[0].status.value == "completed"
+
+    await service._finalize(run.run_id)
+    assert len(repository.list_export_revisions("project-1")) == 1
+    await manager.stop()
+
+
+@pytest.mark.asyncio
 async def test_failure_does_not_block_later_scene(tmp_path):
     provider, _, repository, _, service, _ = _setup(
         tmp_path,

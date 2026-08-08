@@ -19,7 +19,7 @@ Run this script to start the FastAPI server:
     uv run python api/app.py
     
 Or with custom settings:
-    uv run python api/app.py --host 0.0.0.0 --port 8080 --reload
+    uv run python api/app.py --host 127.0.0.1 --port 8080 --reload
 """
 
 import sys
@@ -77,10 +77,19 @@ async def lifespan(app: FastAPI):
     await task_manager.start()
     try:
         core = await get_pixelle_video()
-        if core.project_generation:
-            await core.project_generation.resume_active_runs()
     except Exception as exc:
-        logger.warning(f"Failed to resume project generation runs: {exc}")
+        logger.warning(f"Failed to initialize persisted workbench jobs: {exc}")
+    else:
+        if core.project_generation:
+            try:
+                await core.project_generation.resume_active_runs()
+            except Exception as exc:
+                logger.warning(f"Failed to resume project generation runs: {exc}")
+        if core.workbench_jobs:
+            try:
+                await core.workbench_jobs.resume_active_exports(task_manager)
+            except Exception as exc:
+                logger.warning(f"Failed to resume workbench exports: {exc}")
     logger.info("✅ Pixelle-Video API started successfully\n")
     
     yield
@@ -175,7 +184,7 @@ if __name__ == "__main__":
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Start Pixelle-Video API Server")
-    parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
+    parser.add_argument("--host", default=api_config.host, help="Host to bind to")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind to")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
     
@@ -201,4 +210,3 @@ Press Ctrl+C to stop the server
         port=args.port,
         reload=args.reload,
     )
-

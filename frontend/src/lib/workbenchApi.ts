@@ -9,6 +9,7 @@ export async function createProject(input: QuickCreateInput): Promise<Project> {
 }
 
 export const fetchProject = (projectId: string) => requestJson<Project>(`/api/projects/${projectId}`);
+export const patchProject = (projectId: string, body: { title?: string; config?: Record<string, unknown>; expectedUpdatedAt?: string }) => requestJson<Project>(`/api/projects/${projectId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 export const createProjectFromHistory = (taskId: string) => requestJson<Project>(`/api/projects/from-history/${taskId}`, { method: "POST" });
 
 export async function patchScene(projectId: string, sceneId: string, patch: Partial<Pick<WorkbenchScene, "narration" | "visualPrompt" | "manualHoldSeconds" | "durationSeconds">>) {
@@ -28,6 +29,7 @@ export const reorderScenes = (projectId: string, sceneIds: string[]) => requestJ
 export const updateTimeline = (projectId: string, sceneIds: string[], holds: Record<string, number>) => requestJson(`/api/projects/${projectId}/timeline`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds, holds }) });
 export const submitBatchImageGeneration = (projectId: string, sceneIds: string[], promptPrefix = "") => requestJson<{ jobs: GenerationJob[] }>(`/api/projects/${projectId}/batch/image-generations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds, promptPrefix }) });
 export const createExport = (projectId: string, allowIncomplete = false) => requestJson<ExportSubmission>(`/api/projects/${projectId}/exports`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allowIncomplete }) });
+export const retryExport = (projectId: string, exportId: string) => requestJson<ExportSubmission>(`/api/projects/${projectId}/exports/${exportId}/retry`, { method: "POST" });
 export const cancelWorkbenchJob = (taskId: string) => requestJson(`/api/tasks/${taskId}`, { method: "DELETE" });
 
 export const startGenerationRun = (projectId: string, sceneIds?: string[], configOverride?: Record<string, unknown>) => requestJson<GenerationRun>(`/api/projects/${projectId}/generation-runs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds, configOverride }) });

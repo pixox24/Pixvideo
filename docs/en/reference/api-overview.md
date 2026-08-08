@@ -43,7 +43,7 @@ Primary method for generating videos.
 Start the API server:
 
 ```bash
-uv run uvicorn api.app:app --host 0.0.0.0 --port 8000
+uv run uvicorn api.app:app --host 127.0.0.1 --port 8000
 ```
 
 ### Video Generation - Synchronous
@@ -138,4 +138,3 @@ Generate video asynchronously, returns task ID immediately. Suitable for large v
 ## More Information
 
 API documentation is also available via Swagger UI: `http://localhost:8000/docs`
-

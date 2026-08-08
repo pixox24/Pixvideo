@@ -43,7 +43,7 @@ await pixelle.initialize()
 启动 API 服务器：
 
 ```bash
-uv run uvicorn api.app:app --host 0.0.0.0 --port 8000
+uv run uvicorn api.app:app --host 127.0.0.1 --port 8000
 ```
 
 ### 视频生成 - 同步
@@ -138,4 +138,3 @@ uv run uvicorn api.app:app --host 0.0.0.0 --port 8000
 ## 更多信息
 
 API 文档也可通过 Swagger UI 访问：`http://localhost:8000/docs`
-

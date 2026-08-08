@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { AlertTriangle, Download, X } from "lucide-react";
 import { ExportSubmission, Project } from "../types";
+import { effectiveSceneDuration } from "../lib/workbenchState";
 
 interface Props {
   project: Project;
@@ -26,6 +27,9 @@ export const ExportDialog: React.FC<Props> = ({ project, open, onClose, onExport
   );
   if (!open) return null;
   const canSubmit = blocking.length === 0 || (allowIncomplete && confirmed);
+  const totalDuration = project.scenes.reduce((total, scene) => total + effectiveSceneDuration(scene.durationSeconds, scene.manualHoldSeconds), 0);
+  const bgm = String(project.config.bgm || project.config.bgm_path || "bgm-none");
+  const bgmVolume = Number(project.config.bgmVolume || project.config.bgm_volume || 30);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -56,6 +60,7 @@ export const ExportDialog: React.FC<Props> = ({ project, open, onClose, onExport
         ) : (
           <div className="mb-4 text-xs text-emerald-400">全部场景已通过导出检查</div>
         )}
+        <dl className="mb-4 grid grid-cols-2 gap-2 text-xs text-zinc-400"><div className="border border-zinc-800 p-2"><dt className="text-zinc-600">分镜 / 总时长</dt><dd className="mt-1 text-zinc-200">{project.scenes.length} / {totalDuration.toFixed(1)} 秒</dd></div><div className="border border-zinc-800 p-2"><dt className="text-zinc-600">背景音乐</dt><dd className="mt-1 truncate text-zinc-200">{bgm === "bgm-none" ? "无" : bgm} · {bgmVolume > 1 ? bgmVolume : Math.round(bgmVolume * 100)}%</dd></div></dl>
         {candidateScenes.length > 0 && (
           <div className="mb-4 border border-sky-500/30 bg-sky-500/5 p-3">
             <div className="mb-2 flex items-center gap-2 text-xs text-sky-300">

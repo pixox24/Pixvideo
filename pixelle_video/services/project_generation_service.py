@@ -8,6 +8,7 @@ from typing import Any
 
 from api.tasks.models import TaskType
 from pixelle_video.models.workbench import (
+    ExportRevision,
     GenerationPhase,
     GenerationRun,
     GenerationRunItem,
@@ -246,7 +247,7 @@ class ProjectGenerationService:
             items = self.repository.list_generation_run_items(run_id)
             item = next((candidate for candidate in items if not candidate.is_terminal), None)
             if item is None:
-                self._finalize(run_id)
+                await self._finalize(run_id)
                 return
 
             self.repository.update_generation_run(
@@ -401,7 +402,7 @@ class ProjectGenerationService:
             await event.wait()
             event.clear()
 
-    def _finalize(self, run_id: str) -> None:
+    async def _finalize(self, run_id: str) -> None:
         run = self.repository.recompute_generation_run_counts(run_id)
         status = (
             GenerationRunStatus.COMPLETED_WITH_FAILURES
@@ -414,6 +415,64 @@ class ProjectGenerationService:
             current_scene_id=None,
         )
         self._publish_progress(run_id, "generation completed")
+        if status == GenerationRunStatus.COMPLETED:
+            await self._create_initial_export(run)
+
+    async def _create_initial_export(self, run: GenerationRun) -> None:
+        """Create one immutable first-draft export after a fully successful run."""
+        if self.repository.get_export_revision_for_run(run.project_id, run.run_id):
+            return
+        scenes = self.repository.list_project_scenes(run.project_id)
+        snapshot_scenes = []
+        for scene in scenes:
+            version = (
+                self.repository.get_asset_version(scene.current_version_id)
+                if scene.current_version_id
+                else None
+            )
+            if version is None or not scene.audio_relative_path:
+                return
+            snapshot_scenes.append({
+                "sceneId": scene.scene_id,
+                "position": scene.position,
+                "narration": scene.narration,
+                "visualPrompt": scene.visual_prompt,
+                "durationSeconds": scene.duration_seconds,
+                "manualHoldSeconds": scene.manual_hold_seconds,
+                "versionId": version.version_id,
+                "imagePath": version.relative_path,
+                "audioPath": scene.audio_relative_path,
+            })
+        project = self.repository.get_project(run.project_id)
+        if project is None:
+            return
+        revision = ExportRevision(run.project_id, {
+            "projectId": run.project_id,
+            "purpose": "initial",
+            "createdFromRunId": run.run_id,
+            "sceneOrder": [scene["sceneId"] for scene in snapshot_scenes],
+            "scenes": snapshot_scenes,
+            "config": project.config,
+            "allowIncomplete": False,
+        })
+        self.repository.create_export_revision(revision)
+        if self.workbench_jobs and hasattr(self.workbench_jobs, "run_export_job"):
+            task = self.task_manager.create_task(
+                TaskType.WORKBENCH_EXPORT,
+                request_params={
+                    "project_id": run.project_id,
+                    "export_id": revision.export_id,
+                    "purpose": "initial",
+                    "createdFromRunId": run.run_id,
+                },
+            )
+            await self.task_manager.execute_task(
+                task.task_id,
+                self.workbench_jobs.run_export_job,
+                run.project_id,
+                revision.export_id,
+                task.task_id,
+            )
 
     def _publish_progress(self, run_id: str, message: str) -> None:
         run = self.repository.get_generation_run(run_id)

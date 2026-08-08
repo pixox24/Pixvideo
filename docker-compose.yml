@@ -43,7 +43,7 @@ services:
       init:
         condition: service_completed_successfully
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       # Mount config file (read-write to allow saving from Web UI)
       # Note: init service auto-creates config.yaml from config.example.yaml if not exists

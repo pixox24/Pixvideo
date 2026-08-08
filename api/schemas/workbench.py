@@ -115,6 +115,23 @@ class ExportRequest(BaseModel):
     allow_incomplete: bool = Field(default=False, alias="allowIncomplete")
 
 
+class ProjectUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    config: dict[str, Any] | None = None
+    expected_updated_at: str | None = Field(default=None, alias="expectedUpdatedAt")
+
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("title must not be blank")
+        return value
+
+
 class GenerationRunCreateRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     scene_ids: list[str] | None = Field(default=None, alias="sceneIds")
@@ -193,6 +210,16 @@ class GenerationJobResponse(BaseModel):
     error: str | None = None
 
 
+class LatestExportResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    export_id: str = Field(alias="exportId")
+    purpose: Literal["initial", "manual"] | None = None
+    status: str
+    output_url: str | None = Field(default=None, alias="outputUrl")
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+
+
 class ProjectResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     project_id: str = Field(alias="projectId")
@@ -203,3 +230,5 @@ class ProjectResponse(BaseModel):
     scenes: list[ProjectSceneResponse]
     jobs: list[GenerationJobResponse]
     updated_at: str = Field(alias="updatedAt")
+    latest_export: LatestExportResponse | None = Field(default=None, alias="latestExport")
+    dirty: bool = False

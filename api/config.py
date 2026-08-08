@@ -23,13 +23,18 @@ class APIConfig(BaseModel):
     """API configuration"""
     
     # Server settings
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8000
     reload: bool = False
     
     # CORS settings
     cors_enabled: bool = True
-    cors_origins: list[str] = ["*"]
+    cors_origins: list[str] = [
+        "http://127.0.0.1:4173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://localhost:5173",
+    ]
     
     # Task settings
     max_concurrent_tasks: int = 5
@@ -48,4 +53,3 @@ class APIConfig(BaseModel):
 
 # Global config instance
 api_config = APIConfig()
-

@@ -82,6 +82,13 @@ Common settings include:
 cd frontend && npm run build && cd ..
 uv run python api/app.py --host 127.0.0.1 --port 8000
 
+# Local runs reuse resources/example.png and do not call image providers by default
+# Use this only when real image generation is explicitly required
+PIXELLE_USE_REAL_IMAGE_API=1 uv run python api/app.py --host 127.0.0.1 --port 8000
+
+# Optional: use another existing image for the offline flow
+PIXELLE_TEST_IMAGE_PATH=/absolute/path/existing.png uv run python api/app.py
+
 # Frontend development server with hot reload (port 5173)
 cd frontend && npm run dev
 

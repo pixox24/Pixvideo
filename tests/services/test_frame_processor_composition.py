@@ -50,6 +50,7 @@ async def test_plain_image_segment_uses_original_image(monkeypatch, tmp_path):
     frame.media_type = "image"
     frame.image_path = str(tmp_path / "source.png")
     frame.audio_path = str(tmp_path / "audio.mp3")
+    frame.duration = 3.5
 
     class FakeVideoService:
         def create_video_from_image_with_motion(self, **kwargs):
@@ -75,6 +76,7 @@ async def test_plain_image_segment_uses_original_image(monkeypatch, tmp_path):
     assert calls["subtitle_style"]["fontSize"] == 48
     assert calls["motion_enabled"] is True
     assert calls["subtitle_enabled"] is True
+    assert calls["duration"] == 3.5
     assert frame.video_segment_path == calls["output"]
 
 
@@ -92,7 +94,19 @@ async def test_plain_image_mode_rejects_video_media():
 
 @pytest.mark.asyncio
 async def test_rerender_frame_reuses_existing_audio_and_image(monkeypatch, tmp_path):
-    processor = FrameProcessor(DummyCore())
+    class CountingCore:
+        def __init__(self):
+            self.tts_calls = 0
+            self.media_calls = 0
+
+        async def tts(self, **_kwargs):
+            self.tts_calls += 1
+
+        async def media(self, **_kwargs):
+            self.media_calls += 1
+
+    core = CountingCore()
+    processor = FrameProcessor(core)
     audio = tmp_path / "source.mp3"
     image = tmp_path / "source.png"
     audio.write_bytes(b"audio")
@@ -108,17 +122,12 @@ async def test_rerender_frame_reuses_existing_audio_and_image(monkeypatch, tmp_p
     )
     storyboard = Storyboard(title="Title", config=make_config(), frames=[frame])
 
-    async def fail_generation(*_args, **_kwargs):
-        raise AssertionError("rerender must not regenerate source assets")
-
     async def no_op_compose(*_args, **_kwargs):
         return None
 
     async def create_segment(current_frame, _config):
         current_frame.video_segment_path = str(tmp_path / "rerendered.mp4")
 
-    monkeypatch.setattr(processor, "_step_generate_audio", fail_generation)
-    monkeypatch.setattr(processor, "_step_generate_media", fail_generation)
     monkeypatch.setattr(processor, "_step_compose_frame", no_op_compose)
     monkeypatch.setattr(processor, "_step_create_video_segment", create_segment)
 
@@ -127,3 +136,5 @@ async def test_rerender_frame_reuses_existing_audio_and_image(monkeypatch, tmp_p
     assert result.audio_path == str(audio)
     assert result.image_path == str(image)
     assert result.video_segment_path == str(tmp_path / "rerendered.mp4")
+    assert core.tts_calls == 0
+    assert core.media_calls == 0

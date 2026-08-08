@@ -165,32 +165,145 @@ class WorkbenchJobService:
         self.repository.update_export_revision(export_id, status=GenerationStatus.RUNNING)
         try:
             existing_assets = {}
-            for item in revision.snapshot.get("scenes", []):
+            scenes = revision.snapshot.get("scenes") or []
+            if not scenes:
+                raise ValueError("export snapshot contains no complete scenes")
+            for item in scenes:
                 image_path = item.get("imagePath")
                 audio_path = item.get("audioPath")
-                if image_path:
-                    image_absolute = self.media_store.resolve(project_id, image_path)
-                    if not image_absolute.is_file():
-                        raise ValueError("export image is missing")
-                if audio_path:
-                    audio_absolute = self.media_store.resolve(project_id, audio_path)
-                    if not audio_absolute.is_file():
-                        raise ValueError("export audio is missing")
-                existing_assets[item["sceneId"]] = {"image_path": str(image_absolute) if image_path else None, "audio_path": str(audio_absolute) if audio_path else None}
+                if not image_path or not audio_path:
+                    raise ValueError("export snapshot contains an incomplete scene")
+                image_absolute = self.media_store.resolve(project_id, image_path)
+                if not image_absolute.is_file():
+                    raise ValueError("export image is missing")
+                audio_absolute = self.media_store.resolve(project_id, audio_path)
+                if not audio_absolute.is_file():
+                    raise ValueError("export audio is missing")
+                existing_assets[item["sceneId"]] = {
+                    "image_path": str(image_absolute),
+                    "audio_path": str(audio_absolute),
+                    "duration_seconds": max(
+                        0.0,
+                        float(item.get("durationSeconds") or 0)
+                        - float(item.get("manualHoldSeconds") or 0),
+                    ),
+                    "manual_hold_seconds": max(0.0, float(item.get("manualHoldSeconds") or 0)),
+                }
             if not hasattr(self.core, "generate_video") or self.core.generate_video is None:
                 raise ValueError("video pipeline is unavailable")
-            result = await self.core.generate_video(
-                text=revision.snapshot.get("config", {}).get("title", project_id),
-                scenes=revision.snapshot.get("scenes", []),
-                existing_scene_assets=existing_assets,
-                task_id=task_id,
-                **revision.snapshot.get("config", {}),
-            )
+            params = self._export_pipeline_params(project_id, task_id, revision.snapshot, existing_assets)
+            result = await self.core.generate_video(**params)
             output_path = getattr(result, "video_path", None) or (result.get("video_path") if isinstance(result, dict) else None)
-            self.repository.update_export_revision(export_id, status=GenerationStatus.COMPLETED, output_relative_path=output_path)
+            if not output_path or not Path(output_path).is_file():
+                raise ValueError("video pipeline did not produce an output file")
+            output_relative = f"exports/{export_id}.mp4"
+            destination = self.media_store.resolve(project_id, output_relative)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if Path(output_path).resolve() != destination.resolve():
+                shutil.copyfile(output_path, destination)
+            self.repository.update_export_revision(
+                export_id,
+                status=GenerationStatus.COMPLETED,
+                output_relative_path=output_relative,
+            )
         except Exception as exc:
             self.repository.update_export_revision(export_id, status=GenerationStatus.FAILED, error=str(exc))
             raise
+
+    async def resume_active_exports(self, task_manager) -> list[str]:
+        from api.tasks.models import TaskType
+
+        task_ids = []
+        for revision in self.repository.list_active_export_revisions():
+            self.repository.update_export_revision(
+                revision.export_id,
+                status=GenerationStatus.PENDING,
+                error=None,
+            )
+            task = task_manager.create_task(
+                TaskType.WORKBENCH_EXPORT,
+                request_params={
+                    "project_id": revision.project_id,
+                    "export_id": revision.export_id,
+                    "resumed": True,
+                },
+            )
+            await task_manager.execute_task(
+                task.task_id,
+                self.run_export_job,
+                revision.project_id,
+                revision.export_id,
+                task.task_id,
+            )
+            task_ids.append(task.task_id)
+        return task_ids
+
+    @staticmethod
+    def _export_pipeline_params(
+        project_id: str,
+        task_id: str,
+        snapshot: dict[str, Any],
+        existing_assets: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Translate a project snapshot into the existing standard pipeline contract."""
+        config = dict(snapshot.get("config") or {})
+        scenes = list(snapshot.get("scenes") or [])
+        bgm = config.get("bgm_path", config.get("bgm"))
+        if not bgm or str(bgm).strip() in {"none", "bgm-none"}:
+            bgm = None
+        else:
+            bgm = str(bgm).strip()
+            relative_bgm = bgm
+            for prefix in ("custom-bgm/", "data/bgm/", "bgm/"):
+                if bgm.startswith(prefix):
+                    relative_bgm = bgm.removeprefix(prefix)
+                    break
+            if (
+                Path(relative_bgm).name != relative_bgm
+                or "\\" in relative_bgm
+                or Path(relative_bgm).suffix.lower() not in {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg"}
+            ):
+                raise ValueError("unsupported BGM reference in export snapshot")
+        volume = config.get("bgm_volume", config.get("bgmVolume", 0.3))
+        try:
+            volume = float(volume)
+            if volume > 1:
+                volume /= 100
+        except (TypeError, ValueError):
+            volume = 0.3
+        normalized_scenes = [
+            {
+                "sceneId": item.get("sceneId"),
+                "narration": str(item.get("narration") or "").strip(),
+                "visual_prompt": str(item.get("visualPrompt", item.get("visual_prompt")) or "").strip(),
+            }
+            for item in scenes
+        ]
+        return {
+            "pipeline": "standard",
+            "text": str(config.get("title") or project_id),
+            "title": str(config.get("title") or project_id),
+            "task_id": task_id,
+            "mode": "fixed",
+            "scenes": normalized_scenes,
+            "asset_reuse": True,
+            "existing_scene_assets": existing_assets,
+            "composition_mode": config.get("composition_mode", "plain_image"),
+            "image_motion_enabled": bool(config.get("image_motion_enabled", config.get("enableMotion", True))),
+            "subtitle_enabled": config.get("subtitle_enabled", config.get("enableSubtitles", True)) is not False,
+            "subtitle_style": config.get("subtitle_style", config.get("subtitleStyle")),
+            "tts_inference_mode": config.get("tts_inference_mode", config.get("ttsMode", "local")),
+            "tts_voice": config.get("tts_voice", config.get("voice")),
+            "tts_speed": config.get("tts_speed", config.get("speed")),
+            "minimax_model": config.get("minimax_model", config.get("minimaxModel")),
+            "minimax_emotion": config.get("minimax_emotion", config.get("emotion")),
+            "media_workflow": config.get("media_workflow", config.get("workflowId")),
+            "media_width": config.get("media_width", config.get("mediaWidth")),
+            "media_height": config.get("media_height", config.get("mediaHeight")),
+            "prompt_prefix": config.get("prompt_prefix", config.get("promptPrefix")),
+            "bgm_path": bgm,
+            "bgm_volume": max(0.0, min(1.0, volume)),
+        }
 
     def _require_scene(self, scene_id, project_id):
         scene = self.repository.get_scene(scene_id)

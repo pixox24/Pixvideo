@@ -8,11 +8,23 @@ def test_quick_create_exposes_project_entry_callback():
     assert "onCreateProject" in source
     assert "onGenerateTask" in source
     assert 'handleTriggerRender(true)' in source
-    assert "直接生成成片" in source
-    assert "进入剪辑工作台" in source
+    assert "onCreateProject({ ...taskInput, scenes: enrichedScenes })" in source
+    assert "仅生成成片" in source
+    assert "生成初稿并打开工作台" in source
 
 
 def test_app_registers_project_workbench_tab():
     source = (ROOT / "frontend/src/App.tsx").read_text(encoding="utf-8")
     assert 'activeTab === "project-workbench"' in source
     assert "activeProjectId" in source
+
+
+def test_workbench_exposes_project_settings_and_debounced_holds():
+    workbench = (ROOT / "frontend/src/components/ProjectWorkbench.tsx").read_text(encoding="utf-8")
+    timeline = (ROOT / "frontend/src/components/WorkbenchTimeline.tsx").read_text(encoding="utf-8")
+
+    assert "patchProject" in workbench
+    assert "BGM" in workbench
+    assert "enableSubtitles" in workbench
+    assert "beforeunload" in workbench
+    assert "window.setTimeout(() => onHold(sceneId, value), 350)" in timeline

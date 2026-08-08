@@ -129,7 +129,7 @@ class WorkbenchMediaStore:
     def to_api_url(self, project_id: str, relative_path: str, request=None) -> str:
         del request
         self.resolve(project_id, relative_path)
-        return f"/api/workbench/projects/{quote(project_id)}/media/{quote(relative_path, safe='/')}"
+        return f"/api/projects/{quote(project_id)}/media/{quote(relative_path, safe='/')}"
 
     @staticmethod
     def _validate_image(path: Path) -> Image.Image:

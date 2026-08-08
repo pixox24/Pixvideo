@@ -175,6 +175,26 @@ class StandardPipeline(LinearVideoPipeline):
 
         source_task_id = ctx.params.get("reuse_assets_from_task_id")
         reusable_storyboard = None
+        if ctx.params.get("existing_scene_assets"):
+            ctx.params["asset_reuse"] = True
+            ctx.title = ctx.params.get("title") or text
+            explicit_scenes = ctx.params.get("scenes") or []
+            ctx.narrations = [
+                str(scene.get("narration") or "").strip()
+                for scene in explicit_scenes
+                if str(scene.get("narration") or "").strip()
+            ]
+            ctx.image_prompts = [
+                str(scene.get("visual_prompt") or "").strip()
+                for scene in explicit_scenes
+            ]
+            task_dir, task_id = create_task_output_dir(ctx.params.get("task_id"))
+            ctx.task_id = task_id
+            ctx.task_dir = task_dir
+            ctx.final_video_path = get_task_final_video_path(task_id)
+            logger.info("♻️ Reusing project-local workbench assets")
+            await self._persist_running_task_data(ctx)
+            return
         if source_task_id:
             ctx.params["asset_reuse"] = False
             reusable_storyboard, fallback_reason = await self._load_reusable_storyboard(
@@ -504,6 +524,21 @@ class StandardPipeline(LinearVideoPipeline):
                 image_prompt=image_prompt,
                 created_at=datetime.now()
             )
+            existing = (ctx.params.get("existing_scene_assets") or {}).get(
+                (ctx.params.get("scenes") or [])[i].get("sceneId") if i < len(ctx.params.get("scenes") or []) else str(i),
+                {},
+            )
+            if existing.get("audio_path"):
+                frame.audio_path = existing["audio_path"]
+            if existing.get("image_path"):
+                frame.image_path = existing["image_path"]
+                frame.media_type = "image"
+            frame.duration = max(0.0, float(existing.get("duration_seconds") or 0)) + max(
+                0.0,
+                float(existing.get("manual_hold_seconds") or 0),
+            )
+            frame.completed_steps["audio"] = bool(frame.audio_path)
+            frame.completed_steps["media"] = bool(frame.image_path)
             ctx.storyboard.frames.append(frame)
         await self._persist_running_task_data(ctx)
 

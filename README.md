@@ -82,6 +82,13 @@ cp config.example.yaml config.yaml
 cd frontend && npm run build && cd ..
 uv run python api/app.py --host 127.0.0.1 --port 8000
 
+# 本地默认复用 resources/example.png，不调用图片生成服务
+# 只有明确需要真实图片时才使用下面的启动方式
+PIXELLE_USE_REAL_IMAGE_API=1 uv run python api/app.py --host 127.0.0.1 --port 8000
+
+# 可选：为离线流程指定另一张已经存在的图片
+PIXELLE_TEST_IMAGE_PATH=/absolute/path/existing.png uv run python api/app.py
+
 # 前端热更新开发服务器（端口 5173）
 cd frontend && npm run dev
 

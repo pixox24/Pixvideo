@@ -1093,6 +1093,39 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       };
     });
 
+  const buildVisualPromptFallback = async (scenes: Array<{ ttsText: string; visualPrompt: string }>): Promise<Array<{ ttsText: string; visualPrompt: string }>> => {
+    const missing = scenes.filter((scene) => !String(scene.visualPrompt || "").trim());
+    if (missing.length === 0) return scenes;
+    addToast(`正在为 ${missing.length} 个分镜自动生成画面提示词…`, "info");
+    const response = await fetch("/api/generate-script", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic: (aiTopic || title).trim(),
+        sceneCount: missing.length,
+        draftMode: "segmented",
+        splitType: "paragraph",
+        confirmedText: missing.map((scene) => scene.ttsText).join("\n\n"),
+      }),
+    });
+    const resData = await response.json();
+    if (!response.ok || !resData.success) {
+      addToast(formatApiErrorValue(resData.detail) || formatApiErrorValue(resData.error) || "画面提示词自动生成失败，分镜将沿用旁白作为画面描述。", "info");
+      return scenes;
+    }
+    const prompts: string[] = (resData.data || []).map((item: any) => String(item.visualPrompt || "").trim()).filter(Boolean);
+    if (prompts.length === 0) {
+      addToast("画面提示词自动生成失败，分镜将沿用旁白作为画面描述。", "info");
+      return scenes;
+    }
+    let promptIndex = 0;
+    return scenes.map((scene) => {
+      if (String(scene.visualPrompt || "").trim()) return scene;
+      if (promptIndex >= prompts.length) return scene;
+      return { ...scene, visualPrompt: prompts[promptIndex++] };
+    });
+  };
+
   // Trigger main generator callback
   const handleTriggerRender = async (directGenerate = false) => {
     if (submissionLockRef.current) return;
@@ -1148,7 +1181,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       };
 
       if (mode !== "batch" && onCreateProject && !directGenerate) {
-        await onCreateProject({ title, scenes: renderScenes });
+        const enrichedScenes = await buildVisualPromptFallback(renderScenes);
+        await onCreateProject({ ...taskInput, scenes: enrichedScenes });
         setReviewConfirmed(false);
         return;
       }
@@ -2636,7 +2670,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             className="px-4 py-2.5 border border-zinc-700 text-zinc-200 font-semibold text-xs rounded hover:border-zinc-500 hover:bg-zinc-900 disabled:border-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
           >
             <FileVideo className="w-4 h-4" />
-            直接生成成片
+            仅生成成片
           </button>
         )}
         <button
@@ -2646,7 +2680,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           className="px-6 py-2.5 bg-amber-500 text-black font-semibold text-xs rounded hover:bg-amber-400 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed shadow-xl shadow-amber-500/10 flex items-center gap-2 transition-transform active:scale-[0.99]"
         >
           {isSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : mode === "batch" ? <Sparkles className="w-4 h-4 text-black" /> : <FolderOpen className="w-4 h-4 text-black" />}
-          {isSubmitting ? "正在提交任务…" : mode === "batch" ? `提交 ${reviewVideoCount} 个视频任务` : "进入剪辑工作台"}
+          {isSubmitting ? "正在提交任务…" : mode === "batch" ? `提交 ${reviewVideoCount} 个视频任务` : "生成初稿并打开工作台"}
         </button>
       </div>
     </div>

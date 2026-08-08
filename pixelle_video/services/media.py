@@ -209,6 +209,18 @@ class MediaService(ComfyBaseService):
                 comfyui_url="http://192.168.1.100:8188"
             )
         """
+        if media_type == "image" and os.getenv("PIXELLE_USE_REAL_IMAGE_API", "").strip().lower() not in {
+            "1", "true", "yes", "on",
+        }:
+            fixture = Path(
+                os.getenv("PIXELLE_TEST_IMAGE_PATH")
+                or Path(__file__).resolve().parents[2] / "resources" / "example.png"
+            ).expanduser().resolve()
+            if not fixture.is_file():
+                raise FileNotFoundError(f"Local test image does not exist: {fixture}")
+            logger.info(f"Using local test image instead of an image provider: {fixture}")
+            return MediaResult(media_type="image", url=str(fixture))
+
         if media_type == "image" and self._has_openai_image_generation_config():
             return await self._call_openai_image_generation(
                 prompt=prompt,
@@ -362,7 +374,11 @@ class MediaService(ComfyBaseService):
 
         async with httpx.AsyncClient(timeout=params.get("image_generation_timeout", 120.0)) as client:
             response = await client.post(submit_url, headers=headers, json=payload)
-            response.raise_for_status()
+            if response.is_error:
+                raise RuntimeError(
+                    f"Image generation API error {response.status_code} from {submit_url}: "
+                    f"{(response.text or '<empty>')[:800]}"
+                )
             result = response.json()
 
             image_ref = await self._extract_openai_image_result(

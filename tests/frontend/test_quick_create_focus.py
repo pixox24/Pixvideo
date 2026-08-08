@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 REMOVED_MODULES = (
     "custom-media",
     "digital-human",

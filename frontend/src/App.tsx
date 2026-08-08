@@ -41,7 +41,7 @@ import {
   resumeHistoryTask,
   submitVideoTask,
 } from "./lib/api";
-import { createProject } from "./lib/workbenchApi";
+import { createProject, startGenerationRun } from "./lib/workbenchApi";
 import { createProjectFromHistory } from "./lib/workbenchApi";
 
 const PENDING_TASK_ID_PREFIX = "pending-";
@@ -537,13 +537,20 @@ export default function App() {
   };
 
   const handleCreateProject = async (input: QuickCreateInput) => {
+    let project: Awaited<ReturnType<typeof createProject>>;
     try {
-      const project = await createProject(input);
+      project = await createProject(input);
       setActiveProjectId(project.projectId);
       setActiveTab("project-workbench");
-      addToast("项目草稿已创建，正在打开剪辑工作台。", "success");
+      addToast("项目已创建，正在生成初稿。", "success");
     } catch (error) {
       addToast(error, "error");
+      throw error;
+    }
+    try {
+      await startGenerationRun(project.projectId);
+    } catch (error) {
+      addToast(`项目已创建，但自动生成未启动：${formatApiErrorValue(error)}`, "error");
       throw error;
     }
   };
@@ -848,7 +855,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === "project-workbench" && activeProjectId && <ProjectWorkbench projectId={activeProjectId} addToast={addToast} />}
+          {activeTab === "project-workbench" && activeProjectId && <ProjectWorkbench projectId={activeProjectId} resources={resources} addToast={addToast} />}
 
           {activeTab === "history" && (
             <HistoryList

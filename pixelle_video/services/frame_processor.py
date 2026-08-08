@@ -499,6 +499,7 @@ class FrameProcessor:
                     frame_index=frame.index,
                     subtitle_style=config.subtitle_style,
                     subtitle_alignment=frame.subtitle_alignment,
+                    duration=frame.duration or None,
                 )
             else:
                 logger.debug("  → Using image-based composition")
@@ -507,7 +508,8 @@ class FrameProcessor:
                     image=frame.composed_image_path,
                     audio=frame.audio_path,
                     output=output_path,
-                    fps=config.video_fps
+                    fps=config.video_fps,
+                    duration=frame.duration or None,
                 )
 
         else:

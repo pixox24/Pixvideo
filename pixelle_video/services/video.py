@@ -494,6 +494,7 @@ class VideoService:
         frame_index: int = 0,
         subtitle_style: Optional[dict] = None,
         subtitle_alignment: Optional[list] = None,
+        duration: Optional[float] = None,
     ) -> str:
         """
         Create a video segment directly from a generated image and narration audio.
@@ -519,7 +520,8 @@ class VideoService:
 
         try:
             audio_duration = self._get_audio_duration(audio)
-            frame_count = max(1, math.ceil(audio_duration * fps))
+            target_duration = max(audio_duration, float(duration or 0))
+            frame_count = max(1, math.ceil(target_duration * fps))
             input_audio = ffmpeg.input(audio)
 
             if motion_enabled:
@@ -547,7 +549,7 @@ class VideoService:
                         fps=fps,
                     )
                     .filter("scale", width, height, flags="lanczos")
-                    .filter("trim", duration=audio_duration)
+                    .filter("trim", duration=target_duration)
                     .filter("setpts", "PTS-STARTPTS")
                 )
             else:
@@ -558,7 +560,7 @@ class VideoService:
                     .filter("scale", scale_w, scale_h)
                     .filter("crop", width, height, "(iw-ow)/2", "(ih-oh)/2")
                     .filter("setsar", "1")
-                    .filter("trim", duration=audio_duration)
+                    .filter("trim", duration=target_duration)
                     .filter("setpts", "PTS-STARTPTS")
                 )
 
@@ -579,7 +581,7 @@ class VideoService:
                         )
                         caption_plan = dynamic_renderer.build_caption_plan(
                             text=subtitle_text,
-                            duration=audio_duration,
+                            duration=target_duration,
                             width=width,
                             height=height,
                             fps=fps,
@@ -636,7 +638,7 @@ class VideoService:
                                 custom_font_path = ""
                         subtitle_overlay_path = renderer.create_ass_file(
                             text=subtitle_text,
-                            duration=audio_duration,
+                            duration=target_duration,
                             width=width,
                             height=height,
                             style=normalized_style,
@@ -708,9 +710,9 @@ class VideoService:
                 ffmpeg
                 .output(
                     video_stream,
-                    input_audio.audio,
+                    input_audio.audio.filter("apad"),
                     output,
-                    t=audio_duration,
+                    t=target_duration,
                     vcodec="libx264",
                     acodec="aac",
                     pix_fmt="yuv420p",
@@ -1061,6 +1063,7 @@ class VideoService:
         audio: str,
         output: str,
         fps: int = 30,
+        duration: Optional[float] = None,
     ) -> str:
         """
         Create video from static image and audio
@@ -1096,7 +1099,8 @@ class VideoService:
             # Get audio duration to ensure exact video duration match
             probe = ffmpeg.probe(audio)
             audio_duration = float(probe['format']['duration'])
-            logger.debug(f"Audio duration: {audio_duration:.3f}s")
+            target_duration = max(audio_duration, float(duration or 0))
+            logger.debug(f"Video duration: {target_duration:.3f}s")
 
             # Input image with loop (loop=1 means loop indefinitely)
             # Use framerate to set input framerate
@@ -1109,9 +1113,9 @@ class VideoService:
                 ffmpeg
                 .output(
                     input_image,
-                    input_audio,
+                    input_audio.audio.filter("apad"),
                     output,
-                    t=audio_duration,  # Force video duration to match audio exactly
+                    t=target_duration,
                     vcodec='libx264',
                     acodec='aac',
                     pix_fmt='yuv420p',

@@ -49,6 +49,7 @@ def test_create_video_from_image_with_motion_outputs_segment(tmp_path):
         subtitle_enabled=True,
         motion_enabled=True,
         frame_index=1,
+        duration=1.2,
     )
 
     assert result == str(output_path)
@@ -56,6 +57,13 @@ def test_create_video_from_image_with_motion_outputs_segment(tmp_path):
 
     probe = service._probe_video_geometry(str(output_path))
     assert probe == (360, 640)
+    duration = float(subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(output_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip())
+    assert duration >= 1.15
 
 
 def test_motion_output_uses_supersampled_zoompan_canvas(monkeypatch, tmp_path):

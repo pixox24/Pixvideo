@@ -206,6 +206,8 @@ class WorkbenchRepository:
             values["updated_at"] = _dt(values["updated_at"])
         if not values:
             return
+        if "updated_at" not in values:
+            values["updated_at"] = _dt(utc_now())
         with self._connection:
             self._connection.execute(f"UPDATE projects SET {', '.join(f'{k}=?' for k in values)} WHERE project_id=?", (*values.values(), project_id))
 
@@ -220,6 +222,10 @@ class WorkbenchRepository:
             return
         with self._connection:
             self._connection.execute(f"UPDATE scenes SET {', '.join(f'{k}=?' for k in values)} WHERE scene_id=?", (*values.values(), scene_id))
+            self._connection.execute(
+                "UPDATE projects SET updated_at=? WHERE project_id=(SELECT project_id FROM scenes WHERE scene_id=?)",
+                (_dt(utc_now()), scene_id),
+            )
 
     def reorder_scenes(self, project_id: str, scene_ids: list[str]) -> None:
         with self._connection:
@@ -227,6 +233,7 @@ class WorkbenchRepository:
                 self._connection.execute("UPDATE scenes SET position=? WHERE scene_id=? AND project_id=?", (position + len(scene_ids), scene_id, project_id))
             for position, scene_id in enumerate(scene_ids):
                 self._connection.execute("UPDATE scenes SET position=? WHERE scene_id=? AND project_id=?", (position, scene_id, project_id))
+            self._connection.execute("UPDATE projects SET updated_at=? WHERE project_id=?", (_dt(utc_now()), project_id))
 
     def create_asset_version(self, version: AssetVersion) -> None:
         with self._connection:
@@ -258,6 +265,7 @@ class WorkbenchRepository:
             if not exists:
                 raise ValueError("asset version does not belong to scene")
             self._connection.execute("UPDATE scenes SET current_version_id=? WHERE scene_id=? AND project_id=?", (version_id, scene_id, project_id))
+            self._connection.execute("UPDATE projects SET updated_at=? WHERE project_id=?", (_dt(utc_now()), project_id))
 
     def create_generation_job(self, job: GenerationJob) -> None:
         with self._connection:
@@ -626,6 +634,8 @@ class WorkbenchRepository:
             values["updated_at"] = _dt(values["updated_at"])
         if not values:
             return
+        if "updated_at" not in values:
+            values["updated_at"] = _dt(utc_now())
         with self._connection:
             self._connection.execute(f"UPDATE export_revisions SET {', '.join(f'{k}=?' for k in values)} WHERE export_id=?", (*values.values(), export_id))
 
@@ -634,6 +644,53 @@ class WorkbenchRepository:
         if not row:
             return None
         return ExportRevision(row["project_id"], json.loads(row["snapshot_json"]), row["export_id"], row["output_relative_path"], GenerationStatus(row["status"]), row["error"], _from_dt(row["created_at"]), _from_dt(row["updated_at"]))
+
+    def list_export_revisions(self, project_id: str, limit: int = 20) -> list[ExportRevision]:
+        rows = self._connection.execute(
+            "SELECT * FROM export_revisions WHERE project_id=? ORDER BY created_at DESC LIMIT ?",
+            (project_id, max(1, int(limit))),
+        ).fetchall()
+        return [
+            ExportRevision(
+                row["project_id"],
+                json.loads(row["snapshot_json"]),
+                row["export_id"],
+                row["output_relative_path"],
+                GenerationStatus(row["status"]),
+                row["error"],
+                _from_dt(row["created_at"]),
+                _from_dt(row["updated_at"]),
+            )
+            for row in rows
+        ]
+
+    def list_active_export_revisions(self) -> list[ExportRevision]:
+        rows = self._connection.execute(
+            "SELECT export_id FROM export_revisions WHERE status IN (?, ?) ORDER BY created_at",
+            (GenerationStatus.PENDING.value, GenerationStatus.RUNNING.value),
+        ).fetchall()
+        return [
+            revision
+            for row in rows
+            if (revision := self.get_export_revision(row["export_id"])) is not None
+        ]
+
+    def get_latest_export_revision(self, project_id: str) -> ExportRevision | None:
+        revisions = self.list_export_revisions(project_id, limit=1)
+        return revisions[0] if revisions else None
+
+    def get_latest_completed_export_revision(self, project_id: str) -> ExportRevision | None:
+        row = self._connection.execute(
+            "SELECT export_id FROM export_revisions WHERE project_id=? AND status=? ORDER BY updated_at DESC LIMIT 1",
+            (project_id, GenerationStatus.COMPLETED.value),
+        ).fetchone()
+        return self.get_export_revision(row["export_id"]) if row else None
+
+    def get_export_revision_for_run(self, project_id: str, run_id: str) -> ExportRevision | None:
+        for revision in self.list_export_revisions(project_id, limit=1000):
+            if revision.snapshot.get("createdFromRunId") == run_id:
+                return revision
+        return None
 
     def close(self) -> None:
         self._connection.close()

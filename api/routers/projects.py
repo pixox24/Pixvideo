@@ -57,8 +57,10 @@ router = APIRouter(prefix="/projects", tags=["Workbench Projects"])
 
 _PROJECT_CONFIG_KEYS = {
     "title", "tabType", "workflowId", "workflow", "ttsMode", "tts_inference_mode",
+    "ttsDelivery", "tts_delivery",
     "voice", "tts_voice", "speed", "tts_speed", "minimaxModel", "minimax_model",
-    "emotion", "minimax_emotion", "mediaWidth", "mediaHeight", "media_width", "media_height",
+    "emotion", "minimax_emotion", "mimoModel", "mimo_model", "mimoStyle", "mimo_style",
+    "mediaWidth", "mediaHeight", "media_width", "media_height",
     "imageAspectRatio", "bgm", "bgm_path", "bgmVolume", "bgm_volume", "promptPrefix",
     "prompt_prefix", "enableMotion", "enableSubtitles", "subtitleStyle", "subtitle_enabled",
     "splitType", "frame_template", "template_params", "composition_mode", "image_motion_enabled",
@@ -266,14 +268,18 @@ def _run_response(core, run_id: str) -> GenerationRunResponse:
 
 
 def _allowed_generation_actions(run) -> list[str]:
-    if run.cancel_requested or run.is_terminal:
+    if run.cancel_requested:
+        return []
+    # A run with failed items is terminal for polling, but is still actionable:
+    # the UI must be able to offer a focused retry instead of starting over.
+    if run.status == GenerationRunStatus.COMPLETED_WITH_FAILURES:
+        return ["retry-failed"]
+    if run.is_terminal:
         return []
     if run.status in {GenerationRunStatus.QUEUED, GenerationRunStatus.RUNNING}:
         return ["cancel"] if run.pause_requested else ["pause", "cancel"]
     if run.status == GenerationRunStatus.PAUSED:
         return ["resume", "cancel"]
-    if run.status == GenerationRunStatus.COMPLETED_WITH_FAILURES:
-        return ["retry-failed"]
     return []
 
 

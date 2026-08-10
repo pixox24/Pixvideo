@@ -6,21 +6,21 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Play,
   Download,
   Trash2,
   RefreshCw,
-  Sliders,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
 } from "lucide-react";
 import { Task } from "../types";
 import { VideoPreview } from "./VideoPreview";
+import { ConfirmModal } from "./ConfirmModal";
+import { EmptyState } from "./EmptyState";
 
 interface HistoryListProps {
   tasks: Task[];
-  onDeleteTask: (id: string) => void;
+  onDeleteTask: (id: string) => void | Promise<void>;
   onResumeTask: (task: Task) => void;
   onCancelTask: (task: Task) => void;
   onOpenWorkbench: (task: Task) => void;
@@ -40,9 +40,22 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   const [sortBy, setSortBy] = useState<"createdTime" | "sceneCount" | "title">("createdTime");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const toggleExpand = (id: string) => {
     setExpandedTaskId(expandedTaskId === id ? null : id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await onDeleteTask(deleteTarget.id);
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const filteredTasks = tasks
@@ -70,14 +83,30 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 
   return (
     <div className="space-y-4 max-w-5xl animate-fade-in">
+      <ConfirmModal
+        open={Boolean(deleteTarget)}
+        danger
+        busy={deleting}
+        title="删除历史任务？"
+        description={
+          deleteTarget
+            ? `将删除「${deleteTarget.title}」。此操作不可撤销，成片与任务记录会从历史中移除。`
+            : undefined
+        }
+        confirmLabel="确认删除"
+        onCancel={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+        onConfirm={confirmDelete}
+      />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2 font-display">
             <History className="w-5 h-5 text-amber-500" />
-            历史生产记录
+            历史记录
           </h2>
-          <p className="text-xs text-zinc-400">
-            查看、管理与下载您所有的历史生成视频任务，支持快速配置重新生成。
+          <p className="text-sm text-zinc-400">
+            查看、下载历史成片；也可复制为可编辑项目继续精修。
           </p>
         </div>
 
@@ -142,22 +171,44 @@ export const HistoryList: React.FC<HistoryListProps> = ({
       {/* Task List */}
       <div className="space-y-3">
         {filteredTasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 bg-[#101114] rounded-lg border border-zinc-900 border-dashed">
-            <History className="w-8 h-8 text-zinc-650 mb-3 animate-pulse" />
-            <p className="text-xs text-zinc-400">没有找到匹配的历史任务。</p>
-          </div>
+          <EmptyState
+            icon={<History className="h-10 w-10" />}
+            title={tasks.length === 0 ? "还没有历史任务" : "没有找到匹配的历史任务"}
+            description={
+              tasks.length === 0
+                ? "完成一次快捷创作后，成片与任务会显示在这里，可下载或复制为可编辑项目。"
+                : "试试调整筛选条件或清空搜索关键词。"
+            }
+          />
         ) : (
           filteredTasks.map((task) => {
             const isExpanded = expandedTaskId === task.id;
+            const thumb = task.scenes?.find((scene) => scene.imageUrl)?.imageUrl;
+            const statusBar =
+              task.status === "completed" ? "bg-emerald-500" :
+              task.status === "failed" ? "bg-rose-500" :
+              task.status === "generating" ? "bg-amber-500" :
+              "bg-zinc-600";
             return (
               <div
                 key={task.id}
-                className="bg-[#101114] border border-zinc-900 rounded hover:border-zinc-850 transition-all duration-200"
+                className="overflow-hidden rounded-lg border border-zinc-900 bg-[#101114] transition-all duration-200 hover:border-zinc-700"
               >
-                <div className="p-3 flex items-center justify-between gap-4 flex-wrap md:flex-nowrap">
+                <div className={`h-0.5 w-full ${statusBar}`} />
+                <div className="flex items-stretch gap-0 flex-wrap md:flex-nowrap">
+                  <div className="hidden w-36 shrink-0 bg-zinc-950 sm:block">
+                    {thumb ? (
+                      <img src={thumb} alt="" className="h-full min-h-[96px] w-full object-cover" />
+                    ) : task.videoUrl && task.status === "completed" ? (
+                      <div className="flex h-full min-h-[96px] items-center justify-center text-xs text-zinc-600">成片就绪</div>
+                    ) : (
+                      <div className="flex h-full min-h-[96px] items-center justify-center text-xs text-zinc-600">暂无预览</div>
+                    )}
+                  </div>
+
+                  <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    {/* Icon indicator */}
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 sm:hidden">
                       {task.status === "completed" && (
                         <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
                           <CheckCircle2 className="w-4 h-4" />
@@ -181,86 +232,105 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                     </div>
 
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-medium text-zinc-200 truncate">{task.title}</h4>
-                        <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-sm font-medium text-zinc-100 truncate">{task.title}</h4>
+                        <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-caption text-zinc-400">
                           {task.tabType === "quick-create" && "快捷创作"}
                           {task.tabType === "custom-media" && "自定义素材"}
                           {task.tabType === "digital-human" && "数字人口播"}
                           {task.tabType === "image-to-video" && "图生视频"}
                           {task.tabType === "action-transfer" && "动作迁移"}
                         </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-zinc-450 font-mono">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-zinc-500" /> {task.createdTime}
+                        <span className={`rounded px-1.5 py-0.5 text-caption ${
+                          task.status === "completed" ? "bg-emerald-500/10 text-emerald-400" :
+                          task.status === "failed" ? "bg-rose-500/10 text-rose-400" :
+                          task.status === "generating" ? "bg-amber-500/10 text-amber-400" :
+                          "bg-zinc-800 text-zinc-400"
+                        }`}>
+                          {task.status === "completed" && "已完成"}
+                          {task.status === "failed" && "失败"}
+                          {task.status === "generating" && "生成中"}
+                          {task.status === "cancelled" && "已取消"}
+                          {task.status === "ready" && "就绪"}
                         </span>
-                        <span>•</span>
-                        <span>{task.sceneCount} 帧分镜</span>
-                        <span>•</span>
-                        <span className="text-zinc-500">{task.configSummary}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {task.createdTime}
+                        </span>
+                        <span>{task.sceneCount} 分镜</span>
+                        {task.configSummary && <span className="truncate max-w-[240px]">{task.configSummary}</span>}
                       </div>
                     </div>
                   </div>
 
-                  {/* Actions right */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     {(task.status === "completed" || task.status === "failed") && (
-                      <button type="button" onClick={() => onOpenWorkbench(task)} className="px-2 py-1 border border-amber-500/20 text-amber-400 hover:bg-amber-500/10 rounded text-[10px]">打开工作台</button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenWorkbench(task)}
+                        className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
+                        title="从该历史创建一份新的可编辑项目，原记录保留"
+                      >
+                        复制为可编辑项目
+                      </button>
                     )}
-                    <button
-                      onClick={() => toggleExpand(task.id)}
-                      className="px-2.5 py-1 text-xs rounded border border-zinc-800 text-zinc-300 hover:bg-zinc-850 flex items-center gap-1 font-mono"
-                    >
-                      {isExpanded ? "收起参数" : "展开详情"}
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                    </button>
-
                     {task.status === "completed" && task.videoUrl && (
                       <a
                         href={task.videoUrl}
                         download
-                        className="p-1.5 bg-amber-500 text-black hover:bg-amber-400 rounded transition-colors"
+                        className="inline-flex items-center gap-1 rounded bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-black hover:bg-amber-400"
                         title="下载成片视频"
-                        onClick={(e) => {
+                        onClick={() => {
                           addToast("开始下载高质量 MP4 成片", "success");
                         }}
                       >
                         <Download className="w-3.5 h-3.5" />
+                        下载
                       </a>
                     )}
-
                     {task.status === "failed" && (
                       <button
+                        type="button"
                         onClick={() => onResumeTask(task)}
-                        className="px-2 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 rounded flex items-center gap-1 text-xs"
+                        className="inline-flex items-center gap-1 rounded border border-amber-500/20 px-2 py-1.5 text-xs text-amber-400 hover:bg-amber-500/10"
                         title="继续/重新生成"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
-                        <span className="text-[10px]">重试</span>
+                        重试
                       </button>
                     )}
-
                     {task.status === "generating" && (
                       <button
+                        type="button"
                         onClick={() => onCancelTask(task)}
-                        className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white rounded flex items-center gap-1 text-xs"
+                        className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1.5 text-xs text-zinc-300 hover:text-white"
                         aria-label={`取消任务 ${task.title}`}
                       >
                         <XCircle className="w-3.5 h-3.5" />
-                        <span className="text-[10px]">取消任务</span>
+                        取消
                       </button>
                     )}
-
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(task.id)}
+                      className="inline-flex items-center gap-1 rounded border border-zinc-800 px-2 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+                    >
+                      {isExpanded ? "收起" : "详情"}
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                    </button>
                     {task.status !== "generating" && (
                       <button
-                        onClick={() => onDeleteTask(task.id)}
-                        className="p-1.5 hover:bg-rose-950/25 text-zinc-500 hover:text-rose-400 rounded border border-transparent hover:border-rose-950 transition-all"
+                        type="button"
+                        onClick={() => setDeleteTarget(task)}
+                        className="rounded p-1.5 text-zinc-500 hover:bg-rose-950/25 hover:text-rose-400"
                         title="删除任务"
+                        aria-label={`删除任务 ${task.title}`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
+                  </div>
                   </div>
                 </div>
 

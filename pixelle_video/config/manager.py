@@ -178,6 +178,12 @@ class ConfigManager:
                     "pitch": self.config.comfyui.tts.minimax.pitch,
                     "emotion": self.config.comfyui.tts.minimax.emotion,
                 },
+                "mimo": {
+                    "api_key": self.config.comfyui.tts.mimo.api_key,
+                    "model": self.config.comfyui.tts.mimo.model,
+                    "voice_id": self.config.comfyui.tts.mimo.voice_id,
+                    "style": self.config.comfyui.tts.mimo.style,
+                },
             },
             "image": {
                 "default_workflow": self.config.comfyui.image.default_workflow,
@@ -198,6 +204,7 @@ class ConfigManager:
         runninghub_instance_type: Optional[str] = None,
         bizyair_api_key: Optional[str] = None,
         minimax_api_key: Optional[str] = None,
+        mimo_api_key: Optional[str] = None,
     ):
         """Set ComfyUI global configuration"""
         updates = {}
@@ -216,6 +223,8 @@ class ConfigManager:
             updates["bizyair_api_key"] = bizyair_api_key
         if minimax_api_key is not None:
             updates.setdefault("tts", {}).setdefault("minimax", {})["api_key"] = minimax_api_key
+        if mimo_api_key is not None:
+            updates.setdefault("tts", {}).setdefault("mimo", {})["api_key"] = mimo_api_key
         
         if updates:
             self.update({"comfyui": updates})
@@ -272,6 +281,18 @@ class ConfigManager:
                 minimax_updates["emotion"] = video_params.get("minimax_emotion")
             if minimax_updates:
                 comfyui_updates["tts"]["minimax"] = minimax_updates
+        elif tts_mode == "mimo":
+            mimo_updates = {}
+            if video_params.get("mimo_model"):
+                mimo_updates["model"] = video_params["mimo_model"]
+            if video_params.get("tts_voice"):
+                mimo_updates["voice_id"] = video_params["tts_voice"]
+            if video_params.get("tts_speed") is not None:
+                mimo_updates["speed"] = video_params["tts_speed"]
+            if "mimo_style" in video_params:
+                mimo_updates["style"] = video_params.get("mimo_style")
+            if mimo_updates:
+                comfyui_updates["tts"]["mimo"] = mimo_updates
 
         if media_config_key:
             media_updates = {}

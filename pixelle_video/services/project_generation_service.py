@@ -6,6 +6,8 @@ import asyncio
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from loguru import logger
+
 from api.tasks.models import TaskType
 from pixelle_video.models.workbench import (
     ExportRevision,
@@ -16,6 +18,11 @@ from pixelle_video.models.workbench import (
     GenerationRunStatus,
     effective_scene_duration,
 )
+from pixelle_video.services.continuous_tts import (
+    ContinuousSceneSegment,
+    should_use_continuous_tts,
+)
+from pixelle_video.services.continuous_tts.assemble import delivery_from_snapshot
 from pixelle_video.services.workbench_generation import ProjectGenerationPlanner
 
 
@@ -219,6 +226,7 @@ class ProjectGenerationService:
         if run.is_terminal:
             return
         self.repository.recompute_generation_run_counts(run_id)
+        continuous_tts_done = False
         while True:
             run = self._require_run(run_id)
             if run.cancel_requested:
@@ -245,6 +253,24 @@ class ProjectGenerationService:
                     status=GenerationRunStatus.RUNNING,
                 )
             items = self.repository.list_generation_run_items(run_id)
+
+            # Phase-1 continuous TTS: one synth pass before per-scene image work.
+            if not continuous_tts_done:
+                continuous_tts_done = True
+                try:
+                    await self._maybe_run_continuous_tts(run_id, items)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    # Continuous failure falls back to per-scene TTS for remaining items.
+                    logger.warning(
+                        "Continuous TTS failed for run {}; falling back to per-scene: {}",
+                        run_id,
+                        exc,
+                    )
+                    self._publish_progress(run_id, "continuous TTS failed; using per-scene")
+                items = self.repository.list_generation_run_items(run_id)
+
             item = next((candidate for candidate in items if not candidate.is_terminal), None)
             if item is None:
                 await self._finalize(run_id)
@@ -264,8 +290,131 @@ class ProjectGenerationService:
             self.repository.recompute_generation_run_counts(run_id)
             self._publish_progress(run_id, f"scene {item.position + 1} finished")
 
+    async def _maybe_run_continuous_tts(
+        self,
+        run_id: str,
+        items: Sequence[GenerationRunItem],
+    ) -> bool:
+        """
+        When delivery=continuous and 2+ scenes need TTS, synthesize once and split.
+
+        Marks those items' tts_status COMPLETED so _process_item only does images.
+        Returns True when continuous path executed.
+        """
+        run = self._require_run(run_id)
+        delivery = delivery_from_snapshot(run.parameter_snapshot)
+        provider = None
+        tts_snapshot = run.parameter_snapshot.get("tts") if isinstance(run.parameter_snapshot, dict) else {}
+        if isinstance(tts_snapshot, dict):
+            provider = tts_snapshot.get("provider")
+
+        pending = [
+            item
+            for item in items
+            if item.tts_status in {GenerationPhase.PENDING, GenerationPhase.RUNNING}
+            and item.status not in {
+                GenerationRunItemStatus.FAILED,
+                GenerationRunItemStatus.CANCELLED,
+            }
+        ]
+        if not should_use_continuous_tts(
+            delivery=delivery,
+            scene_count=len(items),
+            pending_tts_count=len(pending),
+            provider=provider,
+        ):
+            return False
+
+        # Recover interrupted RUNNING → treat as pending targets.
+        for item in pending:
+            if item.tts_status == GenerationPhase.RUNNING:
+                self.repository.update_generation_run_item(
+                    item.item_id,
+                    tts_status=GenerationPhase.PENDING,
+                    status=GenerationRunItemStatus.QUEUED,
+                )
+        pending = [
+            item
+            for item in self.repository.list_generation_run_items(run_id)
+            if item.tts_status == GenerationPhase.PENDING
+            and item.status not in {
+                GenerationRunItemStatus.FAILED,
+                GenerationRunItemStatus.CANCELLED,
+            }
+        ]
+        if len(pending) < 2:
+            return False
+
+        segments = [
+            ContinuousSceneSegment(
+                scene_id=item.scene_id,
+                item_id=item.item_id,
+                position=item.position,
+                narration=item.narration_snapshot,
+                narration_fingerprint=item.narration_fingerprint,
+            )
+            for item in sorted(pending, key=lambda entry: entry.position)
+        ]
+
+        for item in pending:
+            self.repository.update_generation_run_item(
+                item.item_id,
+                status=GenerationRunItemStatus.RUNNING_TTS,
+                tts_status=GenerationPhase.RUNNING,
+            )
+        self.repository.update_generation_run(
+            run_id,
+            current_scene_id=segments[0].scene_id,
+        )
+        self._publish_progress(run_id, f"continuous TTS for {len(segments)} scenes")
+
+        try:
+            results = await self.workbench_jobs.generate_continuous_tts_assets(
+                run.project_id,
+                run_id,
+                segments,
+            )
+        except Exception:
+            # Reset to PENDING so per-scene path can retry.
+            for item in pending:
+                self.repository.update_generation_run_item(
+                    item.item_id,
+                    status=GenerationRunItemStatus.QUEUED,
+                    tts_status=GenerationPhase.PENDING,
+                )
+            raise
+
+        for item in pending:
+            result = results.get(item.scene_id)
+            if not result:
+                self.repository.update_generation_run_item(
+                    item.item_id,
+                    status=GenerationRunItemStatus.QUEUED,
+                    tts_status=GenerationPhase.PENDING,
+                    error="continuous TTS missing scene slice",
+                )
+                continue
+            await self._update_scene_duration(
+                run.project_id,
+                item.scene_id,
+                float(result["duration_seconds"]),
+            )
+            self.repository.update_generation_run_item(
+                item.item_id,
+                tts_status=GenerationPhase.COMPLETED,
+                # Keep item non-terminal so image phase can still run.
+                status=GenerationRunItemStatus.QUEUED,
+                error=None,
+            )
+
+        self._publish_progress(run_id, "continuous TTS split complete")
+        return True
+
     async def _process_item(self, run_id: str, item: GenerationRunItem) -> None:
         run = self._require_run(run_id)
+        # Refresh in case continuous phase completed TTS already.
+        current_item = self.repository.get_generation_run_item(item.item_id) or item
+        item = current_item
         if item.tts_status in {GenerationPhase.PENDING, GenerationPhase.RUNNING}:
             self.repository.update_generation_run_item(
                 item.item_id,
@@ -290,6 +439,8 @@ class ProjectGenerationService:
             )
         elif item.tts_status == GenerationPhase.SKIPPED:
             await self._sync_existing_scene_duration(run.project_id, item.scene_id)
+        # GenerationPhase.COMPLETED: continuous pass already applied hold via
+        # _update_scene_duration; do not re-sync or hold is double-counted.
 
         # A cancellation may arrive while TTS is in flight. Let that provider
         # call return, but do not start the next phase for the same scene.
@@ -446,13 +597,18 @@ class ProjectGenerationService:
         project = self.repository.get_project(run.project_id)
         if project is None:
             return
+        # Snapshot a lighter config for the automatic first draft so post-generation
+        # wait is dominated by scene TTS, not multi-minute motion re-encode.
+        draft_config = dict(project.config or {})
+        draft_config["enableMotion"] = False
+        draft_config["image_motion_enabled"] = False
         revision = ExportRevision(run.project_id, {
             "projectId": run.project_id,
             "purpose": "initial",
             "createdFromRunId": run.run_id,
             "sceneOrder": [scene["sceneId"] for scene in snapshot_scenes],
             "scenes": snapshot_scenes,
-            "config": project.config,
+            "config": draft_config,
             "allowIncomplete": False,
         })
         self.repository.create_export_revision(revision)
@@ -466,6 +622,8 @@ class ProjectGenerationService:
                     "createdFromRunId": run.run_id,
                 },
             )
+            # Fire-and-forget: generation run is already COMPLETED; do not make
+            # the worker appear stuck on the last scene while FFmpeg runs.
             await self.task_manager.execute_task(
                 task.task_id,
                 self.workbench_jobs.run_export_job,
@@ -473,6 +631,7 @@ class ProjectGenerationService:
                 revision.export_id,
                 task.task_id,
             )
+            self._publish_progress(run.run_id, "scenes ready; initial draft export started")
 
     def _publish_progress(self, run_id: str, message: str) -> None:
         run = self.repository.get_generation_run(run_id)

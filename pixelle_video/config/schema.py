@@ -57,12 +57,21 @@ class TTSMiniMaxConfig(BaseModel):
     emotion: Optional[str] = Field(default=None, description="MiniMax emotion override (optional)")
 
 
+class TTSMimoConfig(BaseModel):
+    """MiMo TTS API configuration (Xiaomi MiMo-V2.5-TTS)"""
+    api_key: str = Field(default="", description="MiMo API Key")
+    model: str = Field(default="mimo-v2.5-tts", description="MiMo speech model")
+    voice_id: str = Field(default="mimo_default", description="MiMo voice ID")
+    style: str = Field(default="", description="MiMo natural-language style instruction (optional)")
+
+
 class TTSSubConfig(BaseModel):
     """TTS-specific configuration (under comfyui.tts)"""
-    inference_mode: str = Field(default="local", description="TTS inference mode: 'local', 'comfyui', or 'minimax'")
+    inference_mode: str = Field(default="local", description="TTS inference mode: 'local', 'comfyui', 'minimax', or 'mimo'")
     local: TTSLocalConfig = Field(default_factory=TTSLocalConfig, description="Local TTS (Edge TTS) configuration")
     comfyui: TTSComfyUIConfig = Field(default_factory=TTSComfyUIConfig, description="ComfyUI TTS configuration")
     minimax: TTSMiniMaxConfig = Field(default_factory=TTSMiniMaxConfig, description="MiniMax TTS API configuration")
+    mimo: TTSMimoConfig = Field(default_factory=TTSMimoConfig, description="MiMo TTS API configuration")
     
     # Backward compatibility: keep default_workflow at top level
     @property

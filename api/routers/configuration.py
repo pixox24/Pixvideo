@@ -38,6 +38,7 @@ def _sanitized_config() -> dict:
     image_generation = config_manager.get_image_generation_config()
     comfyui = config_manager.get_comfyui_config()
     minimax = comfyui.get("tts", {}).get("minimax", {})
+    mimo = comfyui.get("tts", {}).get("mimo", {})
 
     return {
         "success": True,
@@ -67,6 +68,8 @@ def _sanitized_config() -> dict:
             "bizyair_api_key_masked": _mask_secret(comfyui.get("bizyair_api_key")),
             "minimax_api_key_set": bool(minimax.get("api_key")),
             "minimax_api_key_masked": _mask_secret(minimax.get("api_key")),
+            "mimo_api_key_set": bool(mimo.get("api_key")),
+            "mimo_api_key_masked": _mask_secret(mimo.get("api_key")),
         },
         "quick_create": config_manager.get("quick_create", {}),
         "template": config_manager.get("template", {}),
@@ -81,6 +84,7 @@ def _sanitized_config() -> dict:
             "runninghub": bool(comfyui.get("runninghub_api_key")),
             "bizyair": bool(comfyui.get("bizyair_api_key")),
             "minimax": bool(minimax.get("api_key")),
+            "mimo": bool(mimo.get("api_key")),
         },
     }
 
@@ -132,6 +136,7 @@ async def update_config(request: ConfigUpdateRequest):
                 runninghub_instance_type=request.comfyui.runninghub_instance_type,
                 bizyair_api_key=request.comfyui.bizyair_api_key,
                 minimax_api_key=request.comfyui.minimax_api_key,
+                mimo_api_key=request.comfyui.mimo_api_key,
             )
 
         config_manager.save()
@@ -195,6 +200,7 @@ async def test_service(request: ServiceTestRequest):
             "runninghub": "runninghub_api_key",
             "bizyair": "bizyair_api_key",
             "minimax": "minimax_api_key",
+            "mimo": "mimo_api_key",
         }
         key_name = key_names[request.service]
         key = request.config.get(key_name)
@@ -202,6 +208,8 @@ async def test_service(request: ServiceTestRequest):
             comfyui = config_manager.get_comfyui_config()
             if request.service == "minimax":
                 key = comfyui.get("tts", {}).get("minimax", {}).get("api_key")
+            elif request.service == "mimo":
+                key = comfyui.get("tts", {}).get("mimo", {}).get("api_key")
             else:
                 key = comfyui.get(key_name)
         return {

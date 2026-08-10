@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, List, Music, PanelRight, Pause, Play, RefreshCw, Save, SkipBack, SkipForward } from "lucide-react";
+import { Download, ExternalLink, List, Music, PanelRight, Pause, Play, RefreshCw, Save, SkipBack, SkipForward } from "lucide-react";
 import { GenerationRun, Project, WorkbenchResources } from "../types";
 import { cancelGenerationRun, createExport, fetchActiveGenerationRun, fetchGenerationRun, fetchProject, patchProject, pauseGenerationRun, patchScene, regenerateImage, regenerateTts, retryExport, retryFailedGeneration, resumeGenerationRun, selectAssetVersion, startGenerationRun, submitBatchImageGeneration, updateTimeline, uploadSceneAsset } from "../lib/workbenchApi";
 import { initialGenerationState, reduceRunActionFailed, reduceRunActionFinished, reduceRunFetched, reduceRunStarted, ProjectGenerationState, shouldRefreshProject } from "../lib/projectGenerationState";
@@ -10,6 +10,8 @@ import { GenerationQueue } from "./GenerationQueue";
 import { WorkbenchTimeline } from "./WorkbenchTimeline";
 import { ExportDialog } from "./ExportDialog";
 import { GenerationRunPanel } from "./GenerationRunPanel";
+import { SceneProgressGrid } from "./SceneProgressGrid";
+import { dismissWorkbenchKeysTip, isWorkbenchKeysTipDismissed } from "../lib/onboarding";
 
 const PLAYBACK_MAX_FRAME_DELTA = 0.25;
 const SEEK_STEP_SECONDS = 0.1;
@@ -32,6 +34,7 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   const [batchPrefix, setBatchPrefix] = useState("");
   const [batchBusy, setBatchBusy] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [showKeysTip, setShowKeysTip] = useState(() => !isWorkbenchKeysTipDismissed());
   const [mobilePanel, setMobilePanel] = useState<"scenes" | "inspector" | null>(null);
   const [generation, setGeneration] = useState<ProjectGenerationState>(initialGenerationState);
   const [settings, setSettings] = useState({ bgm: "bgm-none", bgmVolume: 30, enableSubtitles: true });
@@ -422,7 +425,16 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
     bgmAudioRef.current?.pause();
   }, []);
 
-  if (!project) return <div className="p-6 text-sm text-zinc-400">正在加载项目…</div>;
+  if (!project) {
+    return (
+      <div className="flex h-full min-h-[320px] items-center justify-center rounded-lg border border-dashed border-zinc-800 bg-[#101114] p-6 text-sm text-zinc-400">
+        <div className="text-center space-y-2">
+          <LoaderLike />
+          <p>正在加载项目…</p>
+        </div>
+      </div>
+    );
+  }
 
   const runIsTerminal = generation.run && ["completed", "completed_with_failures", "cancelled", "failed"].includes(generation.run.status);
   const pendingCount = generation.run && !runIsTerminal
@@ -431,6 +443,13 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   const exportJob = project.jobs.find((job) => job.kind === "export" && (job.status === "pending" || job.status === "running"));
   const latestExportActive = project.latestExport?.status === "pending" || project.latestExport?.status === "running";
   const candidateCount = project.scenes.reduce((count, scene) => count + (scene.generationState?.candidateCount || 0), 0);
+  const staleOrMissingIds = project.scenes
+    .filter((scene) => {
+      const image = scene.generationState?.image;
+      const audio = scene.generationState?.audio;
+      return image === "stale" || audio === "stale" || image === "missing" || audio === "missing" || !scene.currentVersionId || !scene.audioUrl;
+    })
+    .map((scene) => scene.sceneId);
   const statusLabel = generation.run && !["completed", "completed_with_failures", "cancelled", "failed"].includes(generation.run.status)
     ? "正在生成素材"
     : exportJob || latestExportActive
@@ -446,23 +465,108 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
             : candidateCount > 0
               ? "有候选待确认"
               : null;
+  const exportCompleted = project.latestExport?.status === "completed" && project.latestExport.outputUrl;
+  const exportIsInitial = project.latestExport?.purpose === "initial";
+  const regenerateStale = async () => {
+    if (staleOrMissingIds.length === 0) {
+      addToast("没有需要补生成的镜头", "info");
+      return;
+    }
+    setGeneration((current) => ({ ...current, actionBusy: "start", error: null }));
+    try {
+      const next = await startGenerationRun(projectId, staleOrMissingIds);
+      setGeneration((current) => reduceRunActionFinished(reduceRunStarted(current, next), next));
+      await load();
+      addToast(`已开始补生成 ${staleOrMissingIds.length} 个镜头`, "success");
+    } catch (error) {
+      setGeneration((current) => reduceRunActionFailed(current, error));
+      addToast(error, "error");
+    }
+  };
+
   return (
-    <div className="flex min-h-[640px] flex-col overflow-hidden border border-zinc-800 bg-[#101114]">
-      <GenerationRunPanel run={generation.run} busy={generation.actionBusy} pendingCount={pendingCount} onStart={startRun} onPause={() => generation.run && void runAction("pause", () => pauseGenerationRun(projectId, generation.run!.runId))} onResume={() => generation.run && void runAction("resume", () => resumeGenerationRun(projectId, generation.run!.runId))} onCancel={() => generation.run && void runAction("cancel", () => cancelGenerationRun(projectId, generation.run!.runId))} onRetry={() => generation.run && void runAction("retry", () => retryFailedGeneration(projectId, generation.run!.runId))} />
-      <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-3">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden border border-zinc-800 bg-[#101114]">
+      <GenerationRunPanel
+        run={generation.run}
+        busy={generation.actionBusy}
+        pendingCount={pendingCount}
+        exportStatus={project.latestExport?.status || null}
+        exportPurpose={project.latestExport?.purpose || null}
+        onStart={startRun}
+        onPause={() => generation.run && void runAction("pause", () => pauseGenerationRun(projectId, generation.run!.runId))}
+        onResume={() => generation.run && void runAction("resume", () => resumeGenerationRun(projectId, generation.run!.runId))}
+        onCancel={() => generation.run && void runAction("cancel", () => cancelGenerationRun(projectId, generation.run!.runId))}
+        onRetry={() => generation.run && void runAction("retry", () => retryFailedGeneration(projectId, generation.run!.runId))}
+        onLocateFailure={(sceneId) => { setSelectedSceneId(sceneId); setMobilePanel(null); }}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2.5">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-zinc-100">{project.title}</div>
-          <div className="text-[10px] text-zinc-500">AI 剪辑工作台 · {project.scenes.length} 个分镜{statusLabel ? ` · ${statusLabel}` : ""}</div>
+          <div className="text-caption text-zinc-500">{project.scenes.length} 个分镜{statusLabel ? ` · ${statusLabel}` : ""}</div>
         </div>
-        <div className="flex items-center gap-1">
-          {project.latestExport?.status === "failed" && <button type="button" onClick={() => void retryInitialExport()} className="flex items-center gap-1 border border-red-900 px-3 py-2 text-xs text-red-300"><RefreshCw className="h-3.5 w-3.5" />重试初稿</button>}
-          {project.latestExport?.outputUrl && <a href={project.latestExport.outputUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 border border-zinc-700 px-3 py-2 text-xs text-zinc-200"><Play className="h-3.5 w-3.5" />查看初稿</a>}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {staleOrMissingIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void regenerateStale()}
+              disabled={generation.actionBusy !== null}
+              className="flex items-center gap-1 border border-sky-700/60 px-3 py-2 text-xs text-sky-200 hover:bg-sky-950/40 disabled:opacity-40"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              补生成过期/缺失 ({staleOrMissingIds.length})
+            </button>
+          )}
+          {project.latestExport?.status === "failed" && (
+            <button type="button" onClick={() => void retryInitialExport()} className="flex items-center gap-1 border border-red-900 px-3 py-2 text-xs text-red-300">
+              <RefreshCw className="h-3.5 w-3.5" />重试导出
+            </button>
+          )}
+          {exportCompleted && (
+            <a
+              href={project.latestExport!.outputUrl!}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 border border-emerald-700/50 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {exportIsInitial ? "打开初稿" : "打开成片"}
+            </a>
+          )}
           <button type="button" aria-label="打开分镜面板" onClick={() => setMobilePanel(mobilePanel === "scenes" ? null : "scenes")} className="p-2 text-zinc-400 lg:hidden"><List className="h-4 w-4" /></button>
           <button type="button" aria-label="打开检查器" onClick={() => setMobilePanel(mobilePanel === "inspector" ? null : "inspector")} className="p-2 text-zinc-400 lg:hidden"><PanelRight className="h-4 w-4" /></button>
-          <button type="button" onClick={() => setExportOpen(true)} className="flex items-center gap-1 bg-amber-500 px-3 py-2 text-xs font-semibold text-black"><Download className="h-3.5 w-3.5" />导出</button>
+          <button type="button" onClick={() => setExportOpen(true)} className="flex items-center gap-1 bg-amber-500 px-3 py-2 text-xs font-semibold text-black">
+            <Download className="h-3.5 w-3.5" />导出成片
+          </button>
           <button type="button" title="刷新项目" aria-label="刷新项目" onClick={() => void load()} className="p-2 text-zinc-400 hover:text-zinc-100"><RefreshCw className="h-4 w-4" /></button>
         </div>
       </div>
+
+      {exportCompleted && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-900/40 bg-emerald-500/5 px-3 py-2">
+          <p className="text-xs text-emerald-200">
+            {exportIsInitial ? "初稿已导出完成" : "成片导出完成"}
+            {latestExportActive ? " · 有新的导出任务进行中" : ""}
+          </p>
+          <div className="flex gap-2">
+            <a
+              href={project.latestExport!.outputUrl!}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded border border-emerald-700/50 px-2.5 py-1 text-xs text-emerald-100 hover:bg-emerald-950/40"
+            >
+              打开{exportIsInitial ? "初稿" : "成片"}
+            </a>
+            <a
+              href={project.latestExport!.outputUrl!}
+              download
+              className="rounded bg-emerald-500/20 px-2.5 py-1 text-xs font-medium text-emerald-100 hover:bg-emerald-500/30"
+            >
+              下载
+            </a>
+          </div>
+        </div>
+      )}
+
       <section className="border-b border-zinc-800 bg-[#0d0e11] px-3 py-2">
         <div className="flex flex-wrap items-center gap-3">
           <Music className="h-4 w-4 text-zinc-500" />
@@ -482,6 +586,35 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
           <button type="button" disabled={settingsBusy} onClick={() => void saveSettings()} className="ml-auto flex items-center gap-1 border border-zinc-700 px-3 py-1 text-xs text-zinc-200 disabled:opacity-40"><Save className="h-3.5 w-3.5" />{settingsBusy ? "保存中" : "保存设置"}</button>
         </div>
       </section>
+
+      <SceneProgressGrid
+        scenes={project.scenes}
+        run={generation.run}
+        selectedSceneId={selectedSceneId}
+        onSelect={(id) => { setSelectedSceneId(id); setMobilePanel(null); }}
+      />
+
+      {showKeysTip && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 bg-[var(--color-surface-1)] px-3 py-1.5 animate-fade-in">
+          <p className="text-caption text-zinc-400">
+            快捷键：
+            <span className="kbd mx-1">Space</span> 播放/暂停
+            <span className="kbd mx-1">←</span>
+            <span className="kbd mx-1">→</span> 微调时间
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              dismissWorkbenchKeysTip();
+              setShowKeysTip(false);
+            }}
+            className="text-caption text-zinc-500 hover:text-zinc-300"
+          >
+            知道了
+          </button>
+        </div>
+      )}
+
       {selectedSceneIds.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 bg-zinc-950 px-3 py-2">
           <span className="text-xs text-zinc-300">选中 {selectedSceneIds.size} 项</span>
@@ -489,10 +622,11 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
           <button type="button" disabled={batchBusy} onClick={() => void submitBatch()} className="bg-amber-500 px-3 py-1 text-xs font-semibold text-black disabled:opacity-40">批量重新生成</button>
         </div>
       )}
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(190px,240px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(190px,240px)_minmax(0,1fr)_minmax(280px,360px)]">
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)_minmax(260px,320px)]">
         <SceneList className={mobilePanel === "scenes" ? "flex" : "hidden lg:flex"} scenes={project.scenes} selectedSceneId={selectedSceneId} selectedSceneIds={selectedSceneIds} onSelect={(id) => { setSelectedSceneId(id); setMobilePanel(null); }} onToggle={toggleScene} />
-        <main className={`${mobilePanel ? "hidden lg:block" : "block"} min-w-0 bg-black p-3 sm:p-6`}>
-          <div className="mb-3 flex items-center justify-between">
+        <main className={`${mobilePanel ? "hidden lg:flex" : "flex"} min-h-0 min-w-0 flex-col bg-black p-3 sm:p-4`}>
+          <div className="mb-2 flex items-center justify-between">
             <div className="text-xs text-zinc-400">
               {selected ? `分镜 #${selectedIndex + 1} · ${selected.durationSeconds.toFixed(1)} 秒` : "未选择分镜"}
               <span className="ml-3 font-mono text-zinc-500">{formatTimelineTime(currentTime)} / {formatTimelineTime(totalDuration)}</span>
@@ -503,8 +637,8 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
               <button type="button" title="下一个分镜" aria-label="下一个分镜" onClick={() => goToAdjacentScene(1)} className="p-2 text-zinc-400 disabled:opacity-30" disabled={!currentSceneItem && !currentSceneItemRef.current}><SkipForward className="h-4 w-4" /></button>
             </div>
           </div>
-          <div className="flex aspect-video items-center justify-center overflow-hidden border border-zinc-800 bg-zinc-950 text-xs text-zinc-600">
-            {currentVersion ? <img src={currentVersion.imageUrl} alt="画面预览" className="h-full w-full object-contain" /> : <>画面预览{selected ? ` · #${selectedIndex + 1}` : ""}</>}
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded border border-zinc-800 bg-zinc-950 text-xs text-zinc-600">
+            {currentVersion ? <img src={currentVersion.imageUrl} alt="画面预览" className="max-h-full max-w-full object-contain" /> : <>画面预览{selected ? ` · #${selectedIndex + 1}` : ""}</>}
           </div>
           <audio ref={audioRef} className="hidden" preload="auto"
             onLoadedMetadata={() => {
@@ -544,7 +678,9 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
             }}
           />
         </main>
-        <SceneInspector className={`${mobilePanel === "inspector" ? "block" : "hidden lg:block"} lg:col-start-2 lg:col-span-1 2xl:col-start-auto 2xl:col-span-1`} scene={selected}
+        <SceneInspector
+          className={`${mobilePanel === "inspector" ? "block" : "hidden lg:block"} min-h-0`}
+          scene={selected}
           onSave={(patch) => selected ? act(() => patchScene(projectId, selected.sceneId, patch), "场景草稿已保存") : Promise.resolve()}
           onRegenerateImage={(prompt) => selected ? act(() => regenerateImage(projectId, selected.sceneId, prompt), "图片生成任务已提交") : Promise.resolve()}
           onRegenerateTts={(narration) => selected ? act(() => regenerateTts(projectId, selected.sceneId, narration), "配音生成任务已提交") : Promise.resolve()}
@@ -552,9 +688,15 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
           onSelectVersion={(versionId) => selected ? act(() => selectAssetVersion(projectId, selected.sceneId, versionId), "已切换当前版本") : Promise.resolve()}
         />
       </div>
-      <WorkbenchTimeline scenes={project.scenes} selectedSceneId={selectedSceneId} currentTime={currentTime} totalDuration={totalDuration} isPlaying={isPlaying} pixelsPerSecond={pixelsPerSecond} canUndo={timelinePast.length > 0} canRedo={timelineFuture.length > 0} onZoomChange={(value) => setPixelsPerSecond(Math.min(120, Math.max(8, value)))} onSeek={seek} onPause={() => setIsPlaying(false)} onSelect={setSelectedSceneId} onReorder={handleTimelineReorder} onHold={handleTimelineHold} onUndo={handleUndo} onRedo={handleRedo} />
+      <div className="shrink-0 border-t border-zinc-800">
+        <WorkbenchTimeline scenes={project.scenes} selectedSceneId={selectedSceneId} currentTime={currentTime} totalDuration={totalDuration} isPlaying={isPlaying} pixelsPerSecond={pixelsPerSecond} canUndo={timelinePast.length > 0} canRedo={timelineFuture.length > 0} onZoomChange={(value) => setPixelsPerSecond(Math.min(120, Math.max(8, value)))} onSeek={seek} onPause={() => setIsPlaying(false)} onSelect={setSelectedSceneId} onReorder={handleTimelineReorder} onHold={handleTimelineHold} onUndo={handleUndo} onRedo={handleRedo} />
+      </div>
       <GenerationQueue jobs={project.jobs} />
       <ExportDialog project={project} open={exportOpen} onClose={() => setExportOpen(false)} onExport={submitExport} onLocateScene={(sceneId) => { setSelectedSceneId(sceneId); setExportOpen(false); }} />
     </div>
   );
 };
+
+function LoaderLike() {
+  return <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-amber-500" />;
+}

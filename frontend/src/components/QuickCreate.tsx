@@ -35,11 +35,22 @@ import {
   type KeywordExtractionDensity,
   type KeywordExtractionStyle,
 } from "../lib/api";
+import { ConfirmModal } from "./ConfirmModal";
+import { WIZARD_STEPS, type WizardStepId } from "./quickCreate/wizard";
+import { dismissCreateTip, isCreateTipDismissed } from "../lib/onboarding";
+
+interface ServiceReadyState {
+  llm: boolean;
+  image: boolean;
+  minimax: boolean;
+  mimo: boolean;
+}
 
 interface QuickCreateProps {
   onGenerateTask: (taskInput: any) => Promise<string | null>;
   onCreateProject?: (input: QuickCreateInput) => Promise<void>;
   latestCompletedTaskId?: string | null;
+  latestCompletedTaskTitle?: string | null;
   presets: Preset[];
   activePreset: Preset | null;
   defaultPresetId: string | null;
@@ -52,7 +63,12 @@ interface QuickCreateProps {
   onRefreshResources: () => Promise<void>;
   resources: WorkbenchResources;
   addToast: (text: string, type: "success" | "error" | "info") => void;
+  serviceReady?: ServiceReadyState;
+  onOpenSettings?: () => void;
+  onOpenConsole?: () => void;
 }
+
+type FieldErrors = Partial<Record<"title" | "content" | "review" | "tts", string>>;
 
 const DEFAULT_PREVIEW_TTS_TEXT = "这是一段 TTS 试听文案，用来检查音色、语速和发音效果。";
 const QUICK_CREATE_DRAFT_KEY = "pixvideo.quick-create.draft.v1";
@@ -89,14 +105,6 @@ const normalizeKeywordPreferences = (value: unknown): KeywordPreferences => {
       : "standard",
   };
 };
-
-const QUICK_CREATE_STAGES = [
-  { id: "content", label: "内容", anchor: "stage-content" },
-  { id: "storyboard", label: "分镜", anchor: "stage-storyboard" },
-  { id: "production", label: "声音与画面", anchor: "stage-production" },
-  { id: "review", label: "核对并生成", anchor: "stage-review" },
-  { id: "progress", label: "进度与结果", anchor: "" },
-] as const;
 
 const extractPreviewSentenceFromCopyDraft = (rawDraftText: string) => {
   const draftText = rawDraftText
@@ -256,6 +264,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   onRefreshResources,
   resources,
   addToast,
+  latestCompletedTaskTitle = null,
+  serviceReady,
+  onOpenSettings,
+  onOpenConsole,
 }) => {
   // Main states
   const [mode, setMode] = useState<"ai" | "manual" | "batch">("ai");
@@ -289,12 +301,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [playingBgm, setPlayingBgm] = useState<string | null>(null);
   const bgmPreviewRef = React.useRef<HTMLAudioElement | null>(null);
 
-  // TTS States
-  const [ttsMode, setTtsMode] = useState<"edge" | "comfyui" | "minimax">("minimax");
-  const [voice, setVoice] = useState("male-qn-qingse");
+  // TTS States — default Edge (zero-config). Presets / MiniMax ready state may upgrade later.
+  const [ttsMode, setTtsMode] = useState<"edge" | "comfyui" | "minimax" | "mimo">("edge");
+  // Phase-1 recommended default: whole-script continuous synth + per-scene split.
+  const [ttsDelivery, setTtsDelivery] = useState<"continuous" | "per_scene">("continuous");
+  const [voice, setVoice] = useState("zh-CN-XiaoxiaoNeural");
   const [speed, setSpeed] = useState(1.0);
   const [emotion, setEmotion] = useState("");
   const [minimaxModel, setMinimaxModel] = useState("speech-2.8-turbo");
+  const [mimoModel, setMimoModel] = useState("mimo-v2.5-tts");
+  const [mimoStyle, setMimoStyle] = useState("");
   const [customAudioFile, setCustomAudioFile] = useState<string | null>(null);
   const [previewingTts, setPreviewingTts] = useState(false);
   const [previewTtsText, setPreviewTtsText] = useState(DEFAULT_PREVIEW_TTS_TEXT);
@@ -330,22 +346,38 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [presetNameDraft, setPresetNameDraft] = useState("");
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [reviewConfirmed, setReviewConfirmed] = useState(true);
-  const [activeStage, setActiveStage] = useState<(typeof QUICK_CREATE_STAGES)[number]["id"]>("content");
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [wizardStep, setWizardStep] = useState<WizardStepId>("content");
+  const [expertMode, setExpertMode] = useState(false);
+  const [showAdvancedProduction, setShowAdvancedProduction] = useState(false);
+  const [showAdvancedKeywords, setShowAdvancedKeywords] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [reuseSourceTaskId, setReuseSourceTaskId] = useState<string | null>(null);
+  const [reuseAssetsEnabled, setReuseAssetsEnabled] = useState(false);
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [deletePresetConfirmOpen, setDeletePresetConfirmOpen] = useState(false);
+  const [showCreateTip, setShowCreateTip] = useState(() => !isCreateTipDismissed());
+  const [lastBatchSummary, setLastBatchSummary] = useState<{
+    total: number;
+    success: number;
+    failed: number;
+    at: string;
+  } | null>(null);
   const draftReadyRef = React.useRef(false);
   const draftRecoveredRef = React.useRef(false);
   const reviewReadyRef = React.useRef(false);
   const submissionLockRef = React.useRef(false);
   const suppressInitialReviewResetRef = React.useRef(false);
   const keywordRequestIdRef = React.useRef(0);
+  const safeTtsDefaultAppliedRef = React.useRef(false);
 
   const bgmOptions = resources.bgm;
   const workflowOptions = resources.workflows;
   const fontOptions = resources.fonts || [];
   const selectedBgm = bgmOptions.find((item) => item.id === bgm);
-  const effectiveReuseSourceTaskId = reuseSourceTaskId || latestCompletedTaskId || null;
+  const effectiveReuseSourceTaskId =
+    reuseAssetsEnabled ? (reuseSourceTaskId || latestCompletedTaskId || null) : null;
   const lastAppliedPresetId = React.useRef<string | null>(null);
 
   const normalizeSubtitleStyle = (value?: Partial<SubtitleStyle>): SubtitleStyle => ({
@@ -407,10 +439,15 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           if (["around", "within"].includes(draft.copyCharCountMode)) setCopyCharCountMode(draft.copyCharCountMode);
           if (["paragraph", "line", "sentence"].includes(draft.splitType)) setSplitType(draft.splitType);
           if (typeof draft.workflowId === "string") setWorkflowId(draft.workflowId);
-          if (["edge", "comfyui", "minimax"].includes(draft.ttsMode)) setTtsMode(draft.ttsMode);
+          if (["edge", "comfyui", "minimax", "mimo"].includes(draft.ttsMode)) setTtsMode(draft.ttsMode);
+          if (draft.ttsDelivery === "continuous" || draft.ttsDelivery === "per_scene") {
+            setTtsDelivery(draft.ttsDelivery);
+          }
           if (typeof draft.voice === "string") setVoice(draft.voice);
           if (typeof draft.speed === "number") setSpeed(draft.speed);
           if (typeof draft.minimaxModel === "string") setMinimaxModel(draft.minimaxModel);
+          if (typeof draft.mimoModel === "string") setMimoModel(draft.mimoModel);
+          if (typeof draft.mimoStyle === "string") setMimoStyle(draft.mimoStyle);
           if (typeof draft.emotion === "string") setEmotion(draft.emotion);
           if (typeof draft.bgm === "string") setBgm(draft.bgm);
           if (typeof draft.volume === "number") setVolume(draft.volume);
@@ -420,10 +457,15 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           if (typeof draft.imageAspectRatio === "string") setImageAspectRatio(draft.imageAspectRatio);
           if (typeof draft.imageWidth === "number") setImageWidth(draft.imageWidth);
           if (typeof draft.imageHeight === "number") setImageHeight(draft.imageHeight);
-          if (typeof draft.reuseSourceTaskId === "string") setReuseSourceTaskId(draft.reuseSourceTaskId);
+          if (typeof draft.reuseSourceTaskId === "string") {
+            setReuseSourceTaskId(draft.reuseSourceTaskId);
+            setReuseAssetsEnabled(true);
+          }
+          if (typeof draft.reuseAssetsEnabled === "boolean") setReuseAssetsEnabled(draft.reuseAssetsEnabled);
           if (draft.subtitleStyle) setSubtitleStyle(normalizeSubtitleStyle(draft.subtitleStyle));
           setKeywordPreferences(normalizeKeywordPreferences(draft.keywordPreferences));
           setDraftSavedAt(typeof draft.savedAt === "string" ? draft.savedAt : null);
+          setShowDraftBanner(true);
         }
       }
     } catch {
@@ -432,6 +474,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       draftReadyRef.current = true;
     }
   }, []);
+
+  // Prefer MiniMax only when the service is ready and user has not restored a draft/preset yet.
+  React.useEffect(() => {
+    if (safeTtsDefaultAppliedRef.current || draftRecoveredRef.current) return;
+    if (serviceReady?.minimax && ttsMode === "edge" && !activePreset) {
+      safeTtsDefaultAppliedRef.current = true;
+      setTtsMode("minimax");
+      setVoice("male-qn-qingse");
+    }
+  }, [serviceReady?.minimax, ttsMode, activePreset]);
 
   React.useEffect(() => {
     if (!draftReadyRef.current) return;
@@ -453,10 +505,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         scenes,
         workflowId,
         ttsMode,
+        ttsDelivery,
         voice,
         speed,
         minimaxModel,
         emotion,
+        mimoModel,
+        mimoStyle,
         bgm,
         volume,
         promptPrefix,
@@ -466,13 +521,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         imageWidth,
         imageHeight,
         reuseSourceTaskId,
+        reuseAssetsEnabled,
         subtitleStyle: normalizeSubtitleStyle(subtitleStyle),
         keywordPreferences,
       }));
       setDraftSavedAt(savedAt);
     }, 500);
     return () => window.clearTimeout(timeoutId);
-  }, [mode, title, aiTopic, aiSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, voice, speed, minimaxModel, emotion, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, keywordPreferences]);
+  }, [mode, title, aiTopic, aiSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, reuseAssetsEnabled, keywordPreferences]);
 
   // Invalidate the review whenever a submitted production setting changes.
   React.useEffect(() => {
@@ -485,7 +541,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       return;
     }
     setReviewConfirmed(false);
-  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, splitType, batchInput, scenes, workflowId, ttsMode, voice, speed, minimaxModel, emotion, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageWidth, imageHeight, subtitleStyle]);
+  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageWidth, imageHeight, subtitleStyle]);
 
   React.useEffect(() => {
     if (!copyCharCountTouched) {
@@ -863,7 +919,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setPreviewingTts(true);
     setPreviewTtsAudioUrl(null);
     const previewInferenceMode = ttsMode === "edge" ? "local" : ttsMode;
-    const previewServiceName = ttsMode === "minimax" ? "MiniMax" : ttsMode === "comfyui" ? "ComfyUI" : "Edge";
+    const previewServiceName = ttsMode === "minimax" ? "MiniMax" : ttsMode === "mimo" ? "MiMo" : ttsMode === "comfyui" ? "ComfyUI" : "Edge";
     addToast(`正在生成 ${previewServiceName} TTS 试听音频...`, "info");
 
     try {
@@ -877,6 +933,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           speed,
           minimax_model: ttsMode === "minimax" ? minimaxModel : undefined,
           minimax_emotion: ttsMode === "minimax" ? emotion || undefined : undefined,
+          mimo_model: ttsMode === "mimo" ? mimoModel : undefined,
+          mimo_style: ttsMode === "mimo" ? mimoStyle || undefined : undefined,
         }),
       });
       const data = await response.json();
@@ -943,7 +1001,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setCopyTtsSourceLabel(currentCopy.label);
 
     const copyInferenceMode = ttsMode === "edge" ? "local" : ttsMode;
-    const copyServiceName = ttsMode === "minimax" ? "MiniMax" : ttsMode === "comfyui" ? "ComfyUI" : "Edge";
+    const copyServiceName = ttsMode === "minimax" ? "MiniMax" : ttsMode === "mimo" ? "MiMo" : ttsMode === "comfyui" ? "ComfyUI" : "Edge";
     addToast(`正在合成 ${copyServiceName} 当前文案音频...`, "info");
 
     try {
@@ -957,6 +1015,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           speed,
           minimax_model: ttsMode === "minimax" ? minimaxModel : undefined,
           minimax_emotion: ttsMode === "minimax" ? emotion || undefined : undefined,
+          mimo_model: ttsMode === "mimo" ? mimoModel : undefined,
+          mimo_style: ttsMode === "mimo" ? mimoStyle || undefined : undefined,
         }),
       });
       const data = await response.json();
@@ -1005,6 +1065,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setSubtitleStyle(normalizeSubtitleStyle(activePreset.subtitleStyle));
       setMinimaxModel(activePreset.minimaxModel || "speech-2.8-turbo");
       setEmotion(activePreset.emotion || "");
+      setMimoModel(activePreset.mimoModel || "mimo-v2.5-tts");
+      setMimoStyle(activePreset.mimoStyle || "");
       if (activePreset.sceneCount) setAiSceneCount(activePreset.sceneCount);
       if (activePreset.copyCharCount) {
         setCopyCharCount(activePreset.copyCharCount);
@@ -1244,100 +1306,172 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       };
     });
 
+  const scrollToField = (anchorId: string) => {
+    window.requestAnimationFrame(() => {
+      document.getElementById(anchorId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+
+  const validateBeforeSubmit = (renderScenes: ReturnType<typeof buildScenesForRender>): FieldErrors => {
+    const errors: FieldErrors = {};
+    if (!title.trim()) {
+      errors.title = "请填写项目标题";
+    }
+    if (mode === "ai" && renderScenes.length === 0) {
+      errors.content = "请先生成或填写文案，再开始生成";
+    } else if (mode === "manual" && renderScenes.some((s) => !s.ttsText.trim())) {
+      errors.content = "请完善每一个分镜的旁白文本";
+    } else if (renderScenes.length === 0) {
+      errors.content = "没有可用于生成的文案内容";
+    }
+    if (ttsMode === "minimax" && serviceReady && !serviceReady.minimax) {
+      errors.tts = "MiniMax 未配置，请前往设置填写 Key，或改用 Edge 配音";
+    }
+    if (ttsMode === "mimo" && serviceReady && !serviceReady.mimo) {
+      errors.tts = "MiMo 未配置，请前往设置填写 Key，或改用 Edge 配音";
+    }
+    if (
+      ttsMode === "mimo" &&
+      String(mimoModel || "").includes("voicedesign") &&
+      !String(mimoStyle || "").trim()
+    ) {
+      errors.tts = "Voice Design 模式请填写音色设计描述（全片共用）";
+    }
+    if (!reviewConfirmed) {
+      errors.review = "请勾选下方确认项后再提交";
+    }
+    return errors;
+  };
+
+  const clearLocalDraft = () => {
+    localStorage.removeItem(QUICK_CREATE_DRAFT_KEY);
+    setShowDraftBanner(false);
+    setDraftSavedAt(null);
+    setTitle("新品发布创意科技短视频");
+    setAiTopic("探索未来世界的智能机器人生活碎片");
+    setCopyDraft("");
+    setScenes([
+      { id: 1, ttsText: "这是一个科技感爆棚的高能概念画卷。", visualPrompt: "Cinematic digital art of high-tech lab, warm amber lighting, futuristic, 4k" },
+      { id: 2, ttsText: "每一个齿轮的咬合，都是精工美学的体现。", visualPrompt: "Macro close-up of amber golden machine gears interlocking in motion, cinematic depth of field" },
+    ]);
+    setBatchInput("主题一: 智能机器人在雨夜撑伞\n主题二: 机械宠物狗在客厅嬉戏\n主题三: 未来城市空中飞车速递");
+    setReviewConfirmed(false);
+    setReuseAssetsEnabled(false);
+    setReuseSourceTaskId(null);
+    setFieldErrors({});
+    addToast("已清空本地草稿，可重新开始。", "info");
+  };
+
   // Trigger main generator callback
   const handleTriggerRender = async (directGenerate = false) => {
     if (submissionLockRef.current) return;
     submissionLockRef.current = true;
     try {
-    if (!title.trim()) {
-      addToast("请先指定视频生产任务标题！", "error");
-      return;
-    }
+      const renderScenes = buildScenesForRender();
+      const errors = validateBeforeSubmit(renderScenes);
+      setFieldErrors(errors);
+      if (Object.keys(errors).length > 0) {
+        if (errors.title) scrollToField("stage-content");
+        else if (errors.content) scrollToField("stage-storyboard");
+        else if (errors.tts) scrollToField("stage-production");
+        else if (errors.review) scrollToField("stage-review");
+        addToast(Object.values(errors)[0] || "请先完善必填项", "error");
+        return;
+      }
 
-    const renderScenes = buildScenesForRender();
-
-    if (mode === "ai" && renderScenes.length === 0) {
-      addToast("请先生成或填写确认文案，再开始生成视频。", "error");
-      return;
-    }
-
-    if (mode === "manual" && renderScenes.some((s) => !s.ttsText.trim())) {
-      addToast("检测到未填写的旁白文本，请完善每一个分镜！", "error");
-      return;
-    }
-
-    if (renderScenes.length === 0) {
-      addToast("没有可用于生成视频的文案内容。", "error");
-      return;
-    }
-
-    if (!reviewConfirmed) {
-      addToast("请先核对生成摘要并确认配置。", "error");
-      return;
-    }
+      // Soft guidance when multi-scene Voice Design still uses per-scene delivery.
+      if (
+        ttsMode === "mimo" &&
+        String(mimoModel || "").includes("voicedesign") &&
+        renderScenes.length > 1 &&
+        ttsDelivery === "per_scene"
+      ) {
+        addToast(
+          `当前 ${renderScenes.length} 个分镜将逐段合成 Voice Design 配音，音色可能有轻微漂移。建议改用「整篇连续合成」或预设音色。`,
+          "info",
+        );
+      }
 
       const taskInput = {
-      title,
-      tabType: "quick-create",
-      workflowId,
-      ttsMode,
-      voice,
-      speed,
-      minimaxModel,
-      emotion: emotion || undefined,
-      mediaWidth: imageWidth,
-      mediaHeight: imageHeight,
-      bgm,
-      bgmVolume: volume,
-      promptPrefix,
-      enableMotion,
-      enableSubtitles,
-      subtitleStyle,
-      splitType,
-      reuseTaskId: mode === "batch" ? undefined : effectiveReuseSourceTaskId,
-        scenes: renderScenes
+        title,
+        tabType: "quick-create",
+        workflowId,
+        ttsMode,
+        ttsDelivery,
+        voice,
+        speed,
+        minimaxModel,
+        emotion: emotion || undefined,
+        mimoModel,
+        mimoStyle: mimoStyle || undefined,
+        mediaWidth: imageWidth,
+        mediaHeight: imageHeight,
+        bgm,
+        bgmVolume: volume,
+        promptPrefix,
+        enableMotion,
+        enableSubtitles,
+        subtitleStyle,
+        splitType,
+        reuseTaskId: mode === "batch" ? undefined : effectiveReuseSourceTaskId,
+        scenes: renderScenes,
       };
 
       if (mode !== "batch" && onCreateProject && !directGenerate) {
-        await onCreateProject({
-          ...taskInput,
-          scenes: renderScenes.map((scene) => ({
-            ...scene,
-            visualPrompt: scene.visualPrompt.trim() || scene.ttsText,
-          })),
-        });
-        setReviewConfirmed(false);
+        setIsSubmitting(true);
+        try {
+          await onCreateProject({
+            ...taskInput,
+            scenes: renderScenes.map((scene) => ({
+              ...scene,
+              visualPrompt: scene.visualPrompt.trim() || scene.ttsText,
+            })),
+          });
+          setReviewConfirmed(false);
+          setFieldErrors({});
+        } finally {
+          setIsSubmitting(false);
+        }
         return;
       }
 
       const requestGroupKey = crypto.randomUUID();
-    setIsSubmitting(true);
-    try {
-      if (mode === "batch") {
-        const taskInputs = buildBatchTaskInputs(taskInput, renderScenes, requestGroupKey);
-        let successfulSubmissions = 0;
-        await runWithConcurrency(taskInputs, 3, async (item) => {
-          if (await onGenerateTask(item)) successfulSubmissions += 1;
-        });
-        const failedSubmissions = taskInputs.length - successfulSubmissions;
-        if (failedSubmissions > 0) {
-          addToast(
-            `批量提交完成：成功 ${successfulSubmissions} 个，失败 ${failedSubmissions} 个。请查看任务面板中的失败原因。`,
-            "error",
-          );
+      setIsSubmitting(true);
+      onOpenConsole?.();
+      try {
+        if (mode === "batch") {
+          const taskInputs = buildBatchTaskInputs(taskInput, renderScenes, requestGroupKey);
+          let successfulSubmissions = 0;
+          await runWithConcurrency(taskInputs, 3, async (item) => {
+            if (await onGenerateTask(item)) successfulSubmissions += 1;
+          });
+          const failedSubmissions = taskInputs.length - successfulSubmissions;
+          setLastBatchSummary({
+            total: taskInputs.length,
+            success: successfulSubmissions,
+            failed: failedSubmissions,
+            at: new Date().toISOString(),
+          });
+          if (failedSubmissions > 0) {
+            addToast(
+              `批量提交完成：成功 ${successfulSubmissions} 个，失败 ${failedSubmissions} 个。请在右侧任务面板查看失败原因。`,
+              "error",
+            );
+          } else {
+            addToast(`已提交 ${successfulSubmissions} 个独立视频任务，可在右侧任务面板查看进度。`, "success");
+          }
+          if (successfulSubmissions === 0) return;
         } else {
-          addToast(`已提交 ${successfulSubmissions} 个独立视频任务。`, "success");
+          const submittedTaskId = await onGenerateTask({ ...taskInput, clientRequestKey: requestGroupKey });
+          if (!submittedTaskId) return;
+          setReuseSourceTaskId(submittedTaskId);
+          addToast("任务已提交，请在右侧任务面板查看进度与结果。", "info");
         }
-        if (successfulSubmissions === 0) return;
-      } else {
-        const submittedTaskId = await onGenerateTask({ ...taskInput, clientRequestKey: requestGroupKey });
-        if (!submittedTaskId) return;
-        setReuseSourceTaskId(submittedTaskId);
+        setReviewConfirmed(false);
+        setFieldErrors({});
+      } finally {
+        setIsSubmitting(false);
       }
-      setReviewConfirmed(false);
-    } finally {
-      setIsSubmitting(false);
-    }
     } finally {
       submissionLockRef.current = false;
     }
@@ -1346,6 +1480,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const buildWorkbenchPreset = (name: string): Omit<Preset, "id"> => ({
       name,
       ttsMode,
+      ttsDelivery,
       voice,
       speed,
       workflow: workflowId,
@@ -1358,6 +1493,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       subtitleStyle,
       minimaxModel,
       emotion: emotion || undefined,
+      mimoModel,
+      mimoStyle: mimoStyle || undefined,
       sceneCount: aiSceneCount,
       copyCharCount,
       copyCharCountMode,
@@ -1392,8 +1529,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
   const handleDeletePreset = async () => {
     if (!activePreset) return;
-    await onDeletePreset(activePreset.id);
+    setDeletePresetConfirmOpen(true);
     setPresetMenuOpen(false);
+  };
+
+  const confirmDeletePreset = async () => {
+    if (!activePreset) return;
+    await onDeletePreset(activePreset.id);
+    setDeletePresetConfirmOpen(false);
   };
 
   const handleSetDefaultPreset = async () => {
@@ -1414,63 +1557,269 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const currentCopyForTts = getCurrentCopyForTts();
   const copyTtsDownloadName = `${title.trim() || "pixelle"}-current-copy-tts.mp3`.replace(/[\\/:*?"<>|]+/g, "-");
 
+  const readinessItems = [
+    { key: "llm", label: "语言模型", ok: serviceReady?.llm !== false, action: "去配置" },
+    { key: "image", label: "图像生成", ok: serviceReady?.image !== false, action: "去配置" },
+    {
+      key: "tts",
+      label: ttsMode === "edge" ? "配音 (Edge)" : ttsMode === "minimax" ? "配音 (MiniMax)" : ttsMode === "mimo" ? "配音 (MiMo)" : "配音",
+      ok:
+        ttsMode === "edge" || ttsMode === "comfyui"
+          ? true
+          : ttsMode === "minimax"
+          ? Boolean(serviceReady?.minimax)
+          : Boolean(serviceReady?.mimo),
+      action: ttsMode === "edge" ? "" : "去配置或改用 Edge",
+    },
+  ];
+  const readinessIssues = readinessItems.filter((item) => !item.ok);
+  const liveStoryboardPreview = mode === "ai" ? buildScenesForRender() : [];
+  const reuseLabel =
+    latestCompletedTaskTitle ||
+    (latestCompletedTaskId ? `最近完成任务 ${latestCompletedTaskId.slice(0, 8)}…` : null);
+  const showContentStep = expertMode || wizardStep === "content";
+  const showProductionStep = expertMode || wizardStep === "production";
+  const showReviewStep = expertMode || wizardStep === "review";
+  const contentReady = Boolean(title.trim()) && buildScenesForRender().length > 0;
+  const productionReady = Boolean(workflowId && voice);
+  const goWizard = (step: WizardStepId) => {
+    setWizardStep(step);
+    window.requestAnimationFrame(() => {
+      const anchor =
+        step === "content" ? "stage-content" :
+        step === "production" ? "stage-production" :
+        "stage-review";
+      document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+  const handleWizardNext = () => {
+    if (wizardStep === "content") {
+      if (!contentReady) {
+        const errors = validateBeforeSubmit(buildScenesForRender());
+        // Only surface content-related errors for step gate (ignore review confirm).
+        const stepErrors: FieldErrors = {};
+        if (errors.title) stepErrors.title = errors.title;
+        if (errors.content) stepErrors.content = errors.content;
+        if (!title.trim()) stepErrors.title = "请填写项目标题";
+        if (buildScenesForRender().length === 0) stepErrors.content = "请先生成或填写文案";
+        setFieldErrors(stepErrors);
+        if (stepErrors.title) scrollToField("stage-content");
+        else scrollToField("stage-storyboard");
+        addToast(Object.values(stepErrors)[0] || "请先完成内容步骤", "error");
+        return;
+      }
+      setFieldErrors({});
+      goWizard("production");
+      return;
+    }
+    if (wizardStep === "production") {
+      if (!productionReady) {
+        addToast("请选择音色与工作流后再继续", "error");
+        scrollToField("stage-production");
+        return;
+      }
+      if (fieldErrors.tts) {
+        scrollToField("stage-production");
+        addToast(fieldErrors.tts, "error");
+        return;
+      }
+      goWizard("review");
+    }
+  };
+  const handleWizardBack = () => {
+    if (wizardStep === "production") goWizard("content");
+    else if (wizardStep === "review") goWizard("production");
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in w-full max-w-[1240px] mx-auto pb-10">
-      <nav className="sticky top-0 z-20 -mx-1 p-1 bg-[#07080a]/95 backdrop-blur border border-zinc-900 rounded-lg" aria-label="快捷创作阶段">
-        <ol className="grid grid-cols-5 gap-1">
-          {QUICK_CREATE_STAGES.map((stage, index) => {
+    <div className="space-y-5 animate-fade-in w-full max-w-[1240px] mx-auto pb-28">
+      <ConfirmModal
+        open={deletePresetConfirmOpen}
+        danger
+        title="删除工作台预设？"
+        description={activePreset ? `将删除预设「${activePreset.name}」，此操作不可撤销。` : undefined}
+        confirmLabel="确认删除"
+        onCancel={() => setDeletePresetConfirmOpen(false)}
+        onConfirm={confirmDeletePreset}
+      />
+
+      {showDraftBanner && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2.5">
+          <div className="text-sm text-amber-100">
+            已恢复本地草稿
+            {draftSavedAt ? ` · ${new Date(draftSavedAt).toLocaleString()}` : ""}
+            <span className="block text-xs text-amber-200/70 mt-0.5">可继续编辑，或清空后重新开始。</span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDraftBanner(false)}
+              className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500"
+            >
+              继续编辑
+            </button>
+            <button
+              type="button"
+              onClick={clearLocalDraft}
+              className="rounded border border-rose-900/50 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-950/30"
+            >
+              清空重来
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showCreateTip && (
+        <div className="flex flex-col gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between animate-fade-in-up">
+          <p className="text-sm text-amber-50/95">
+            <span className="font-medium text-amber-200">快速上手：</span>
+            先写主题 → 点「生成文案」→ 下一步设定配音 → 核对后生成初稿。
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              dismissCreateTip();
+              setShowCreateTip(false);
+            }}
+            className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200"
+          >
+            知道了
+          </button>
+        </div>
+      )}
+
+      {serviceReady && (
+        <div className={`rounded-xl border px-3 py-2.5 ${readinessIssues.length ? "border-amber-500/30 bg-amber-500/5" : "border-emerald-500/20 bg-emerald-500/5"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-zinc-200">
+              {readinessIssues.length
+                ? `创作前检查：${readinessIssues.length} 项服务待处理`
+                : "创作前检查：关键服务已就绪"}
+            </p>
+            {readinessIssues.length > 0 && onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="text-xs font-medium text-amber-300 hover:text-amber-200"
+              >
+                打开系统设置
+              </button>
+            )}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {readinessItems.map((item) => (
+              <span
+                key={item.key}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+                  item.ok
+                    ? "border-emerald-500/20 text-emerald-300"
+                    : "border-amber-500/30 text-amber-200"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${item.ok ? "bg-emerald-400" : "bg-amber-400"}`} />
+                {item.label}
+                {!item.ok && item.action ? ` · ${item.action}` : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <nav className="sticky top-0 z-20 -mx-1 space-y-2 rounded-lg border border-zinc-900 bg-[#07080a]/95 p-2 backdrop-blur" aria-label="快捷创作步骤">
+        <ol className="grid grid-cols-3 gap-1">
+          {WIZARD_STEPS.map((step, index) => {
             const completed =
-              stage.id === "content" ? Boolean(title.trim()) :
-              stage.id === "storyboard" ? buildScenesForRender().length > 0 :
-              stage.id === "production" ? Boolean(workflowId && voice) :
-              stage.id === "review" ? reviewConfirmed : false;
+              step.id === "content" ? contentReady :
+              step.id === "production" ? productionReady :
+              reviewConfirmed;
+            const current = !expertMode && wizardStep === step.id;
             return (
-              <li key={stage.id}>
+              <li key={step.id}>
                 <button
                   type="button"
-                  aria-current={activeStage === stage.id ? "step" : undefined}
+                  aria-current={current ? "step" : undefined}
                   onClick={() => {
-                    setActiveStage(stage.id);
-                    if (stage.anchor) {
-                      document.getElementById(stage.anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    } else {
-                      addToast("任务提交后可在任务面板或历史记录查看进度与结果。", "info");
+                    if (expertMode) {
+                      goWizard(step.id);
+                      return;
                     }
+                    // Allow free navigation to completed/previous steps; forward only if prior ready.
+                    if (step.id === "production" && !contentReady && wizardStep === "content") {
+                      handleWizardNext();
+                      return;
+                    }
+                    if (step.id === "review" && wizardStep !== "review") {
+                      if (!contentReady) {
+                        handleWizardNext();
+                        return;
+                      }
+                      if (!productionReady) {
+                        goWizard("production");
+                        addToast("请先完成成片设定", "info");
+                        return;
+                      }
+                    }
+                    goWizard(step.id);
                   }}
-                  className={`w-full min-h-11 px-1.5 py-1.5 rounded text-[10px] sm:text-xs flex items-center justify-center gap-1 border transition-colors ${
-                    activeStage === stage.id
-                      ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                      : "bg-[#101114] text-zinc-400 border-zinc-900 hover:text-zinc-200"
+                  className={`flex min-h-11 w-full items-center justify-center gap-1 rounded border px-1.5 py-1.5 text-xs transition-colors ${
+                    current
+                      ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                      : "border-zinc-900 bg-[#101114] text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  <span className="font-mono">{completed ? "✓" : index + 1}</span>
-                  <span>{stage.label}</span>
+                  <span className="font-mono text-caption">{completed ? "✓" : index + 1}</span>
+                  <span className="hidden sm:inline">{step.label}</span>
+                  <span className="sm:hidden">{step.short}</span>
                 </button>
               </li>
             );
           })}
         </ol>
-        <p className="px-2 pt-1 text-[10px] text-zinc-500" aria-live="polite">
-          {draftSavedAt ? `草稿已自动保存 · ${new Date(draftSavedAt).toLocaleTimeString()}` : "草稿将在编辑后自动保存"}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <p className="text-caption" aria-live="polite">
+            {expertMode
+              ? "专家模式：一次显示全部步骤"
+              : wizardStep === "content"
+              ? "步骤 1/3 · 写好文案后再进入设定"
+              : wizardStep === "production"
+              ? "步骤 2/3 · 确认配音、画幅与工作流"
+              : "步骤 3/3 · 核对后提交生成"}
+            {draftSavedAt ? ` · 草稿 ${new Date(draftSavedAt).toLocaleTimeString()}` : ""}
+          </p>
+          <button
+            type="button"
+            onClick={() => setExpertMode((value) => !value)}
+            className="text-xs text-zinc-400 underline-offset-2 hover:text-amber-300 hover:underline"
+          >
+            {expertMode ? "退出专家模式" : "专家模式（展开全部）"}
+          </button>
+        </div>
       </nav>
 
+      {/* Step 1: Content */}
+      <div className={showContentStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
       {/* Task Header Title */}
       <div id="stage-content" className="bg-[#101114] border border-zinc-900 rounded-md p-3.5 space-y-3 scroll-mt-24">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex-1">
-          <label htmlFor="quick-create-title" className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-0.5">
-            当前生产项目名称 / Project Title
+          <label htmlFor="quick-create-title" className="block text-label mb-0.5">
+            项目标题
           </label>
           <input
             id="quick-create-title"
             type="text"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="bg-transparent border-b border-zinc-800 text-zinc-100 font-medium text-sm w-full py-0.5 focus:outline-none focus:border-amber-500 font-display transition-colors"
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (fieldErrors.title) setFieldErrors((prev) => ({ ...prev, title: undefined }));
+            }}
+            className={`bg-transparent border-b text-zinc-100 font-medium text-base w-full py-0.5 focus:outline-none font-display transition-colors ${
+              fieldErrors.title ? "border-rose-500" : "border-zinc-800 focus:border-amber-500"
+            }`}
           />
+          {fieldErrors.title && <p className="mt-1 text-xs text-rose-400">{fieldErrors.title}</p>}
         </div>
-        <div className="text-[10px] text-zinc-600 font-mono">
+        <div className="text-caption">
           {activePreset ? `当前预设: ${activePreset.name}` : "尚未选择预设"}
           {activePreset?.id === defaultPresetId && " · 默认"}
         </div>
@@ -1563,41 +1912,44 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       </div>
 
       {/* 1. Creative Mode Tab Switches */}
-      <div className="space-y-3">
-        <label className="block text-xs font-semibold text-zinc-400">选择内容源创作模式</label>
-        <div className="grid grid-cols-3 gap-2 p-1 bg-[#101114] border border-zinc-900 rounded-md max-w-lg">
+      <div className="space-y-2">
+        <label className="block text-xs font-semibold text-zinc-400">创作方式</label>
+        <div className="grid max-w-2xl grid-cols-1 gap-2 p-1 sm:grid-cols-3 rounded-xl border border-zinc-800 bg-[var(--color-surface-2)]">
           <button
+            type="button"
             onClick={() => setMode("ai")}
-            className={`flex items-center justify-center gap-1.5 py-1.5 text-xs rounded transition-all ${
+            className={`flex flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left text-xs transition-all ${
               mode === "ai"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold"
-                : "text-zinc-400 hover:text-zinc-200"
+                ? "bg-amber-500/10 text-amber-300 border border-amber-500/25 font-semibold"
+                : "text-zinc-400 hover:text-zinc-200 border border-transparent"
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            AI 创作 (一键脚本)
+            <span className="inline-flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> AI 一键文案</span>
+            <span className="text-caption font-normal text-zinc-500">主题生成口播，推荐新手</span>
           </button>
           <button
+            type="button"
             onClick={() => setMode("manual")}
-            className={`flex items-center justify-center gap-1.5 py-1.5 text-xs rounded transition-all ${
+            className={`flex flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left text-xs transition-all ${
               mode === "manual"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold"
-                : "text-zinc-400 hover:text-zinc-200"
+                ? "bg-amber-500/10 text-amber-300 border border-amber-500/25 font-semibold"
+                : "text-zinc-400 hover:text-zinc-200 border border-transparent"
             }`}
           >
-            <Edit3 className="w-3.5 h-3.5" />
-            自行创作 (分镜编辑)
+            <span className="inline-flex items-center gap-1.5"><Edit3 className="w-3.5 h-3.5" /> 手动分镜</span>
+            <span className="text-caption font-normal text-zinc-500">逐镜写旁白与画面提示词</span>
           </button>
           <button
+            type="button"
             onClick={() => setMode("batch")}
-            className={`flex items-center justify-center gap-1.5 py-1.5 text-xs rounded transition-all ${
+            className={`flex flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left text-xs transition-all ${
               mode === "batch"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold"
-                : "text-zinc-400 hover:text-zinc-200"
+                ? "bg-amber-500/10 text-amber-300 border border-amber-500/25 font-semibold"
+                : "text-zinc-400 hover:text-zinc-200 border border-transparent"
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
-            批量生成 (多主题)
+            <span className="inline-flex items-center gap-1.5"><Layers className="w-3.5 h-3.5" /> 批量多主题</span>
+            <span className="text-caption font-normal text-zinc-500">一行一主题，各生成一条视频</span>
           </button>
         </div>
       </div>
@@ -1664,16 +2016,24 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               <div id="keyword-extraction" className="mt-3 border-t border-zinc-800 pt-3 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <div className="text-xs font-medium text-zinc-300">AI 自动抽词</div>
+                    <div className="text-xs font-medium text-zinc-300">字幕高亮词（可选）</div>
                     <div className="text-[10px] text-zinc-500 mt-0.5">
                       {keywordStatus === "loading" && "正在分析当前文案..."}
                       {keywordStatus === "stale" && "文案已修改，建议重新抽词"}
                       {keywordStatus === "error" && "抽词失败，可重新尝试"}
                       {keywordStatus === "ready" && (aiKeywordSuggestions.length ? `已生成 ${aiKeywordSuggestions.length} 个候选` : "候选已处理")}
-                      {keywordStatus === "idle" && "尚未抽取"}
+                      {keywordStatus === "idle" && "可折叠，不影响主路径出片"}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedKeywords((open) => !open)}
+                      className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200"
+                    >
+                      {showAdvancedKeywords ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      {showAdvancedKeywords ? "收起" : "展开"}
+                    </button>
                     <label className="inline-flex items-center gap-2 text-[11px] text-zinc-400 cursor-pointer">
                       <input
                         type="checkbox"
@@ -1694,6 +2054,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     </button>
                   </div>
                 </div>
+                <div className={showAdvancedKeywords || keywordPreferences.autoExtract && aiKeywordSuggestions.length > 0 ? "space-y-3" : "hidden"}>
 
                 <div className="grid grid-cols-2 gap-2">
                   <label className="block">
@@ -1772,7 +2133,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 )}
 
                 {renderSelectedKeywordEditor()}
-
+                </div>
               </div>
             </div>
             
@@ -1836,44 +2197,79 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               </div>
             </div>
 
+            {fieldErrors.content && (
+              <p className="text-xs text-rose-400" role="alert">{fieldErrors.content}</p>
+            )}
+
+            {liveStoryboardPreview.length > 0 && (
+              <div className="rounded-md border border-zinc-800 bg-[#0c0d10] p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-zinc-200">
+                    将生成 {liveStoryboardPreview.length} 个分镜（根据当前文案实时预览）
+                  </p>
+                  <span className="text-caption">提交时按此切分</span>
+                </div>
+                <ol className="max-h-40 space-y-1.5 overflow-y-auto">
+                  {liveStoryboardPreview.slice(0, 12).map((scene) => (
+                    <li key={scene.id} className="flex gap-2 text-xs text-zinc-400">
+                      <span className="font-mono text-amber-500/80 shrink-0">#{scene.id}</span>
+                      <span className="line-clamp-2 text-zinc-300">{scene.ttsText || "（空旁白）"}</span>
+                    </li>
+                  ))}
+                  {liveStoryboardPreview.length > 12 && (
+                    <li className="text-caption">…还有 {liveStoryboardPreview.length - 12} 个分镜</li>
+                  )}
+                </ol>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2 border-t border-zinc-900">
               <button
                 type="button"
                 onClick={handleGenerateCopyDraft}
-                disabled={copyDraftLoading || aiLoading}
-                className="px-4 py-1.5 bg-zinc-800 text-zinc-300 hover:text-white disabled:bg-zinc-900 disabled:text-zinc-600 border border-zinc-750 hover:border-amber-500/40 text-xs font-semibold rounded shadow-md flex items-center justify-center gap-1.5 transition-colors"
+                disabled={copyDraftLoading || aiLoading || serviceReady?.llm === false}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-800 text-black disabled:text-zinc-500 font-semibold text-sm rounded shadow-md flex items-center justify-center gap-1.5 transition-colors"
               >
                 {copyDraftLoading ? (
                   <>
-                    <Loader className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                    <Loader className="w-3.5 h-3.5 animate-spin" />
                     AI 正在生成文案...
                   </>
                 ) : (
                   <>
-                    <Edit3 className="w-3.5 h-3.5 text-amber-500" />
-                    {copyDraftMode === "full" ? "生成口播稿草稿" : "生成分镜旁白草稿"}
+                    <Sparkles className="w-3.5 h-3.5 text-black" />
+                    {copyDraftMode === "full" ? "生成口播稿" : "生成分镜旁白"}
                   </>
                 )}
               </button>
               <button
                 type="button"
                 onClick={handleAIGenerateScript}
-                disabled={aiLoading || copyDraftLoading}
-                className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-800 text-black disabled:text-zinc-500 font-semibold text-xs rounded shadow-md flex items-center justify-center gap-1.5 transition-colors"
+                disabled={aiLoading || copyDraftLoading || !copyDraft.trim()}
+                className="px-3 py-2 bg-zinc-800 text-zinc-300 hover:text-white disabled:bg-zinc-900 disabled:text-zinc-600 border border-zinc-700 hover:border-amber-500/40 text-xs font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
+                title="进阶：为每镜生成画面提示词并切换到手动分镜编辑"
               >
                 {aiLoading ? (
                   <>
-                    <Loader className="w-3.5 h-3.5 animate-spin" />
-                    AI 正在构建智能分镜脚本...
+                    <Loader className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                    生成画面提示词中...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-3.5 h-3.5 text-black" />
-                    基于确认文案生成 AI 分镜脚本
+                    <Edit3 className="w-3.5 h-3.5 text-amber-500" />
+                    进阶：生成画面提示词并手动编辑
                   </>
                 )}
               </button>
             </div>
+            {serviceReady?.llm === false && (
+              <p className="text-xs text-amber-300 text-right">
+                语言模型未就绪，
+                <button type="button" className="underline ml-1" onClick={onOpenSettings}>
+                  前往配置
+                </button>
+              </p>
+            )}
           </div>
         )}
 
@@ -1946,11 +2342,17 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         )}
 
         {mode === "batch" && (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                输入多个主题 (每个主题将独立渲染一个短视频)
-              </label>
+          <div className="space-y-4 animate-soft-scale-in">
+            <div className="rounded-xl border border-zinc-800 bg-[var(--color-surface-3)] p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <label className="text-sm font-medium text-zinc-200">批量主题列表</label>
+                <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-caption text-amber-200">
+                  最多并行 3 路 · 共 {batchCount} 条
+                </span>
+              </div>
+              <p className="mb-2 text-xs text-zinc-500">
+                一行一个主题。提交后每个主题会生成<strong className="text-zinc-300">独立视频任务</strong>，进度在右侧任务面板与历史记录中分别查看。
+              </p>
               <textarea
                 value={batchInput}
                 onChange={(e) => {
@@ -1958,24 +2360,68 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   const count = e.target.value.split("\n").filter((l) => l.trim() !== "").length;
                   setBatchCount(count);
                 }}
-                placeholder="一行一个主题进行配置..."
-                className="w-full h-32 bg-[#17181c] border border-zinc-800 rounded p-2.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 font-mono placeholder-zinc-700"
+                placeholder={"主题一: 智能机器人在雨夜撑伞\n主题二: 机械宠物狗在客厅嬉戏\n主题三: 未来城市空中飞车速递"}
+                className="w-full h-36 rounded-lg border border-zinc-800 bg-[var(--color-surface-1)] p-2.5 text-sm text-zinc-300 focus:outline-none focus:border-amber-500 font-mono placeholder-zinc-600"
               />
+              {batchCount > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {batchInput
+                    .split(/\r?\n/)
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .slice(0, 12)
+                    .map((line, index) => (
+                      <span
+                        key={`${index}-${line.slice(0, 12)}`}
+                        className="max-w-full truncate rounded-md border border-zinc-800 bg-[var(--color-surface-1)] px-2 py-1 text-caption text-zinc-400"
+                        title={line}
+                      >
+                        #{index + 1} {line.replace(/^主题\s*[一二三四五六七八九十\d]+\s*[:：]\s*/u, "").slice(0, 28)}
+                      </span>
+                    ))}
+                  {batchCount > 12 && (
+                    <span className="text-caption text-zinc-500">…还有 {batchCount - 12} 条</span>
+                  )}
+                </div>
+              )}
             </div>
-            
-            <div className="bg-amber-550/5 border border-amber-500/10 p-3 rounded text-xs text-zinc-400 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                系统检测到 <strong>{batchCount}</strong> 个合法主题，将创建 <strong>{batchCount}</strong> 个独立视频。
-              </span>
-              <span className="text-[10px] font-mono uppercase tracking-wider bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
-                批量生成并发
+
+            <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-amber-500/15 bg-amber-500/5 p-3 text-xs text-zinc-400">
+              <span className="flex items-start gap-1.5">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <span>
+                  将创建 <strong className="text-zinc-200">{batchCount}</strong> 个独立任务；配音 / 工作流 / 画幅共用当前成片设定。
+                  批量模式不进入项目工作台。
+                </span>
               </span>
             </div>
+
+            {lastBatchSummary && (
+              <div className="rounded-xl border border-zinc-800 bg-[var(--color-surface-2)] p-3 text-xs">
+                <div className="mb-1 font-medium text-zinc-200">最近一次批量提交</div>
+                <p className="text-zinc-400">
+                  {new Date(lastBatchSummary.at).toLocaleString()} · 共 {lastBatchSummary.total} 条 ·
+                  成功 <span className="text-emerald-400">{lastBatchSummary.success}</span> ·
+                  失败 <span className={lastBatchSummary.failed ? "text-rose-400" : "text-zinc-500"}>{lastBatchSummary.failed}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onOpenConsole?.()}
+                  className="mt-2 text-amber-300 hover:text-amber-200"
+                >
+                  打开任务面板查看进度 →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
 
+      </div>
+      {/* End step 1 content */}
+
+      {/* Step 2: Production */}
+      <div className={showProductionStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
       {/* 3. TTS Voice Synthesis & BGM Mixing */}
       <div id="stage-production" className="grid grid-cols-1 md:grid-cols-2 gap-4 scroll-mt-24">
         {/* TTS Panel */}
@@ -1986,8 +2432,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           </h3>
           <p className="text-[10px] text-amber-400/80">试听与“合成当前文案”仅供预览，不会复用到最终成片。</p>
 
-          <div className="grid grid-cols-3 gap-1 p-0.5 bg-[#17181c] border border-zinc-850 rounded">
-            {(["edge", "comfyui", "minimax"] as const).map((opt) => (
+          <div className="grid grid-cols-4 gap-1 p-0.5 bg-[#17181c] border border-zinc-850 rounded">
+            {(["edge", "comfyui", "minimax", "mimo"] as const).map((opt) => (
               <button
                 key={opt}
                 onClick={() => {
@@ -2001,8 +2447,41 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 {opt === "edge" && "Edge 极速"}
                 {opt === "comfyui" && "Comfy 克隆"}
                 {opt === "minimax" && "MiniMax 精致"}
+                {opt === "mimo" && "MiMo 自然"}
               </button>
             ))}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+              多镜配音交付 / Delivery
+            </label>
+            <div className="grid grid-cols-2 gap-1 p-0.5 bg-[#17181c] border border-zinc-850 rounded">
+              {(
+                [
+                  { id: "continuous" as const, label: "整篇连续（推荐）" },
+                  { id: "per_scene" as const, label: "逐镜合成" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setTtsDelivery(opt.id)}
+                  className={`py-1.5 text-[10px] rounded font-medium text-center transition-all ${
+                    ttsDelivery === opt.id
+                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-zinc-500 leading-relaxed">
+              {ttsDelivery === "continuous"
+                ? "多镜默认整篇一次合成，再按对齐时间切成各镜，音色更连贯；改某一镜旁白会整轨重合成。"
+                : "每镜单独合成，速度快、局部重做省成本，但多镜可能出现音色/语势漂移。"}
+            </p>
           </div>
 
           <div className="space-y-3 pt-1">
@@ -2060,6 +2539,65 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     <option value="speech-02-turbo">speech-02-turbo</option>
                     <option value="speech-02-hd">speech-02-hd</option>
                   </Select>
+                </div>
+              </div>
+            )}
+
+            {/* Sub options if MiMo */}
+            {ttsMode === "mimo" && (
+              <div className="grid grid-cols-2 gap-2 bg-[#17181c] p-2 rounded border border-zinc-850">
+                <div>
+                  <label className="block text-[9px] text-zinc-500 mb-0.5">MiMo 基座模型</label>
+                  <Select
+                    value={mimoModel}
+                    onChange={(e) => setMimoModel(e.target.value)}
+                    className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="mimo-v2.5-tts">mimo-v2.5-tts（预设音色 · 多镜更稳）</option>
+                    <option value="mimo-v2.5-tts-voicedesign">mimo-v2.5-tts-voicedesign（文案设计音色 · 多镜易漂移）</option>
+                    <option value="mimo-v2.5-tts-voiceclone">mimo-v2.5-tts-voiceclone（参考音频克隆）</option>
+                  </Select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[9px] text-zinc-500 mb-0.5">
+                    {mimoModel.includes("voicedesign")
+                      ? "音色设计描述（必填，全片共用同一描述）"
+                      : "自然语言风格指令（可选，多镜建议填写并固定）"}
+                  </label>
+                  <textarea
+                    value={mimoStyle}
+                    onChange={(e) => setMimoStyle(e.target.value)}
+                    rows={2}
+                    placeholder={
+                      mimoModel.includes("voicedesign")
+                        ? "例：25 岁年轻女声，清亮温柔，略带笑意，语速适中，适合短视频口播。同一讲述者全程口播。"
+                        : "例：平稳专业的讲解语气，语速适中，情绪克制，适合知识口播。"
+                    }
+                    className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 resize-none focus:outline-none focus:border-amber-500"
+                  />
+                  {mimoModel.includes("voicedesign") ? (
+                    <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
+                      {ttsDelivery === "continuous"
+                        ? "已启用「整篇连续合成」：Voice Design 多镜将一次合成再切分，音色更稳。请保持全片同一设计描述。"
+                        : "当前为逐分镜合成：Voice Design 每镜都会重采样，多镜口播容易不像同一人。建议改用「整篇连续」或「预设音色」。"}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[10px] text-zinc-500 leading-relaxed">
+                      多镜口播请固定音色与风格指令；连续合成 + 响度归一可进一步减轻镜间突兀感。
+                    </p>
+                  )}
+                  {mimoModel.includes("voicedesign") && buildScenesForRender().length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMimoModel("mimo-v2.5-tts");
+                        addToast("已切换为预设音色模型，多镜口播更稳定。请再选一个固定音色。", "info");
+                      }}
+                      className="mt-1.5 text-[10px] text-amber-300 underline-offset-2 hover:underline"
+                    >
+                      一键改用预设音色（推荐）
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -2270,18 +2808,27 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
       {/* 4. Image style and motion composition */}
       <div className="bg-[#101114] border border-zinc-900 rounded-lg p-4 space-y-4">
-          <div className="flex items-center pb-2 border-b border-zinc-900">
+        <div className="flex items-center justify-between gap-3 pb-2 border-b border-zinc-900">
           <h3 className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
             <FileVideo className="w-4 h-4 text-amber-500" />
-            分镜画风及画面渲染模式
+            画幅 · 字幕 · 画风
           </h3>
+          <button
+            type="button"
+            onClick={() => setShowAdvancedProduction((open) => !open)}
+            className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200"
+          >
+            {showAdvancedProduction ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {showAdvancedProduction ? "收起高级" : "更多设定"}
+          </button>
         </div>
 
-        <div className="space-y-3">
+        {/* Always-visible essentials: aspect + motion/subtitle toggles appear below; advanced block holds prefix/test/subtitle detail */}
+        <div className={showAdvancedProduction ? "space-y-3" : "hidden"}>
           <div>
             <div className="flex items-center justify-between gap-3 mb-1">
               <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
-                底模提示词前缀固定参数 / Prompt Prefix
+                画风提示词前缀
               </label>
               <button
                 type="button"
@@ -2798,14 +3345,18 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           </div>
         )}
       </div>
+      </div>
+      {/* End step 2 production */}
 
+      {/* Step 3: Review */}
+      <div className={showReviewStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
       <section id="stage-review" className="bg-[#101114] border border-amber-500/20 rounded-lg p-4 space-y-3 scroll-mt-24" aria-labelledby="generation-review-title">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 id="generation-review-title" className="text-sm font-semibold text-zinc-200">生成前核对</h3>
-            <p className="text-xs text-zinc-400 mt-1">确认任务数量和关键生产参数，提交后仍可在任务面板取消。</p>
+            <p className="text-xs text-zinc-400 mt-1">确认数量与关键参数。提交后仍可在任务面板取消。</p>
           </div>
-          <span className="text-[10px] font-mono text-amber-400 border border-amber-500/20 rounded px-2 py-1">
+          <span className="text-caption text-amber-400 border border-amber-500/20 rounded px-2 py-1">
             {mode === "batch" ? "批量视频" : "单视频"}
           </span>
         </div>
@@ -2818,7 +3369,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             ["画布", `${imageWidth} × ${imageHeight}`],
             ["字幕", enableSubtitles ? `${subtitleStyle.fontSize}px · ${subtitleStyle.fontFamily || "自动中文字体"}` : "关闭"],
             ["背景音乐", selectedBgm?.name || "无背景音乐"],
-            ["生成策略", effectiveReuseSourceTaskId ? "优先复用配音与图片" : "完整生成"],
+            ["生成策略", effectiveReuseSourceTaskId ? `复用素材${reuseLabel ? ` · ${reuseLabel}` : ""}` : "完整生成"],
             ["预计旁白", `约 ${Math.ceil(reviewNarrationSeconds / 60)} 分钟`],
           ].map(([label, value]) => (
             <div key={label} className="bg-[#17181c] border border-zinc-900 rounded p-2 min-w-0">
@@ -2827,42 +3378,130 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             </div>
           ))}
         </dl>
-        <label className="flex items-start gap-2 text-xs text-zinc-300 cursor-pointer">
+
+        {mode !== "batch" && (latestCompletedTaskId || reuseSourceTaskId) && (
+          <label className="flex items-start gap-2 rounded-md border border-zinc-800 bg-[#0c0d10] p-3 text-sm text-zinc-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={reuseAssetsEnabled}
+              onChange={(event) => {
+                setReuseAssetsEnabled(event.target.checked);
+                if (event.target.checked && !reuseSourceTaskId && latestCompletedTaskId) {
+                  setReuseSourceTaskId(latestCompletedTaskId);
+                }
+              }}
+              className="mt-0.5 accent-amber-500"
+            />
+            <span>
+              沿用历史素材（配音/图片优先复用）
+              {reuseLabel && (
+                <span className="block text-xs text-zinc-500 mt-0.5">来源：{reuseLabel}</span>
+              )}
+              {!reuseLabel && (
+                <span className="block text-xs text-zinc-500 mt-0.5">将使用最近完成的快捷创作任务</span>
+              )}
+            </span>
+          </label>
+        )}
+
+        <label className={`flex items-start gap-2 text-sm text-zinc-300 cursor-pointer ${fieldErrors.review ? "text-rose-300" : ""}`}>
           <input
             type="checkbox"
             checked={reviewConfirmed}
-            onChange={(event) => setReviewConfirmed(event.target.checked)}
+            onChange={(event) => {
+              setReviewConfirmed(event.target.checked);
+              if (event.target.checked) setFieldErrors((prev) => ({ ...prev, review: undefined }));
+            }}
             className="mt-0.5 accent-amber-500"
           />
           <span>
             我已核对以上配置，确认
-            {mode === "batch" ? `创建 ${reviewVideoCount} 个视频任务` : "进入剪辑工作台或直接生成成片"}。
+            {mode === "batch" ? `创建 ${reviewVideoCount} 个视频任务` : "提交生成"}。
           </span>
         </label>
+        {fieldErrors.review && <p className="text-xs text-rose-400">{fieldErrors.review}</p>}
+        {fieldErrors.tts && <p className="text-xs text-rose-400">{fieldErrors.tts}</p>}
       </section>
+      </div>
+      {/* End step 3 review */}
 
-      {/* Primary Action Button */}
-      <div className="flex flex-wrap justify-end gap-2 pt-2">
-        {mode !== "batch" && onCreateProject && (
-          <button
-            type="button"
-            onClick={() => void handleTriggerRender(true)}
-            disabled={isSubmitting || !reviewConfirmed}
-            className="px-4 py-2.5 border border-zinc-700 text-zinc-200 font-semibold text-xs rounded hover:border-zinc-500 hover:bg-zinc-900 disabled:border-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-          >
-            <FileVideo className="w-4 h-4" />
-            仅生成成片
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => void handleTriggerRender(false)}
-          disabled={isSubmitting || !reviewConfirmed}
-          className="px-6 py-2.5 bg-amber-500 text-black font-semibold text-xs rounded hover:bg-amber-400 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed shadow-xl shadow-amber-500/10 flex items-center gap-2 transition-transform active:scale-[0.99]"
-        >
-          {isSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : mode === "batch" ? <Sparkles className="w-4 h-4 text-black" /> : <FolderOpen className="w-4 h-4 text-black" />}
-          {isSubmitting ? "正在提交任务…" : mode === "batch" ? `提交 ${reviewVideoCount} 个视频任务` : "生成初稿并打开工作台"}
-        </button>
+      {/* Sticky primary actions / wizard nav */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-zinc-800 bg-[#0c0d10]/95 backdrop-blur lg:left-64">
+        <div className="mx-auto flex max-w-[1240px] flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="min-w-0 text-xs text-zinc-500">
+            {isSubmitting
+              ? "正在提交…"
+              : expertMode
+              ? mode === "batch"
+                ? `将提交 ${reviewVideoCount} 个独立视频任务`
+                : "核对后提交；推荐进入工作台精修"
+              : wizardStep === "content"
+              ? contentReady
+                ? "内容已就绪，可进入成片设定"
+                : "请生成或填写文案后再继续"
+              : wizardStep === "production"
+              ? productionReady
+                ? "设定已就绪，可进入核对生成"
+                : "请选择音色与工作流"
+              : !reviewConfirmed
+              ? "请先勾选「生成前核对」中的确认项"
+              : mode === "batch"
+              ? `将提交 ${reviewVideoCount} 个独立视频任务，进度在右侧任务面板`
+              : "推荐：生成初稿并进入工作台精修；也可直接渲染成片"}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {!expertMode && wizardStep !== "content" && (
+              <button
+                type="button"
+                onClick={handleWizardBack}
+                className="rounded border border-zinc-700 px-4 py-2.5 text-sm text-zinc-300 hover:border-zinc-500"
+              >
+                上一步
+              </button>
+            )}
+            {!expertMode && wizardStep !== "review" && (
+              <button
+                type="button"
+                onClick={handleWizardNext}
+                className="rounded bg-amber-500 px-5 py-2.5 text-sm font-semibold text-black hover:bg-amber-400"
+              >
+                下一步
+              </button>
+            )}
+            {(expertMode || wizardStep === "review") && (
+              <>
+                {mode !== "batch" && onCreateProject && (
+                  <div className="flex flex-col items-end gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => void handleTriggerRender(true)}
+                      disabled={isSubmitting}
+                      className="px-4 py-2.5 border border-zinc-700 text-zinc-200 font-semibold text-sm rounded hover:border-zinc-500 hover:bg-zinc-900 disabled:border-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                    >
+                      <FileVideo className="w-4 h-4" />
+                      仅生成成片
+                    </button>
+                    <span className="text-caption hidden sm:block">直接渲染 MP4，不进入编辑</span>
+                  </div>
+                )}
+                <div className="flex flex-col items-end gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => void handleTriggerRender(false)}
+                    disabled={isSubmitting}
+                    className="px-5 py-2.5 bg-amber-500 text-black font-semibold text-sm rounded hover:bg-amber-400 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed shadow-xl shadow-amber-500/10 flex items-center gap-2 transition-transform active:scale-[0.99]"
+                  >
+                    {isSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : mode === "batch" ? <Sparkles className="w-4 h-4 text-black" /> : <FolderOpen className="w-4 h-4 text-black" />}
+                    {isSubmitting ? "正在提交任务…" : mode === "batch" ? `提交 ${reviewVideoCount} 个视频任务` : "生成初稿并打开工作台"}
+                  </button>
+                  {mode !== "batch" && (
+                    <span className="text-caption hidden sm:block">创建项目并开始生成配音与画面</span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

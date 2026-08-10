@@ -42,3 +42,16 @@ def test_thumbnail_is_project_local_and_bounded(tmp_path):
     with Image.open(result) as image:
         assert max(image.size) <= 320
 
+
+@pytest.mark.asyncio
+async def test_generated_local_image_path_is_copied_on_windows(tmp_path):
+    source = tmp_path / "local-material.png"
+    _image(source)
+    store = WorkbenchMediaStore(tmp_path / "projects")
+
+    relative = await store.download_result("p1", "s1", str(source), "v1")
+
+    destination = store.resolve("p1", relative)
+    assert destination.is_file()
+    assert destination.read_bytes() == source.read_bytes()
+

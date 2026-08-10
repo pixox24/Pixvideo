@@ -84,7 +84,10 @@ class FakeGenerationProvider:
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(f"fake-audio:{text}".encode("utf-8"))
-        self.audio_durations[str(path.resolve())] = behavior.tts_duration
+        # Continuous multi-scene scripts join scenes with newlines; scale duration.
+        parts = [part for part in str(text).split("\n") if part.strip()]
+        part_count = max(1, len(parts))
+        self.audio_durations[str(path.resolve())] = behavior.tts_duration * part_count
         self.completed_calls.append(call)
         return str(path)
 

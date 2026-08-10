@@ -33,6 +33,7 @@ class ComfyUIConfigPayload(BaseModel):
     runninghub_instance_type: Optional[str] = None
     bizyair_api_key: Optional[str] = None
     minimax_api_key: Optional[str] = None
+    mimo_api_key: Optional[str] = None
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -42,7 +43,7 @@ class ConfigUpdateRequest(BaseModel):
 
 
 class ServiceTestRequest(BaseModel):
-    service: Literal["llm", "image_generation", "comfyui", "runninghub", "bizyair", "minimax"]
+    service: Literal["llm", "image_generation", "comfyui", "runninghub", "bizyair", "minimax", "mimo"]
     config: dict[str, Any] = Field(default_factory=dict)
 
 

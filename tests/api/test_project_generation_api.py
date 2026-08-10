@@ -19,6 +19,7 @@ from pixelle_video.models.workbench import (
     AssetVersion,
     GenerationRun,
     GenerationRunItem,
+    GenerationRunItemStatus,
     GenerationRunStatus,
     Project,
     Scene,
@@ -155,4 +156,25 @@ async def test_invalid_generation_action_returns_current_allowed_actions(tmp_pat
         await resume_generation_run(project.project_id, run.run_id, core)
     assert error.value.status_code == 409
     assert error.value.detail["allowedActions"] == ["pause", "cancel"]
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_generation_run_exposes_retry_failed_action(tmp_path):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scene = Scene(project.project_id, 0, "narration", "prompt")
+    core.workbench_repository.create_project(project, [scene])
+    run = GenerationRun(project.project_id, "task-1", {}, status=GenerationRunStatus.COMPLETED_WITH_FAILURES)
+    item = GenerationRunItem(
+        run.run_id, scene.scene_id, 0, "narration", "prompt", "tts", "image",
+        status=GenerationRunItemStatus.FAILED,
+        error="local image import failed",
+    )
+    core.workbench_repository.create_generation_run(run, [item])
+
+    response = await get_generation_run(project.project_id, run.run_id, core)
+
+    assert response.allowed_actions == ["retry-failed"]
+    assert response.items[0].error == "local image import failed"
     core.workbench_repository.close()

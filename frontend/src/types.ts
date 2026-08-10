@@ -16,9 +16,11 @@ export interface Preset {
   name: string;
   createdAt?: string;
   updatedAt?: string;
-  ttsMode: "edge" | "comfyui" | "minimax";
+  ttsMode: "edge" | "comfyui" | "minimax" | "mimo";
   voice: string;
   speed: number;
+  /** continuous = one multi-scene synth then split (recommended); per_scene = legacy */
+  ttsDelivery?: "continuous" | "per_scene";
   workflow: string;
   bgm: string;
   bgmVolume: number;
@@ -28,6 +30,8 @@ export interface Preset {
   enableSubtitles?: boolean;
   minimaxModel?: string;
   emotion?: string;
+  mimoModel?: string;
+  mimoStyle?: string;
   sceneCount?: number;
   copyCharCount?: number;
   copyCharCountMode?: "around" | "within";
@@ -104,6 +108,8 @@ export interface SystemSettings {
   bizyairKeyMasked?: string;
   minimaxKey: string;
   minimaxKeyMasked?: string;
+  mimoKey: string;
+  mimoKeyMasked?: string;
 }
 
 export interface WorkflowOption {
@@ -173,7 +179,7 @@ export type GenerationRunStatus = "queued" | "running" | "paused" | "completed" 
 export type GenerationRunItemStatus = "queued" | "running_tts" | "running_image" | "completed" | "skipped" | "failed" | "cancelled" | "candidate_review";
 export interface GenerationState { image: "ready" | "missing" | "stale"; audio: "ready" | "missing" | "stale"; candidateCount: number; }
 export interface GenerationRunItem { itemId: string; sceneId: string; position: number; status: GenerationRunItemStatus; phase: string; ttsStatus: string; imageStatus: string; skipReason?: string | null; candidateVersionId?: string | null; error?: string | null; updatedAt: string; }
-export interface GenerationRun { runId: string; projectId: string; taskId: string; status: GenerationRunStatus; currentSceneId?: string | null; totalCount: number; completedCount: number; skippedCount: number; failedCount: number; candidateReviewCount: number; pauseRequested: boolean; cancelRequested: boolean; error?: string | null; createdAt: string; updatedAt: string; items: GenerationRunItem[]; }
+export interface GenerationRun { runId: string; projectId: string; taskId: string; status: GenerationRunStatus; currentSceneId?: string | null; totalCount: number; completedCount: number; skippedCount: number; failedCount: number; candidateReviewCount: number; pauseRequested: boolean; cancelRequested: boolean; error?: string | null; createdAt: string; updatedAt: string; allowedActions?: string[]; items: GenerationRunItem[]; }
 export interface GenerationRunError { status?: number; detail?: unknown; currentRunId?: string; blockingScenes?: string[]; }
 export interface GenerationJob { jobId: string; taskId: string; sceneId?: string; kind: "scene" | "image" | "tts" | "export"; status: WorkbenchJobStatus; progress: number; error?: string; }
 export interface LatestExport { exportId: string; purpose?: "initial" | "manual" | null; status: WorkbenchJobStatus; outputUrl?: string | null; createdAt: string; updatedAt: string; }

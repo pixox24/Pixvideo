@@ -86,8 +86,24 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
           系统连接配置
         </h2>
         <p className="text-xs text-zinc-400">
-          配置底层大模型 (LLM)、ComfyUI、RunningHub 等云端算力节点。设置将保存在本次会话中。
+          配置语言模型、图像生成、ComfyUI、RunningHub 等服务连接。点击保存后会写入服务器配置文件，刷新页面仍然保留。
         </p>
+        <button
+          type="button"
+          onClick={() => {
+            try {
+              localStorage.removeItem("pixvideo.onboarding.coach.v1");
+              localStorage.removeItem("pixvideo.onboarding.create-tip.v1");
+              localStorage.removeItem("pixvideo.onboarding.workbench-keys.v1");
+            } catch {
+              /* ignore */
+            }
+            addToast("已重置入门提示，刷新页面后将再次显示引导。", "info");
+          }}
+          className="mt-2 text-xs text-amber-400/90 hover:text-amber-300 underline-offset-2 hover:underline"
+        >
+          重置入门引导与界面提示
+        </button>
       </div>
 
       {/* 1. LLM Configurations */}
@@ -361,9 +377,9 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
             </button>
           </div>
 
-          {/* MiniMax / BizyAir */}
+          {/* MiniMax / BizyAir / MiMo */}
           <div className="space-y-3 md:border-l md:border-zinc-900 md:pl-4">
-            <h4 className="text-xs font-medium text-amber-400">BizyAir 节点 / MiniMax TTS</h4>
+            <h4 className="text-xs font-medium text-amber-400">BizyAir 节点 / MiniMax / MiMo TTS</h4>
             <div>
               <label className="block text-[10px] text-zinc-500 mb-1">BizyAir API Key</label>
               <input
@@ -390,7 +406,20 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
                 <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.minimaxKeyMasked}，输入新值可替换</span>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] text-zinc-500 mb-1">MiMo API Key (Xiaomi)</label>
+              <input
+                type="password"
+                placeholder="请输入 MiMo API Key"
+                value={settings.mimoKey}
+                onChange={(e) => handleFieldChange("mimoKey", "", e.target.value)}
+                className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+              />
+              {settings.mimoKeyMasked && !settings.mimoKey && (
+                <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.mimoKeyMasked}，输入新值可替换</span>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => testConnection("bizyair", { apiKey: settings.bizyairKey })}
                 className="flex justify-center items-center gap-1 py-1 text-[10px] rounded border border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-200"
@@ -402,6 +431,12 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
                 className="flex justify-center items-center gap-1 py-1 text-[10px] rounded border border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-200"
               >
                 测试 MiniMax
+              </button>
+              <button
+                onClick={() => testConnection("mimo", { apiKey: settings.mimoKey })}
+                className="flex justify-center items-center gap-1 py-1 text-[10px] rounded border border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-200"
+              >
+                测试 MiMo
               </button>
             </div>
           </div>

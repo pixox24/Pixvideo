@@ -94,6 +94,8 @@ PRESET_FIELDS = {
     "enableSubtitles",
     "minimaxModel",
     "emotion",
+    "mimoModel",
+    "mimoStyle",
     "sceneCount",
     "copyCharCount",
     "copyCharCountMode",
@@ -118,6 +120,8 @@ PRESET_DEFAULTS = {
     "enableSubtitles": True,
     "minimaxModel": "speech-2.8-turbo",
     "emotion": "",
+    "mimoModel": "mimo-v2.5-tts",
+    "mimoStyle": "",
     "sceneCount": 5,
     "copyCharCount": 100,
     "copyCharCountMode": "around",
@@ -220,6 +224,8 @@ async def _narrations_from_confirmed_copy(request: GenerateScriptRequest, llm_se
 def _frontend_tts_mode(mode: str | None) -> str:
     if mode == "minimax":
         return "minimax"
+    if mode == "mimo":
+        return "mimo"
     if mode == "comfyui":
         return "comfyui"
     return "local"
@@ -228,6 +234,8 @@ def _frontend_tts_mode(mode: str | None) -> str:
 def _backend_tts_mode(mode: str | None) -> str:
     if mode == "minimax":
         return "minimax"
+    if mode == "mimo":
+        return "mimo"
     if mode == "comfyui":
         return "comfyui"
     return "edge"
@@ -285,7 +293,7 @@ def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = 
     normalized["createdAt"] = str((existing or {}).get("createdAt") or base.get("createdAt") or now)
     normalized["updatedAt"] = now
 
-    normalized["ttsMode"] = normalized.get("ttsMode") if normalized.get("ttsMode") in {"edge", "comfyui", "minimax"} else "minimax"
+    normalized["ttsMode"] = normalized.get("ttsMode") if normalized.get("ttsMode") in {"edge", "comfyui", "minimax", "mimo"} else "minimax"
     normalized["splitType"] = _normalize_split_type(str(normalized.get("splitType") or "line"))
     normalized["copyCharCountMode"] = _normalize_char_count_mode(str(normalized.get("copyCharCountMode") or "around"))
     normalized["copyDraftMode"] = _normalize_draft_mode(str(normalized.get("copyDraftMode") or "full"))
@@ -300,7 +308,7 @@ def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = 
     normalized["enableSubtitles"] = bool(normalized.get("enableSubtitles", True))
     normalized["subtitleStyle"] = _normalize_subtitle_style(normalized.get("subtitleStyle"))
 
-    for key in ["voice", "workflow", "bgm", "promptPrefix", "minimaxModel", "emotion", "imageAspectRatio"]:
+    for key in ["voice", "workflow", "bgm", "promptPrefix", "minimaxModel", "emotion", "mimoModel", "mimoStyle", "imageAspectRatio"]:
         normalized[key] = str(normalized.get(key) or "")
 
     if not normalized["imageAspectRatio"]:
@@ -379,6 +387,9 @@ def _preset_from_config(name: str = "当前保存配置") -> dict[str, Any]:
     if tts_mode == "minimax":
         voice = tts.get("minimax", {}).get("voice_id", "")
         speed = tts.get("minimax", {}).get("speed", 1.0)
+    elif tts_mode == "mimo":
+        voice = tts.get("mimo", {}).get("voice_id", "")
+        speed = tts.get("mimo", {}).get("speed", 1.0)
     else:
         voice = tts.get("local", {}).get("voice", "")
         speed = tts.get("local", {}).get("speed", 1.0)
@@ -418,6 +429,8 @@ def _preset_from_config(name: str = "当前保存配置") -> dict[str, Any]:
         "subtitleStyle": config_manager.get("subtitle", {}).get("default_style") or SUBTITLE_STYLE_DEFAULTS,
         "minimaxModel": tts.get("minimax", {}).get("model"),
         "emotion": tts.get("minimax", {}).get("emotion"),
+        "mimoModel": tts.get("mimo", {}).get("model"),
+        "mimoStyle": tts.get("mimo", {}).get("style"),
     }
 
 
@@ -438,6 +451,8 @@ def _quick_create_config_from_preset(preset: dict[str, Any]) -> dict[str, Any]:
         "tts_speed": preset.get("speed"),
         "minimax_model": preset.get("minimaxModel"),
         "minimax_emotion": preset.get("emotion"),
+        "mimo_model": preset.get("mimoModel"),
+        "mimo_style": preset.get("mimoStyle"),
         "media_workflow": media_workflow,
         "prompt_prefix": preset.get("promptPrefix", ""),
         "bgm_path": bgm_path,
@@ -458,6 +473,7 @@ def _service_test_request(request: TestConnectionRequest) -> ServiceTestRequest:
         "runninghub": "runninghub",
         "bizyair": "bizyair",
         "minimax": "minimax",
+        "mimo": "mimo",
     }
     service = service_aliases.get(request.service)
     if not service:
@@ -473,6 +489,7 @@ def _service_test_request(request: TestConnectionRequest) -> ServiceTestRequest:
         "runninghub_api_key": config.get("runninghub_api_key") or config.get("apiKey"),
         "bizyair_api_key": config.get("bizyair_api_key") or config.get("apiKey"),
         "minimax_api_key": config.get("minimax_api_key") or config.get("apiKey"),
+        "mimo_api_key": config.get("mimo_api_key") or config.get("apiKey"),
     }
     return ServiceTestRequest(
         service=service,  # type: ignore[arg-type]
@@ -645,9 +662,12 @@ async def generate_copy_draft(request: GenerateCopyDraftRequest, pixelle_video: 
                 await pixelle_video.llm(
                     prompt=prompt,
                     temperature=0.8,
-                    max_tokens=2000,
+                    max_tokens=4096,
+                    thinking=False,
                 )
             ).strip()
+            if not draft_text:
+                raise ValueError("LLM 未返回口播正文，请检查模型配置或稍后重试")
 
         return {"success": True, "draftMode": draft_mode, "draftText": draft_text}
     except HTTPException:

@@ -1,22 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Select } from "./components/Select";
 import {
   Sparkles,
   History,
   Settings as SettingsIcon,
   Cpu,
   Tv,
-  CheckCircle2,
-  XCircle,
-  HelpCircle,
-  Sliders,
-  Play,
-  Activity,
-  Download,
+  FolderOpen,
   Menu,
   PanelRightOpen,
   PanelRightClose,
   X,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { ActiveTab, Preset, QuickCreateInput, Task, SystemSettings } from "./types";
 import { Toast, ToastMessage } from "./components/Toast";
@@ -43,10 +38,22 @@ import {
 } from "./lib/api";
 import { createProject, startGenerationRun } from "./lib/workbenchApi";
 import { createProjectFromHistory } from "./lib/workbenchApi";
+import { loadRecentProjects, pushRecentProject, RecentProject } from "./lib/recentProjects";
+import { FirstRunCoach } from "./components/FirstRunCoach";
+import {
+  dismissFirstRunCoach,
+  isFirstRunCoachDismissed,
+} from "./lib/onboarding";
 
 const PENDING_TASK_ID_PREFIX = "pending-";
 
 const isPendingTaskId = (taskId: string) => taskId.startsWith(PENDING_TASK_ID_PREFIX);
+
+const TOAST_DURATION: Record<ToastMessage["type"], number> = {
+  success: 3500,
+  info: 4500,
+  error: 0, // sticky until dismissed
+};
 
 export default function App() {
   // Global States
@@ -66,18 +73,28 @@ export default function App() {
     runninghub: false,
     bizyair: false,
     minimax: false,
+    mimo: false,
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [consoleOpen, setConsoleOpen] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth >= 1024 : true,
-  );
+  /** Default collapsed; open automatically when a direct-render task is submitted. */
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [statusExpanded, setStatusExpanded] = useState(false);
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>(() => loadRecentProjects());
+  const [coachOpen, setCoachOpen] = useState(false);
+  const [configHydrated, setConfigHydrated] = useState(false);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const pendingCancellationIdsRef = useRef(new Set<string>());
+  const toastTimersRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
     setSidebarOpen(false);
   }, [activeTab]);
+
+  useEffect(() => () => {
+    toastTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    toastTimersRef.current.clear();
+  }, []);
 
   // Default system settings state
   const [settings, setSettings] = useState<SystemSettings>({
@@ -102,21 +119,49 @@ export default function App() {
       instanceType: "24G"
     },
     bizyairKey: "",
-    minimaxKey: ""
+    minimaxKey: "",
+    mimoKey: ""
   });
 
-  // Toaster helper
+  // Toaster helper — errors stay until dismissed; success/info auto-hide.
   const addToast = (text: unknown, type: "success" | "error" | "info" = "info") => {
-    const id = `toast-${Date.now()}`;
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const safeText = formatApiErrorValue(text) || "未知错误";
-    setToasts((prev) => [...prev, { id, text: safeText, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4500);
+    const sticky = type === "error";
+    setToasts((prev) => [...prev, { id, text: safeText, type, sticky }]);
+    const duration = TOAST_DURATION[type];
+    if (duration > 0) {
+      const timer = window.setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+        toastTimersRef.current.delete(id);
+      }, duration);
+      toastTimersRef.current.set(id, timer);
+    }
   };
 
   const removeToast = (id: string) => {
+    const timer = toastTimersRef.current.get(id);
+    if (timer) {
+      window.clearTimeout(timer);
+      toastTimersRef.current.delete(id);
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const rememberProject = (projectId: string, title: string) => {
+    setRecentProjects(
+      pushRecentProject({
+        projectId,
+        title: title || "未命名项目",
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  };
+
+  const openProject = (projectId: string, title?: string) => {
+    setActiveProjectId(projectId);
+    if (title) rememberProject(projectId, title);
+    setActiveTab("project-workbench");
   };
 
   const refreshHistory = async () => {
@@ -152,6 +197,8 @@ export default function App() {
   // Load persisted backend state
   useEffect(() => {
     const loadBackendState = async () => {
+      let nextServiceStatus = serviceStatus;
+      let nextSettings = settings;
       try {
         const [presetsRes, configRes] = await Promise.all([
           fetch("/api/presets"),
@@ -167,8 +214,12 @@ export default function App() {
 
         if (configRes.ok) {
           const data = await configRes.json();
-          setSettings((current) => mapBackendConfigToSettings(data, current));
-          if (data.service_status) setServiceStatus(data.service_status);
+          nextSettings = mapBackendConfigToSettings(data, settings);
+          setSettings(nextSettings);
+          if (data.service_status) {
+            nextServiceStatus = data.service_status;
+            setServiceStatus(data.service_status);
+          }
         }
       } catch (err) {
         console.warn("Could not load backend configuration.", err);
@@ -185,9 +236,20 @@ export default function App() {
       } catch (err) {
         console.warn("Could not load backend history.", err);
       }
+
+      setConfigHydrated(true);
+      if (!isFirstRunCoachDismissed()) {
+        const llmOk = nextServiceStatus.llm || nextSettings.llm.apiKey !== "";
+        const imageOk = nextServiceStatus.image_generation || nextSettings.imageGeneration.apiKey !== "";
+        // Show coach when critical services look incomplete.
+        if (!llmOk || !imageOk) {
+          setCoachOpen(true);
+        }
+      }
     };
 
     loadBackendState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- boot once
   }, []);
 
   // Preset handlers
@@ -417,6 +479,7 @@ export default function App() {
 
     setTasks((prev) => [optimisticTask, ...prev]);
     setActiveTask(optimisticTask);
+    setConsoleOpen(true);
     addToast(`开始提交视频渲染任务: ${taskInput.title}`, "info");
 
     try {
@@ -540,46 +603,106 @@ export default function App() {
     let project: Awaited<ReturnType<typeof createProject>>;
     try {
       project = await createProject(input);
+      rememberProject(project.projectId, project.title || input.title);
       setActiveProjectId(project.projectId);
       setActiveTab("project-workbench");
-      addToast("项目已创建，正在生成初稿。", "success");
+      addToast("项目已创建，正在启动素材生成…", "info");
     } catch (error) {
       addToast(error, "error");
       throw error;
     }
     try {
       await startGenerationRun(project.projectId);
+      addToast("初稿生成已启动，可在工作台查看镜头进度。", "success");
     } catch (error) {
-      addToast(`项目已创建，但自动生成未启动：${formatApiErrorValue(error)}`, "error");
-      throw error;
+      addToast(
+        `项目已创建，但自动生成未启动：${formatApiErrorValue(error)}。请在工作台点击「开始生成」重试。`,
+        "error",
+      );
+      // Keep user on workbench so they can retry manually.
     }
   };
 
   const handleOpenHistoryWorkbench = async (task: Task) => {
     try {
       const project = await createProjectFromHistory(task.id);
+      rememberProject(project.projectId, project.title || task.title);
       setActiveProjectId(project.projectId);
       setActiveTab("project-workbench");
-      addToast("历史任务已打开为可编辑项目。", "success");
+      addToast("已创建新的可编辑项目（原历史记录保留）。", "success");
     } catch (error) {
       addToast(error, "error");
     }
   };
 
   // Sidebar connectivity widgets indicator
-  const hasLlmKey = serviceStatus.llm || settings.llm.apiKey !== "";
-  const hasComfyUrl = serviceStatus.comfyui || settings.comfy.url !== "";
+  const hasLlm = serviceStatus.llm || settings.llm.apiKey !== "";
   const hasRunningHub = serviceStatus.runninghub || settings.runninghub.apiKey !== "";
   const hasImageGeneration = serviceStatus.image_generation || settings.imageGeneration.apiKey !== "";
   const hasMiniMax = serviceStatus.minimax || settings.minimaxKey !== "";
-  const latestCompletedQuickCreateTaskId = tasks.find(
+  const hasMimo = serviceStatus.mimo || settings.mimoKey !== "";
+  const latestCompletedQuickCreateTask = tasks.find(
     (task) => task.tabType === "quick-create" && task.status === "completed" && !isPendingTaskId(task.id),
-  )?.id || null;
+  ) || null;
+  const statusItems: Array<{ key: string; label: string; ok: boolean; detail: string }> = [
+    { key: "llm", label: "语言模型", ok: hasLlm, detail: serviceStatus.llm ? "已连接" : hasLlm ? "已配置" : "待配置" },
+    { key: "image", label: "图像生成", ok: hasImageGeneration, detail: hasImageGeneration ? "已就绪" : "待配置" },
+    { key: "minimax", label: "MiniMax 配音", ok: Boolean(serviceStatus.minimax || hasMiniMax), detail: serviceStatus.minimax ? "已连接" : hasMiniMax ? "已配置" : "未配置" },
+    { key: "mimo", label: "MiMo 配音", ok: Boolean(serviceStatus.mimo || hasMimo), detail: serviceStatus.mimo ? "已连接" : hasMimo ? "已配置" : "未配置" },
+    { key: "runninghub", label: "RunningHub", ok: hasRunningHub, detail: hasRunningHub ? "已就绪" : "待配置" },
+    { key: "bizyair", label: "BizyAir", ok: Boolean(serviceStatus.bizyair), detail: serviceStatus.bizyair ? "已连接" : "未检测" },
+  ];
+  const readySummaryCount = statusItems.filter((item) => item.ok).length;
+  const currentProjectTitle =
+    recentProjects.find((item) => item.projectId === activeProjectId)?.title ||
+    (activeProjectId ? "当前项目" : null);
+  const navBtn = (tab: ActiveTab, active: boolean) =>
+    `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium rounded-md transition-all ${
+      active
+        ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
+        : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c] border border-transparent"
+    }`;
+
+  const coachNeeds = [
+    {
+      key: "llm",
+      label: "语言模型",
+      detail: hasLlm ? "已配置，可用于生成文案与分镜" : "用于主题生成口播稿与分镜脚本",
+      required: !hasLlm,
+    },
+    {
+      key: "image",
+      label: "图像生成",
+      detail: hasImageGeneration ? "已就绪，可用于画面素材" : "用于生成分镜画面（也可后续配置）",
+      required: !hasImageGeneration,
+    },
+    {
+      key: "tts",
+      label: "配音",
+      detail: hasMiniMax || hasMimo
+        ? "已配置云端配音；也可使用免费 Edge"
+        : "未配置云端 TTS 时将默认使用 Edge（免 Key）",
+      required: false,
+    },
+  ].map((item) => ({
+    ...item,
+    // Keep list order but only surface missing required first visually via required flag
+    required: item.required,
+  }));
 
   return (
-    <div className="flex h-screen w-full bg-[#07080a] text-zinc-100 overflow-hidden font-sans relative antialiased">
-      {/* Toast Notification Container */}
+    <div className="flex h-screen w-full bg-[var(--color-surface-0)] text-zinc-100 overflow-hidden font-sans relative antialiased">
       <Toast toasts={toasts} onClose={removeToast} />
+      <FirstRunCoach
+        open={coachOpen && configHydrated}
+        needs={coachNeeds}
+        onDismiss={() => {
+          dismissFirstRunCoach();
+          setCoachOpen(false);
+        }}
+        onOpenSettings={() => setActiveTab("settings")}
+        onStartCreate={() => setActiveTab("quick-create")}
+      />
 
       {sidebarOpen && (
         <button
@@ -590,208 +713,115 @@ export default function App() {
         />
       )}
 
-      {/* 1. LEFT SIDEBAR NAVIGATION */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#101114] border-r border-zinc-900 flex flex-col justify-between flex-shrink-0 h-full transition-transform lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[var(--color-surface-2)] border-r border-zinc-800/80 flex flex-col justify-between flex-shrink-0 h-full transition-transform lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex flex-col min-h-0 flex-1">
-          {/* Brand header */}
-          <div className="p-4 border-b border-zinc-900 flex items-center gap-2.5 bg-[#0c0d10]">
-            <div className="w-7 h-7 rounded bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/10">
+          <div className="p-4 border-b border-zinc-800/80 flex items-center gap-2.5 bg-[var(--color-surface-1)]">
+            <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
               <Tv className="w-4 h-4 text-black stroke-[2.5]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-sm font-black font-display text-zinc-100 tracking-wide">
+                PixVideo
+              </h1>
+              <span className="text-caption text-amber-500 font-semibold block mt-0.5">
+                AI 短视频工作台
+              </span>
             </div>
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="ml-auto p-1 text-zinc-400 lg:hidden"
+              className="p-1 text-zinc-400 lg:hidden"
               aria-label="关闭导航"
             >
               <X className="w-4 h-4" />
             </button>
-            <div>
-              <h1 className="text-sm font-black font-display text-zinc-100 tracking-wider">
-                PIXELLE-VIDEO
-              </h1>
-              <span className="text-[9px] text-amber-500 font-bold uppercase tracking-widest block mt-0.5">
-                AI 视频工作台
-              </span>
-            </div>
           </div>
 
-          {/* Navigation Items */}
           <nav className="p-3 space-y-1 overflow-y-auto flex-1">
-            <span className="text-[9px] font-bold text-zinc-650 tracking-wider uppercase block px-2.5 mb-1.5 font-mono">
-              创造引擎 / Workspace
+            <span className="text-caption font-semibold tracking-wider uppercase block px-2.5 mb-1.5">
+              创作
             </span>
-            
-            <button
-              onClick={() => setActiveTab("quick-create")}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded transition-all ${
-                activeTab === "quick-create"
-                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c]"
-              }`}
-            >
+            <button type="button" onClick={() => setActiveTab("quick-create")} className={navBtn("quick-create", activeTab === "quick-create")}>
               <Sparkles className="w-4 h-4" />
-              <span>快捷创作 Quick Create</span>
+              <span>快捷创作</span>
             </button>
 
             <div className="pt-4 pb-1">
-              <span className="text-[9px] font-bold text-zinc-650 tracking-wider uppercase block px-2.5 mb-1.5 font-mono">
-                资产管理 / Logs
+              <span className="text-caption font-semibold tracking-wider uppercase block px-2.5 mb-1.5">
+                项目与资产
               </span>
             </div>
 
             <button
-              onClick={() => activeProjectId && setActiveTab("project-workbench")}
-              disabled={!activeProjectId}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded transition-all ${
-                activeTab === "project-workbench" ? "bg-amber-500/10 text-amber-400 border border-amber-500/15" : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c] disabled:opacity-40"
-              }`}
+              type="button"
+              onClick={() => setActiveTab("project-workbench")}
+              className={navBtn("project-workbench", activeTab === "project-workbench")}
             >
-              <Tv className="w-4 h-4" />
-              <span>项目工作台 Project</span>
+              <FolderOpen className="w-4 h-4" />
+              <span>项目工作台</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab("history")}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded transition-all ${
-                activeTab === "history"
-                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c]"
-              }`}
-            >
+            <button type="button" onClick={() => setActiveTab("history")} className={navBtn("history", activeTab === "history")}>
               <History className="w-4 h-4" />
-              <span>历史记录 History</span>
+              <span>历史记录</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab("settings")}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded transition-all ${
-                activeTab === "settings"
-                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c]"
-              }`}
-            >
+            <button type="button" onClick={() => setActiveTab("settings")} className={navBtn("settings", activeTab === "settings")}>
               <SettingsIcon className="w-4 h-4" />
-              <span>系统设置 Settings</span>
+              <span>系统设置</span>
             </button>
           </nav>
         </div>
 
-        {/* Bottom system connectivity states */}
-        <div className="p-3 border-t border-zinc-900 bg-[#0c0d10] space-y-2.5">
-          <span className="text-[9px] font-bold text-zinc-500 tracking-wider uppercase block font-mono">
-            物理算力网络节点 / Status
-          </span>
+        <div className="p-3 border-t border-zinc-900 bg-[#0c0d10] space-y-2">
+          <button
+            type="button"
+            onClick={() => setStatusExpanded((open) => !open)}
+            className="w-full flex items-center justify-between text-left"
+          >
+            <span className="text-caption font-semibold tracking-wider uppercase">
+              服务状态 · {readySummaryCount}/{statusItems.length} 就绪
+            </span>
+            {statusExpanded ? <ChevronUp className="w-3.5 h-3.5 text-zinc-500" /> : <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />}
+          </button>
 
-          <div className="space-y-1.5 text-[11px] font-mono">
-            {/* LLM */}
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-500 flex items-center gap-1">
-                <Cpu className="w-3.5 h-3.5 text-zinc-600" />
-                {settings.llm.provider.toUpperCase()} · {settings.llm.model}
-              </span>
-              <span className={`flex items-center gap-1 text-[10px] font-semibold px-1 rounded ${serviceStatus.llm ? "text-emerald-400 bg-emerald-500/5" : "text-amber-400 bg-amber-500/5"}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${serviceStatus.llm ? "bg-emerald-500" : "bg-amber-500"}`}></span>
-                {serviceStatus.llm ? "已连接" : "未检测"}
-              </span>
+          {statusExpanded && (
+            <div className="space-y-1">
+              {statusItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setActiveTab("settings")}
+                  className="w-full flex items-center justify-between rounded px-1.5 py-1 text-xs hover:bg-zinc-900/80"
+                  title="点击前往系统设置"
+                >
+                  <span className="text-zinc-500 flex items-center gap-1.5">
+                    <Cpu className="w-3.5 h-3.5 text-zinc-600" />
+                    {item.label}
+                  </span>
+                  <span className={`flex items-center gap-1 text-caption font-semibold px-1 rounded ${item.ok ? "text-emerald-400" : "text-amber-400"}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${item.ok ? "bg-emerald-500" : "bg-amber-500"}`} />
+                    {item.detail}
+                  </span>
+                </button>
+              ))}
             </div>
+          )}
 
-            {/* Image Generation */}
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-500 flex items-center gap-1">
-                <Cpu className="w-3.5 h-3.5 text-zinc-600" />
-                Image API
-              </span>
-              <span className={`flex items-center gap-1 text-[10px] px-1 rounded font-semibold ${
-                hasImageGeneration ? "text-emerald-400 bg-emerald-500/5" : "text-amber-400 bg-amber-500/5"
-              }`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${hasImageGeneration ? "bg-emerald-500" : "bg-amber-500"}`}></span>
-                {hasImageGeneration ? "已就绪" : "待配置"}
-              </span>
-            </div>
-
-            {/* ComfyUI */}
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-500 flex items-center gap-1">
-                <Cpu className="w-3.5 h-3.5 text-zinc-600" />
-                ComfyUI Local
-              </span>
-              <span className="flex items-center gap-1 text-[10px] text-zinc-500 bg-zinc-800 px-1 rounded">
-                <span className="h-1.5 w-1.5 rounded-full bg-zinc-600"></span>
-                待监听
-              </span>
-            </div>
-
-            {/* RunningHub */}
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-500 flex items-center gap-1">
-                <Cpu className="w-3.5 h-3.5 text-zinc-600" />
-                RunningHub
-              </span>
-              <span className={`flex items-center gap-1 text-[10px] px-1 rounded font-semibold ${
-                hasRunningHub ? "text-emerald-400 bg-emerald-500/5" : "text-amber-400 bg-amber-500/5"
-              }`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${hasRunningHub ? "bg-emerald-500" : "bg-amber-500"}`}></span>
-                {hasRunningHub ? "已就绪" : "待配置"}
-              </span>
-            </div>
-
-            {/* BizyAir */}
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-500 flex items-center gap-1">
-                <Cpu className="w-3.5 h-3.5 text-zinc-600" />
-                BizyAir Cloud
-              </span>
-              <span className={`flex items-center gap-1 text-[10px] px-1 rounded font-semibold ${serviceStatus.bizyair ? "text-emerald-400 bg-emerald-500/5" : "text-amber-400 bg-amber-500/5"}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${serviceStatus.bizyair ? "bg-emerald-500" : "bg-amber-500"}`}></span>
-                {serviceStatus.bizyair ? "已连接" : "未检测"}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-500 flex items-center gap-1">
-                <Cpu className="w-3.5 h-3.5 text-zinc-600" />
-                MiniMax TTS
-              </span>
-              <span className={`flex items-center gap-1 text-[10px] px-1 rounded font-semibold ${serviceStatus.minimax ? "text-emerald-400 bg-emerald-500/5" : hasMiniMax ? "text-amber-400 bg-amber-500/5" : "text-zinc-500 bg-zinc-800"}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${serviceStatus.minimax ? "bg-emerald-500" : hasMiniMax ? "bg-amber-500" : "bg-zinc-600"}`}></span>
-                {serviceStatus.minimax ? "已连接" : hasMiniMax ? "已配置" : "未配置"}
-              </span>
-            </div>
-          </div>
-
-          {/* Quick presets picker summary */}
-          {presets.length > 0 && (
-            <div className="pt-2 border-t border-zinc-900/60">
-              <label className="block text-[9px] text-zinc-650 font-mono uppercase mb-1">
-                已载入云端预设:
-              </label>
-              <Select
-                onChange={(e) => {
-                  const p = presets.find((pr) => pr.id === e.target.value);
-                  if (p) setActivePreset(p);
-                }}
-                className="w-full bg-[#15161c] border border-zinc-850 text-[10px] text-zinc-400 rounded py-1 px-2 focus:outline-none focus:border-amber-500/40"
-              >
-                <option value="">-- 点击快速应用预设 --</option>
-                {presets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
+          {activePreset && (
+            <div className="pt-1 border-t border-zinc-900/60">
+              <p className="text-caption text-zinc-500 mb-0.5">当前预设</p>
+              <p className="text-xs text-zinc-300 truncate">{activePreset.name}</p>
             </div>
           )}
         </div>
       </aside>
 
       <div className="flex-1 min-w-0 h-full flex justify-center">
-        <div className="w-full max-w-[1680px] h-full flex min-w-0">
-      {/* 2. CENTER WORKSPACE WITH HEADER & BODY */}
+        <div className={`w-full h-full flex min-w-0 ${activeTab === "project-workbench" && activeProjectId ? "max-w-none" : "max-w-[1680px]"}`}>
       <main className="flex-1 flex flex-col min-w-0 h-full">
-        {/* TOP STATUS BAR */}
-        <header className="h-12 bg-[#101114] border-b border-zinc-900 px-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
+        <header className={`h-12 bg-[#101114] border-b border-zinc-900 px-4 flex items-center justify-between flex-shrink-0 ${activeTab === "project-workbench" && activeProjectId ? "lg:pl-4" : ""}`}>
+          <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
@@ -800,45 +830,59 @@ export default function App() {
             >
               <Menu className="w-4 h-4" />
             </button>
-            <span className="text-sm font-semibold text-zinc-200 font-display">
-              {activeTab === "quick-create" && "快捷创作工作室 / Quick Create Studio"}
-              {activeTab === "history" && "生产日志与历史项目 / Production History"}
-              {activeTab === "settings" && "系统算力网络配置 / Server Configurations"}
+            <span className="text-sm font-semibold text-zinc-200 font-display truncate">
+              {activeTab === "quick-create" && "快捷创作"}
+              {activeTab === "project-workbench" && (currentProjectTitle ? `工作台 · ${currentProjectTitle}` : "项目工作台")}
+              {activeTab === "history" && "历史记录"}
+              {activeTab === "settings" && "系统设置"}
             </span>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Quick monitor indicators */}
-            <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-zinc-500 bg-zinc-900/80 px-2.5 py-1 rounded border border-zinc-850">
-              <span className={`flex items-center gap-1 ${serviceStatus.llm ? "text-emerald-400" : "text-amber-400"}`}>
-                <span className={`h-1 w-1 rounded-full ${serviceStatus.llm ? "bg-emerald-500" : "bg-amber-500"}`}></span>
-                {settings.llm.provider} {serviceStatus.llm ? "已连接" : "未检测"}
-              </span>
-              <span className="text-zinc-700">|</span>
-              <span className={`flex items-center gap-1 ${serviceStatus.bizyair ? "text-emerald-400" : "text-amber-400"}`}>
-                <span className={`h-1 w-1 rounded-full ${serviceStatus.bizyair ? "bg-emerald-500" : "bg-amber-500"}`}></span>
-                BizyAir {serviceStatus.bizyair ? "已连接" : "未检测"}
-              </span>
-            </div>
-
             <button
               type="button"
-              onClick={() => setConsoleOpen((open) => !open)}
-              className="p-1.5 bg-[#17181c] border border-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1 text-xs"
-              aria-label={consoleOpen ? "关闭任务面板" : "打开任务面板"}
+              onClick={() => setActiveTab("settings")}
+              className="hidden sm:flex items-center gap-2 text-xs text-zinc-500 bg-zinc-900/80 px-2.5 py-1 rounded border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300"
+              title="查看服务配置"
             >
-              {consoleOpen ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRightOpen className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline text-[10px]">任务</span>
+              <span className={`flex items-center gap-1 ${hasLlm ? "text-emerald-400" : "text-amber-400"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${hasLlm ? "bg-emerald-500" : "bg-amber-500"}`} />
+                LLM
+              </span>
+              <span className="text-zinc-700">|</span>
+              <span className={`flex items-center gap-1 ${hasImageGeneration ? "text-emerald-400" : "text-amber-400"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${hasImageGeneration ? "bg-emerald-500" : "bg-amber-500"}`} />
+                图像
+              </span>
             </button>
+
+            {!(activeTab === "project-workbench" && activeProjectId) && (
+              <button
+                type="button"
+                onClick={() => setConsoleOpen((open) => !open)}
+                className="p-1.5 bg-[#17181c] border border-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1 text-xs"
+                aria-label={consoleOpen ? "关闭任务面板" : "打开任务面板"}
+              >
+                {consoleOpen ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRightOpen className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline text-xs">任务</span>
+              </button>
+            )}
           </div>
         </header>
 
-        {/* MAIN BODY AREA */}
-        <div ref={mainScrollRef} className="flex-1 overflow-y-auto p-3 sm:p-5 xl:p-6">
+        <div
+          ref={mainScrollRef}
+          className={
+            activeTab === "project-workbench" && activeProjectId
+              ? "flex-1 min-h-0 overflow-hidden p-0"
+              : "flex-1 overflow-y-auto p-3 sm:p-5 xl:p-6"
+          }
+        >
           {activeTab === "quick-create" && (
             <QuickCreate
               onGenerateTask={handleGenerateTask}
-              latestCompletedTaskId={latestCompletedQuickCreateTaskId}
+              latestCompletedTaskId={latestCompletedQuickCreateTask?.id || null}
+              latestCompletedTaskTitle={latestCompletedQuickCreateTask?.title || null}
               presets={presets}
               activePreset={activePreset}
               defaultPresetId={defaultPresetId}
@@ -852,10 +896,68 @@ export default function App() {
               resources={resources}
               addToast={addToast}
               onCreateProject={handleCreateProject}
+              serviceReady={{
+                llm: hasLlm,
+                image: hasImageGeneration,
+                minimax: hasMiniMax || Boolean(serviceStatus.minimax),
+                mimo: hasMimo || Boolean(serviceStatus.mimo),
+              }}
+              onOpenSettings={() => setActiveTab("settings")}
+              onOpenConsole={() => setConsoleOpen(true)}
             />
           )}
 
-          {activeTab === "project-workbench" && activeProjectId && <ProjectWorkbench projectId={activeProjectId} resources={resources} addToast={addToast} />}
+          {activeTab === "project-workbench" && activeProjectId && (
+            <div className="h-full min-h-0">
+              <ProjectWorkbench projectId={activeProjectId} resources={resources} addToast={addToast} />
+            </div>
+          )}
+
+          {activeTab === "project-workbench" && !activeProjectId && (
+            <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-dashed border-zinc-800 bg-[var(--color-surface-2)] p-8 text-center animate-soft-scale-in shadow-[var(--shadow-card)]">
+              <FolderOpen className="mx-auto h-10 w-10 text-zinc-600" />
+              <div>
+                <h2 className="text-base font-semibold text-zinc-100 font-display">还没有打开的项目</h2>
+                <p className="mt-1.5 text-sm text-zinc-400">
+                  从快捷创作生成初稿，或从历史记录复制为可编辑项目。
+                </p>
+              </div>
+              {recentProjects.length > 0 && (
+                <div className="space-y-2 text-left">
+                  <p className="text-xs font-medium text-zinc-500">最近项目</p>
+                  {recentProjects.map((project) => (
+                    <button
+                      key={project.projectId}
+                      type="button"
+                      onClick={() => openProject(project.projectId, project.title)}
+                      className="w-full rounded-md border border-zinc-800 bg-[#17181c] px-3 py-2.5 text-left hover:border-amber-500/40"
+                    >
+                      <div className="truncate text-sm text-zinc-200">{project.title}</div>
+                      <div className="mt-0.5 text-caption text-zinc-500">
+                        {new Date(project.updatedAt).toLocaleString()}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap justify-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("quick-create")}
+                  className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-400"
+                >
+                  去快捷创作
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("history")}
+                  className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-500"
+                >
+                  查看历史记录
+                </button>
+              </div>
+            </div>
+          )}
 
           {activeTab === "history" && (
             <HistoryList
@@ -879,21 +981,24 @@ export default function App() {
         </div>
       </main>
 
-      {/* 3. RIGHT RUNNING PANEL (THE CONSOLE) */}
-      {consoleOpen && <button type="button" className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setConsoleOpen(false)} aria-label="关闭任务面板遮罩" />}
-      <ConsolePanel
-        activeTask={activeTask}
-        recentTasks={tasks}
-        isOpen={consoleOpen}
-        onClose={() => setConsoleOpen(false)}
-        onCancelTask={handleCancelTask}
-        onSelectTask={(t) => {
-          // Open details by switching tab to History or showing popup
-          setActiveTab("history");
-          addToast(`正在聚焦查看任务: ${t.title}`, "info");
-        }}
-        addToast={addToast}
-      />
+      {/* Hide task console while immersed in project workbench */}
+      {!(activeTab === "project-workbench" && activeProjectId) && consoleOpen && (
+        <button type="button" className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setConsoleOpen(false)} aria-label="关闭任务面板遮罩" />
+      )}
+      {!(activeTab === "project-workbench" && activeProjectId) && (
+        <ConsolePanel
+          activeTask={activeTask}
+          recentTasks={tasks}
+          isOpen={consoleOpen}
+          onClose={() => setConsoleOpen(false)}
+          onCancelTask={handleCancelTask}
+          onSelectTask={(t) => {
+            setActiveTab("history");
+            addToast(`已切换到历史记录查看：${t.title}`, "info");
+          }}
+          addToast={addToast}
+        />
+      )}
         </div>
       </div>
     </div>

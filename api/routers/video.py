@@ -161,6 +161,10 @@ def _build_video_params(request_body: VideoGenerateRequest, progress_callback=No
         video_params["minimax_model"] = request_body.minimax_model
     if request_body.minimax_emotion:
         video_params["minimax_emotion"] = request_body.minimax_emotion
+    if request_body.mimo_model:
+        video_params["mimo_model"] = request_body.mimo_model
+    if request_body.mimo_style:
+        video_params["mimo_style"] = request_body.mimo_style
     if progress_callback:
         video_params["progress_callback"] = progress_callback
 

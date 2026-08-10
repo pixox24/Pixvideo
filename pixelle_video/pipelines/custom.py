@@ -151,6 +151,10 @@ class CustomPipeline(BasePipeline):
                 final_voice_id = tts_voice or "male-qn-qingse"
                 final_tts_workflow = None
                 logger.debug(f"TTS Mode: minimax (voice={final_voice_id})")
+            elif tts_inference_mode == "mimo":
+                final_voice_id = tts_voice or "mimo_default"
+                final_tts_workflow = None
+                logger.debug(f"TTS Mode: mimo (voice={final_voice_id})")
         else:
             # Old API (backward compatibility)
             final_voice_id = voice_id or tts_voice or "zh-CN-YunjianNeural"

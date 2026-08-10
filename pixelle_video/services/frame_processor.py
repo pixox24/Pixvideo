@@ -254,6 +254,15 @@ class FrameProcessor:
                 tts_params["minimax_model"] = config.minimax_model
             if config.minimax_emotion:
                 tts_params["minimax_emotion"] = config.minimax_emotion
+        elif config.tts_inference_mode == "mimo":
+            if config.voice_id:
+                tts_params["voice"] = config.voice_id
+            if config.tts_speed is not None:
+                tts_params["speed"] = config.tts_speed
+            if config.mimo_model:
+                tts_params["mimo_model"] = config.mimo_model
+            if config.mimo_style:
+                tts_params["mimo_style"] = config.mimo_style
         else:  # comfyui
             # ComfyUI mode: pass workflow, voice, speed, and ref_audio
             if config.tts_workflow:

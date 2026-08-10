@@ -11,9 +11,10 @@
 # limitations under the License.
 
 """
-TTS (Text-to-Speech) Service - Supports local, ComfyUI, and MiniMax inference
+TTS (Text-to-Speech) Service - Supports local, ComfyUI, MiniMax, and Mimo inference
 """
 
+import base64
 import binascii
 import json
 import os
@@ -64,7 +65,7 @@ class TTSService(ComfyBaseService):
         # Unit tests and direct service usage may pass the TTS subsection
         # instead of the full app config. Keep full-config behavior unchanged.
         if not self.config and any(
-            key in config for key in ("inference_mode", "local", "comfyui", "minimax", "default_workflow")
+            key in config for key in ("inference_mode", "local", "comfyui", "minimax", "mimo", "default_workflow")
         ):
             self.config = config
         if not self.config.get("default_workflow"):
@@ -81,6 +82,7 @@ class TTSService(ComfyBaseService):
         comfyui_url: Optional[str] = None,
         runninghub_api_key: Optional[str] = None,
         minimax_api_key: Optional[str] = None,
+        mimo_api_key: Optional[str] = None,
         # TTS parameters
         voice: Optional[str] = None,
         speed: Optional[float] = None,
@@ -125,7 +127,13 @@ class TTSService(ComfyBaseService):
             )
         """
         # Determine inference mode (param > config)
-        mode = inference_mode or self.config.get("inference_mode", "local")
+        # Frontend uses "edge"; normalize to backend "local".
+        raw_mode = inference_mode or self.config.get("inference_mode", "local")
+        mode = str(raw_mode or "local").strip().lower()
+        if mode in {"edge", "local"}:
+            mode = "local"
+        elif mode not in {"comfyui", "minimax", "mimo"}:
+            mode = "local"
         
         # Route to appropriate implementation
         if mode == "local":
@@ -139,6 +147,15 @@ class TTSService(ComfyBaseService):
             return await self._call_minimax_tts(
                 text=text,
                 api_key=minimax_api_key,
+                voice=voice,
+                speed=speed,
+                output_path=output_path,
+                **params
+            )
+        elif mode == "mimo":
+            return await self._call_mimo_tts(
+                text=text,
+                api_key=mimo_api_key,
                 voice=voice,
                 speed=speed,
                 output_path=output_path,
@@ -208,7 +225,9 @@ class TTSService(ComfyBaseService):
                 rate=rate,
                 output_path=output_path
             )
-            
+            from pixelle_video.utils.tts_audio_postprocess import postprocess_tts_clip
+
+            postprocess_tts_clip(output_path)
             logger.info(f"✅ Generated audio (local Edge TTS): {output_path}")
             return output_path
         
@@ -229,6 +248,22 @@ class TTSService(ComfyBaseService):
             raise ValueError(
                 "MiniMax API key is not configured. "
                 "Please set it in Advanced Settings or MINIMAX_API_KEY."
+            )
+        return final_api_key.strip()
+
+    def _resolve_mimo_api_key(self, api_key: Optional[str] = None) -> str:
+        mimo_config = self.config.get("mimo", {})
+        final_api_key = (
+            api_key
+            or os.getenv("MIMO_API_KEY")
+            or self._load_dotenv_value("MIMO_API_KEY")
+            or mimo_config.get("api_key")
+            or ""
+        )
+        if not final_api_key.strip():
+            raise ValueError(
+                "Mimo API key is not configured. "
+                "Please set it in Advanced Settings or MIMO_API_KEY."
             )
         return final_api_key.strip()
 
@@ -379,6 +414,9 @@ class TTSService(ComfyBaseService):
 
         # Persist subtitle timestamps when MiniMax returns them (URL or inline).
         await self._save_minimax_alignment(data, output_path, params)
+        from pixelle_video.utils.tts_audio_postprocess import postprocess_tts_clip
+
+        postprocess_tts_clip(output_path)
 
         extra_info = response_json.get("extra_info") or {}
         audio_length_ms = extra_info.get("audio_length")
@@ -432,7 +470,157 @@ class TTSService(ComfyBaseService):
             logger.info(f"📝 Saved MiniMax subtitle alignment ({len(cues)} cues): {sidecar}")
         except Exception as exc:
             logger.warning(f"Failed to save MiniMax subtitle alignment: {exc}")
-    
+
+    async def _call_mimo_tts(
+        self,
+        text: str,
+        api_key: Optional[str] = None,
+        voice: Optional[str] = None,
+        speed: Optional[float] = None,
+        output_path: Optional[str] = None,
+        **params
+    ) -> str:
+        """
+        Generate speech using the Xiaomi MiMo chat-completions TTS API.
+
+        MiMo returns base64-encoded audio in ``choices[0].message.audio.data``.
+        The audio is decoded and saved locally so the existing duration probing
+        and video assembly pipeline can keep using file paths.
+        """
+        import httpx
+
+        mimo_config = self.config.get("mimo", {})
+        final_api_key = self._resolve_mimo_api_key(api_key)
+        final_model = str(params.get("mimo_model") or mimo_config.get("model", "mimo-v2.5-tts")).strip()
+        # Reject MiniMax model IDs accidentally routed here (common when both
+        # minimaxModel and mimoModel exist on the same project payload).
+        if final_model.startswith("speech-") or final_model.lower().startswith("speech"):
+            logger.warning(
+                "MiMo TTS received MiniMax model {!r}; falling back to mimo-v2.5-tts",
+                final_model,
+            )
+            final_model = "mimo-v2.5-tts"
+        final_voice = voice or params.get("mimo_voice_id") or mimo_config.get("voice_id", "mimo_default")
+        final_speed = speed if speed is not None else mimo_config.get("speed", 1.0)
+        final_style = params.get("mimo_style")
+        if final_style is None:
+            final_style = mimo_config.get("style")
+        if final_style == "":
+            final_style = None
+
+        # MiMo models differ in how voice is specified:
+        # - mimo-v2.5-tts: preset voice via audio.voice
+        # - mimo-v2.5-tts-voicedesign: natural-language description in user message;
+        #   audio.voice is forbidden (API returns 400 Param Incorrect)
+        # - mimo-v2.5-tts-voiceclone: reference audio cloning (not fully wired here)
+        model_lower = final_model.lower()
+        is_voice_design = "voicedesign" in model_lower or "voice-design" in model_lower
+        is_voice_clone = "voiceclone" in model_lower or "voice-clone" in model_lower
+
+        if is_voice_design and not (final_style and str(final_style).strip()):
+            raise ValueError(
+                "MiMo voice design 模式需要填写「自然语言风格指令」"
+                "（作为音色描述，例如：年轻女声，清亮温柔，语速适中）"
+            )
+
+        if not output_path:
+            unique_id = uuid.uuid4().hex
+            output_path = f"output/{unique_id}.wav"
+
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Target text goes in the assistant message; optional style / voice-design
+        # guidance goes in the user message.
+        messages = []
+        if final_style:
+            messages.append({"role": "user", "content": final_style})
+        elif is_voice_design:
+            # Should be unreachable due to the guard above; keep for safety.
+            messages.append({"role": "user", "content": "自然清晰的中文旁白音色"})
+        messages.append({"role": "assistant", "content": text})
+
+        audio_params: dict = {"format": "wav"}
+        if is_voice_design:
+            # Official API: voice design rejects audio.voice entirely.
+            pass
+        elif is_voice_clone:
+            # Clone mode uses reference audio rather than preset voice IDs.
+            # If only a voice id is provided, omit it to avoid invalid params;
+            # callers should pass reference audio via dedicated params later.
+            ref_audio = params.get("mimo_ref_audio") or params.get("ref_audio")
+            if ref_audio:
+                audio_params["voice"] = final_voice
+                # Keep room for future ref-audio payload fields.
+                params = {**params, "mimo_ref_audio": ref_audio}
+            # Without ref audio, still avoid sending unsupported preset voices if empty.
+            elif final_voice and final_voice not in {"mimo_default", ""}:
+                audio_params["voice"] = final_voice
+        else:
+            # Standard TTS: preset built-in voices.
+            if final_voice:
+                audio_params["voice"] = final_voice
+
+        payload = {
+            "model": final_model,
+            "messages": messages,
+            "audio": audio_params,
+        }
+
+        endpoint = params.get("mimo_endpoint") or mimo_config.get(
+            "endpoint",
+            "https://api.xiaomimimo.com/v1/chat/completions",
+        )
+        headers = {
+            "Authorization": f"Bearer {final_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        logger.info(
+            "🎙️  Using Mimo TTS: model={}, voice={}, style={!r}, speed={}x, voice_design={}",
+            final_model,
+            None if is_voice_design else final_voice,
+            final_style,
+            final_speed,
+            is_voice_design,
+        )
+
+        try:
+            async with httpx.AsyncClient(timeout=params.get("mimo_timeout", 120.0)) as client:
+                response = await client.post(endpoint, json=payload, headers=headers)
+                response.raise_for_status()
+                response_json = response.json()
+        except httpx.HTTPStatusError as e:
+            raise Exception(f"Mimo TTS HTTP error: {e.response.status_code} - {e.response.text}") from e
+        except httpx.HTTPError as e:
+            raise Exception(f"Mimo TTS request failed: {e}") from e
+        except ValueError as e:
+            raise Exception(f"Mimo TTS returned invalid JSON: {e}") from e
+
+        choices = response_json.get("choices") or []
+        if not choices:
+            response_keys = ", ".join(sorted(response_json.keys()))
+            raise Exception(
+                "Mimo TTS response did not include choices "
+                f"(response_keys={response_keys})"
+            )
+        message = choices[0].get("message") or {}
+        audio_data = (message.get("audio") or {}).get("data")
+        if not audio_data:
+            raise Exception("Mimo TTS response did not include audio data")
+
+        try:
+            audio_bytes = base64.b64decode(audio_data)
+        except (TypeError, ValueError, binascii.Error) as e:
+            raise Exception(f"Mimo TTS returned invalid base64 audio: {e}") from e
+
+        output_file.write_bytes(audio_bytes)
+        from pixelle_video.utils.tts_audio_postprocess import postprocess_tts_clip
+
+        postprocess_tts_clip(output_path)
+        logger.info(f"✅ Generated audio (Mimo): {output_path}")
+        return output_path
+
     async def _call_comfyui_workflow(
         self,
         workflow_info: dict,

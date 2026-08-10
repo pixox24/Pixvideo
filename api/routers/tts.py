@@ -86,6 +86,11 @@ async def tts_synthesize(
             tts_params["minimax_model"] = request.minimax_model
         if request.minimax_emotion:
             tts_params["minimax_emotion"] = request.minimax_emotion
+
+        if request.mimo_model:
+            tts_params["mimo_model"] = request.mimo_model
+        if request.mimo_style:
+            tts_params["mimo_style"] = request.mimo_style
         
         # Call TTS service
         audio_path = await pixelle_video.tts(**tts_params)

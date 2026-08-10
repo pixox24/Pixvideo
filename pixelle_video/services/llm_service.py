@@ -114,6 +114,32 @@ class LLMService:
         
         return AsyncOpenAI(**client_kwargs)
     
+    @staticmethod
+    def _model_supports_thinking_toggle(model: str) -> bool:
+        """DeepSeek V4 / reasoner models expose thinking mode that burns completion budget."""
+        name = (model or "").lower()
+        return "deepseek" in name and (
+            "v4" in name or "reasoner" in name or "r1" in name
+        )
+
+    @classmethod
+    def _apply_thinking_control(cls, model: str, kwargs: dict, thinking: Optional[bool]) -> dict:
+        """
+        Inject DeepSeek thinking controls.
+
+        Reasoning tokens count against max_tokens. When thinking fills the budget,
+        content is empty and callers that expect JSON fail. Default: disable thinking
+        for DeepSeek V4/reasoner models unless explicitly enabled.
+        """
+        out = dict(kwargs)
+        extra_body = dict(out.pop("extra_body", None) or {})
+        if "thinking" not in extra_body and cls._model_supports_thinking_toggle(model):
+            enabled = True if thinking is True else False if thinking is False else False
+            extra_body["thinking"] = {"type": "enabled" if enabled else "disabled"}
+        if extra_body:
+            out["extra_body"] = extra_body
+        return out
+
     async def __call__(
         self,
         prompt: str,
@@ -123,6 +149,7 @@ class LLMService:
         temperature: float = 0.7,
         max_tokens: int = 2000,
         response_type: Optional[Type[T]] = None,
+        thinking: Optional[bool] = None,
         **kwargs
     ) -> Union[str, T]:
         """
@@ -137,6 +164,9 @@ class LLMService:
             max_tokens: Maximum tokens to generate
             response_type: Optional Pydantic model class for structured output.
                           If provided, returns parsed model instance instead of string.
+            thinking: Optional DeepSeek thinking toggle. False disables reasoning mode
+                      (recommended for JSON/script tasks). None defaults to disabled on
+                      DeepSeek V4/reasoner models.
             **kwargs: Additional provider-specific parameters
         
         Returns:
@@ -167,8 +197,13 @@ class LLMService:
             or self._get_config_value("model")
             or "gpt-3.5-turbo"  # Default fallback
         )
+        call_kwargs = self._apply_thinking_control(final_model, kwargs, thinking)
         
-        logger.debug(f"LLM call: model={final_model}, base_url={client.base_url}, response_type={response_type}")
+        logger.debug(
+            f"LLM call: model={final_model}, base_url={client.base_url}, "
+            f"response_type={response_type}, max_tokens={max_tokens}, "
+            f"thinking={call_kwargs.get('extra_body', {}).get('thinking')}"
+        )
         
         try:
             if response_type is not None:
@@ -180,7 +215,7 @@ class LLMService:
                     response_type=response_type,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    **kwargs
+                    **call_kwargs
                 )
             else:
                 # Standard text output mode
@@ -189,11 +224,20 @@ class LLMService:
                     messages=[{"role": "user", "content": prompt}],
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    **kwargs
+                    **call_kwargs
                 )
                 
-                result = self._message_text(response.choices[0].message)
-                logger.debug(f"LLM response length: {len(result)} chars")
+                message = response.choices[0].message
+                result = self._message_text(message)
+                if not str(result or "").strip():
+                    finish = getattr(response.choices[0], "finish_reason", None)
+                    usage = getattr(response, "usage", None)
+                    logger.warning(
+                        "LLM returned empty content "
+                        f"(model={final_model}, finish={finish}, usage={usage})"
+                    )
+                else:
+                    logger.debug(f"LLM response length: {len(result)} chars")
                 
                 return result
         
@@ -219,10 +263,18 @@ class LLMService:
                     parts.append(str(text))
             if parts:
                 return "".join(parts)
+        # Prefer empty over dumping chain-of-thought when content is missing:
+        # reasoning_content is usually not the user-facing JSON answer.
         reasoning = value(message, "reasoning_content")
         if isinstance(reasoning, list):
-            return "".join(str(value(item, "text") or value(item, "content") or "") for item in reasoning)
-        return str(reasoning or "")
+            text = "".join(str(value(item, "text") or value(item, "content") or "") for item in reasoning)
+        else:
+            text = str(reasoning or "")
+        # Only fall back to reasoning when it itself looks like structured output.
+        stripped = text.strip()
+        if stripped and ("{" in stripped or "[" in stripped or "```" in stripped):
+            return stripped
+        return ""
     
     async def _call_with_structured_output(
         self,

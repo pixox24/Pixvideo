@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 class TTSSynthesizeRequest(BaseModel):
     """TTS synthesis request"""
     text: str = Field(..., description="Text to synthesize")
-    inference_mode: Optional[Literal["local", "comfyui", "minimax"]] = Field(
+    inference_mode: Optional[Literal["local", "comfyui", "minimax", "mimo"]] = Field(
         None,
         description="TTS inference mode override. Use 'local' for Edge TTS."
     )
@@ -52,6 +52,14 @@ class TTSSynthesizeRequest(BaseModel):
         None,
         description="MiniMax TTS emotion override"
     )
+    mimo_model: Optional[str] = Field(
+        None,
+        description="MiMo TTS model override"
+    )
+    mimo_style: Optional[str] = Field(
+        None,
+        description="MiMo natural-language style instruction (optional)"
+    )
     
     class Config:
         json_schema_extra = {
@@ -63,6 +71,8 @@ class TTSSynthesizeRequest(BaseModel):
                 "speed": 1.1,
                 "minimax_model": "speech-2.8-turbo",
                 "minimax_emotion": None,
+                "mimo_model": "mimo-v2.5-tts",
+                "mimo_style": None,
                 "ref_audio": None
             }
         }

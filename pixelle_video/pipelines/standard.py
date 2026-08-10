@@ -473,6 +473,10 @@ class StandardPipeline(LinearVideoPipeline):
                 final_voice_id = tts_voice or "male-qn-qingse"
                 final_tts_workflow = None
                 logger.debug(f"TTS Mode: minimax (voice={final_voice_id})")
+            elif tts_inference_mode == "mimo":
+                final_voice_id = tts_voice or "mimo_default"
+                final_tts_workflow = None
+                logger.debug(f"TTS Mode: mimo (voice={final_voice_id})")
         else:
             # Old API
             final_voice_id = voice_id or tts_voice or "zh-CN-YunjianNeural"
@@ -494,6 +498,8 @@ class StandardPipeline(LinearVideoPipeline):
             ref_audio=ctx.params.get("ref_audio"),
             minimax_model=ctx.params.get("minimax_model"),
             minimax_emotion=ctx.params.get("minimax_emotion"),
+            mimo_model=ctx.params.get("mimo_model"),
+            mimo_style=ctx.params.get("mimo_style"),
             media_width=ctx.params.get("media_width"),
             media_height=ctx.params.get("media_height"),
             media_workflow=ctx.params.get("media_workflow"),

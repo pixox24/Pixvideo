@@ -156,6 +156,7 @@ export function buildConfigPayload(settings: SystemSettings) {
       runninghub_instance_type: settings.runninghub.instanceType,
       bizyair_api_key: settings.bizyairKey || undefined,
       minimax_api_key: settings.minimaxKey || undefined,
+      mimo_api_key: settings.mimoKey || undefined,
     },
   };
 }
@@ -195,6 +196,8 @@ export function mapBackendConfigToSettings(data: any, fallback: SystemSettings):
     bizyairKeyMasked: data.comfyui?.bizyair_api_key_masked || "",
     minimaxKey: data.comfyui?.minimax_api_key_set ? fallback.minimaxKey : "",
     minimaxKeyMasked: data.comfyui?.minimax_api_key_masked || "",
+    mimoKey: data.comfyui?.mimo_api_key_set ? fallback.mimoKey : "",
+    mimoKeyMasked: data.comfyui?.mimo_api_key_masked || "",
   };
 }
 
@@ -258,7 +261,7 @@ function buildVideoPayload(input: any) {
   const scenes = input.scenes || [];
   const sceneTexts = scenes.map((scene: any) => scene.ttsText).filter(Boolean);
   const text = sceneTexts.join("\n\n") || input.title;
-  const ttsMode = input.ttsMode === "minimax" ? "minimax" : input.ttsMode === "comfyui" ? "comfyui" : "local";
+  const ttsMode = input.ttsMode === "minimax" ? "minimax" : input.ttsMode === "mimo" ? "mimo" : input.ttsMode === "comfyui" ? "comfyui" : "local";
   const bgmPath = input.bgm && input.bgm !== "bgm-none" ? input.bgm : undefined;
   const bgmVolume = input.bgmVolume > 1 ? input.bgmVolume / 100 : input.bgmVolume;
   const subtitleStyle = input.subtitleStyle
@@ -292,6 +295,8 @@ function buildVideoPayload(input: any) {
     tts_speed: input.speed,
     minimax_model: input.minimaxModel || undefined,
     minimax_emotion: input.emotion || undefined,
+    mimo_model: input.mimoModel || undefined,
+    mimo_style: input.mimoStyle || undefined,
     media_width: input.mediaWidth || undefined,
     media_height: input.mediaHeight || undefined,
     bgm_path: bgmPath,

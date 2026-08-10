@@ -17,6 +17,17 @@ export const VOICE_OPTIONS = {
     { id: "Chinese (Mandarin)_Warm_Girl", name: "中文温暖女声", desc: "温柔自然" },
     { id: "Chinese (Mandarin)_Gentleman", name: "中文绅士男声", desc: "沉稳商务" },
   ],
+  mimo: [
+    { id: "mimo_default", name: "MiMo 默认音色", desc: "中国集群默认为「冰糖」，其他集群为「Mia」" },
+    { id: "冰糖", name: "冰糖 (中文女声)", desc: "中文女性音色" },
+    { id: "茉莉", name: "茉莉 (中文女声)", desc: "中文女性音色" },
+    { id: "苏打", name: "苏打 (中文男声)", desc: "中文男性音色" },
+    { id: "白桦", name: "白桦 (中文男声)", desc: "中文男性音色" },
+    { id: "Mia", name: "Mia (英文女声)", desc: "英文女性音色" },
+    { id: "Chloe", name: "Chloe (英文女声)", desc: "英文女性音色" },
+    { id: "Milo", name: "Milo (英文男声)", desc: "英文男性音色" },
+    { id: "Dean", name: "Dean (英文男声)", desc: "英文男性音色" },
+  ],
   comfyui: [
     { id: "comfy-custom-voice1", name: "自定义参考音频 (根据上传克隆)", desc: "由 ComfyUI Audio-Prompt 提取特征" },
   ],

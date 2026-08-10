@@ -46,8 +46,12 @@ class WorkbenchMediaStore:
         return destination_relative
 
     async def download_result(self, project_id: str, scene_id: str, source_url: str, version_id: str) -> str:
+        # Check a filesystem path before parsing a URL.  On Windows, parsing
+        # ``C:\\...`` first treats the drive letter as a URL scheme and rejects
+        # an otherwise valid local image returned by the test-material provider.
+        source_path = Path(source_url).expanduser()
         parsed = urlparse(source_url)
-        suffix = Path(parsed.path).suffix.lower() or ".png"
+        suffix = (source_path.suffix if source_path.is_file() else Path(parsed.path).suffix).lower() or ".png"
         relative = f"assets/scenes/{scene_id}/generated/{version_id}{suffix}"
         destination = self.resolve(project_id, relative)
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -68,8 +72,8 @@ class WorkbenchMediaStore:
                                 if size > self.max_bytes:
                                     raise ValueError("download exceeds size limit")
                                 handle.write(chunk)
-            elif parsed.scheme == "" and Path(source_url).is_file():
-                source = Path(source_url).resolve()
+            elif source_path.is_file():
+                source = source_path.resolve()
                 if source.stat().st_size > self.max_bytes:
                     raise ValueError("source exceeds size limit")
                 shutil.copyfile(source, temporary)

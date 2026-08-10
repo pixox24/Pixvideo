@@ -28,7 +28,7 @@ async def test_media_service_uses_existing_local_image_by_default(monkeypatch):
     result = await service(prompt="must stay offline", width=2560, height=1440, scene_id="scene-1")
 
     assert result.media_type == "image"
-    assert Path(result.url).parent == (Path(__file__).parents[2] / "素材库" / "16:9").resolve()
+    assert Path(result.url).parent == (Path(__file__).parents[2] / "素材库" / "16x9").resolve()
 
 
 @pytest.mark.asyncio
@@ -39,7 +39,7 @@ async def test_media_service_selects_portrait_storyboard_material(monkeypatch):
     service = MediaService({}, core=DummyCore())
     result = await service(prompt="portrait", width=1440, height=2560, scene_id="scene-2")
 
-    assert Path(result.url).parent == (Path(__file__).parents[2] / "素材库" / "9:16").resolve()
+    assert Path(result.url).parent == (Path(__file__).parents[2] / "素材库" / "9x16").resolve()
 
 
 @pytest.mark.asyncio

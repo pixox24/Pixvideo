@@ -7,7 +7,20 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 from pixelle_video.models.workbench import AssetSource, AssetVersion, GenerationStatus
+from pixelle_video.services.continuous_tts import (
+    ContinuousSceneSegment,
+    assemble_continuous_script,
+    extract_audio_segments,
+    plan_scene_slices,
+)
+from pixelle_video.services.workbench_generation import (
+    build_parameter_snapshot,
+    normalize_tts_inference_mode,
+)
+from pixelle_video.utils.tts_audio_postprocess import postprocess_tts_clip, with_speaker_lock
 
 
 class WorkbenchJobService:
@@ -44,12 +57,26 @@ class WorkbenchJobService:
     ) -> dict[str, Any]:
         """Generate and persist one image without changing job status."""
         scene = self._require_scene(scene_id, project_id)
+        project = self.repository.get_project(project_id)
+        project_config = (project.config if project else {}) or {}
+        prefix = str(
+            project_config.get("promptPrefix")
+            or project_config.get("prompt_prefix")
+            or ""
+        ).strip()
+        full_prompt = f"{prefix}, {prompt_snapshot}".strip(", ") if prefix else prompt_snapshot
+        workflow = (
+            project_config.get("workflowId")
+            or project_config.get("workflow")
+            or project_config.get("media_workflow")
+            or self._workflow()
+        )
         result = await self.core.media(
-            prompt=prompt_snapshot,
+            prompt=full_prompt,
             media_type="image",
-            workflow=self._workflow(),
-            width=self._width(),
-            height=self._height(),
+            workflow=workflow,
+            width=self._width(project_id),
+            height=self._height(project_id),
             scene_id=scene_id,
         )
         source_url = result.url if hasattr(result, "url") else result
@@ -119,15 +146,38 @@ class WorkbenchJobService:
         audio_relative = f"assets/scenes/{scene_id}/audio/{task_id}.mp3"
         audio_path = self.media_store.resolve(project_id, audio_relative)
         audio_path.parent.mkdir(parents=True, exist_ok=True)
-        result = await self.core.tts(
-            text=narration_snapshot,
-            output_path=str(audio_path),
-            scene_id=scene_id,
-        )
+        tts_kwargs = self._tts_kwargs_for_project(project_id)
+        try:
+            result = await self.core.tts(
+                text=narration_snapshot,
+                output_path=str(audio_path),
+                scene_id=scene_id,
+                **tts_kwargs,
+            )
+        except Exception as exc:
+            # ComfyUI often unavailable in local installs; fall back to Edge TTS.
+            if tts_kwargs.get("inference_mode") == "comfyui":
+                logger.warning(
+                    "ComfyUI TTS failed for project {}, falling back to Edge TTS: {}",
+                    project_id,
+                    exc,
+                )
+                result = await self.core.tts(
+                    text=narration_snapshot,
+                    output_path=str(audio_path),
+                    scene_id=scene_id,
+                    inference_mode="local",
+                    voice="zh-CN-YunjianNeural",
+                    speed=1.0,
+                )
+            else:
+                raise
         if result and Path(str(result)).resolve() != audio_path.resolve() and Path(str(result)).is_file():
             shutil.copyfile(result, audio_path)
         if not audio_path.is_file():
             raise FileNotFoundError("TTS provider did not create an audio file")
+        # Cross-scene consistency: loudness + short fades (does not re-synthesize).
+        postprocess_tts_clip(audio_path)
         duration = await self._audio_duration(audio_path)
         changes = {
             "narration": narration_snapshot,
@@ -141,6 +191,202 @@ class WorkbenchJobService:
             "audio_relative_path": audio_relative,
             "duration_seconds": duration,
         }
+
+    async def generate_continuous_tts_assets(
+        self,
+        project_id: str,
+        run_id: str,
+        segments: list[ContinuousSceneSegment],
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Synthesize one continuous track for multi-scene narration, then split.
+
+        Returns mapping scene_id -> {audio_relative_path, duration_seconds, split_method}.
+        """
+        if len(segments) < 2:
+            raise ValueError("continuous TTS requires at least two scenes")
+
+        assembled = assemble_continuous_script(segments)
+        continuous_relative = f"assets/runs/{run_id}/continuous.mp3"
+        continuous_path = self.media_store.resolve(project_id, continuous_relative)
+        continuous_path.parent.mkdir(parents=True, exist_ok=True)
+
+        tts_kwargs = self._tts_kwargs_for_project(project_id)
+        # Use the first scene id so provider fakes / logs stay scene-addressable.
+        anchor_scene_id = assembled.segments[0].scene_id
+        logger.info(
+            "Continuous TTS: project={} run={} scenes={} chars={}",
+            project_id,
+            run_id,
+            len(assembled.segments),
+            len(assembled.full_text),
+        )
+        try:
+            result = await self.core.tts(
+                text=assembled.full_text,
+                output_path=str(continuous_path),
+                scene_id=anchor_scene_id,
+                **tts_kwargs,
+            )
+        except Exception as exc:
+            if tts_kwargs.get("inference_mode") == "comfyui":
+                logger.warning(
+                    "ComfyUI continuous TTS failed for project {}, falling back to Edge: {}",
+                    project_id,
+                    exc,
+                )
+                result = await self.core.tts(
+                    text=assembled.full_text,
+                    output_path=str(continuous_path),
+                    scene_id=anchor_scene_id,
+                    inference_mode="local",
+                    voice="zh-CN-YunjianNeural",
+                    speed=1.0,
+                )
+            else:
+                raise
+
+        if result and Path(str(result)).resolve() != continuous_path.resolve() and Path(str(result)).is_file():
+            shutil.copyfile(result, continuous_path)
+        if not continuous_path.is_file():
+            raise FileNotFoundError("Continuous TTS provider did not create an audio file")
+
+        # Light normalize on the whole track before cutting.
+        postprocess_tts_clip(continuous_path)
+        total_duration = await self._audio_duration(continuous_path)
+        if total_duration <= 0:
+            # Fake / non-media fixtures: scale by scene count for proportional split.
+            total_duration = float(len(assembled.segments))
+
+        slices = plan_scene_slices(
+            assembled.scene_ids,
+            list(assembled.scene_texts),
+            continuous_audio_path=continuous_path,
+            total_duration=total_duration,
+        )
+        results: dict[str, dict[str, Any]] = {}
+        fingerprint_by_scene = {
+            segment.scene_id: segment.narration_fingerprint for segment in assembled.segments
+        }
+        narration_by_scene = {
+            segment.scene_id: segment.narration for segment in assembled.segments
+        }
+
+        # Batch-cut in OS temp via few ffmpeg processes, then Python-move into project.
+        # Skip per-scene loudnorm/fade: the continuous track was already post-processed.
+        cut_jobs: list[tuple[str, Path, float, float, str]] = []
+        for slice_info in slices:
+            scene_id = slice_info.scene_id
+            self._require_scene(scene_id, project_id)
+            audio_relative = f"assets/scenes/{scene_id}/audio/{run_id}-continuous.mp3"
+            audio_path = self.media_store.resolve(project_id, audio_relative)
+            cut_jobs.append(
+                (scene_id, audio_path, slice_info.start, slice_info.end, audio_relative)
+            )
+
+        extract_audio_segments(
+            continuous_path,
+            [(path, start, end) for _scene_id, path, start, end, _rel in cut_jobs],
+            batch_size=16,
+        )
+
+        for scene_id, audio_path, start, end, audio_relative in cut_jobs:
+            duration = await self._audio_duration(audio_path)
+            if duration <= 0:
+                duration = max(0.05, float(end) - float(start))
+            changes = {
+                "narration": narration_by_scene.get(scene_id, ""),
+                "audio_relative_path": audio_relative,
+                "duration_seconds": duration,
+            }
+            fingerprint = fingerprint_by_scene.get(scene_id)
+            if fingerprint:
+                changes["audio_fingerprint"] = fingerprint
+            self.repository.update_scene(scene_id, **changes)
+            results[scene_id] = {
+                "audio_relative_path": audio_relative,
+                "duration_seconds": duration,
+                "split_method": next(
+                    (s.method for s in slices if s.scene_id == scene_id),
+                    "proportional",
+                ),
+                "slice_start": start,
+                "slice_end": end,
+            }
+
+        logger.info(
+            "Continuous TTS split done: project={} method={} scenes={}",
+            project_id,
+            slices[0].method if slices else "n/a",
+            len(results),
+        )
+        return results
+
+    def _tts_kwargs_for_project(self, project_id: str) -> dict[str, Any]:
+        """Resolve project/run TTS settings instead of relying on global ComfyUI defaults."""
+        project = self.repository.get_project(project_id)
+        runtime_config = getattr(self.core, "config", {}) or {}
+        snapshot = build_parameter_snapshot(
+            project or type("P", (), {"config": {}})(),
+            runtime_config=runtime_config if isinstance(runtime_config, dict) else {},
+        )
+        tts = snapshot.get("tts") or {}
+        mode = normalize_tts_inference_mode(tts.get("provider") or "local")
+        scene_count = 0
+        if project is not None:
+            try:
+                scene_count = len(self.repository.list_project_scenes(project_id))
+            except Exception:
+                scene_count = 0
+        multi_scene = scene_count > 1
+        kwargs: dict[str, Any] = {
+            "inference_mode": mode,
+            "voice": tts.get("voice"),
+            "speed": tts.get("speed"),
+        }
+        if mode == "minimax":
+            model = tts.get("model")
+            # Guard: never send MiMo model names to MiniMax.
+            if model and not str(model).startswith("mimo"):
+                kwargs["minimax_model"] = model
+            # Lock emotion for multi-scene: empty string means "no emotion switch".
+            emotion = tts.get("emotion")
+            if emotion:
+                kwargs["minimax_emotion"] = emotion
+            elif multi_scene:
+                # Prefer neutral continuity over random emotion sampling when unset.
+                kwargs["minimax_emotion"] = None
+        elif mode == "mimo":
+            project_config = (project.config if project else {}) or {}
+            model = (
+                project_config.get("mimoModel")
+                or project_config.get("mimo_model")
+                or tts.get("model")
+                or "mimo-v2.5-tts"
+            )
+            # Guard: MiniMax speech-* models must never be sent to MiMo.
+            if str(model).startswith("speech-") or str(model).startswith("Speech"):
+                model = "mimo-v2.5-tts"
+            kwargs["mimo_model"] = model
+            style = tts.get("style") or project_config.get("mimoStyle") or project_config.get("mimo_style")
+            is_voice_design = "voicedesign" in str(model).lower()
+            # Multi-scene: pin the same speaker-lock phrase into every call.
+            locked = with_speaker_lock(
+                style,
+                multi_scene=multi_scene,
+                force=is_voice_design and multi_scene,
+            )
+            if locked:
+                kwargs["mimo_style"] = locked
+            if multi_scene and is_voice_design:
+                logger.info(
+                    "MiMo voice-design multi-scene: applying locked style for project {}",
+                    project_id,
+                )
+        elif mode == "comfyui" and tts.get("workflow"):
+            kwargs["workflow"] = tts.get("workflow")
+        # Drop only missing keys; keep explicit None for emotion lock path handled above.
+        return {key: value for key, value in kwargs.items() if value is not None}
 
     async def run_tts_job(self, project_id: str, scene_id: str, task_id: str, narration_snapshot: str) -> None:
         self._require_scene(scene_id, project_id)
@@ -279,6 +525,13 @@ class WorkbenchJobService:
             }
             for item in scenes
         ]
+        # Initial auto-draft prioritizes speed so users don't feel "last scene stuck"
+        # while FFmpeg re-encodes every frame with motion. Manual export keeps full quality.
+        purpose = str(snapshot.get("purpose") or "").strip().lower()
+        motion_enabled = bool(config.get("image_motion_enabled", config.get("enableMotion", True)))
+        if purpose == "initial":
+            motion_enabled = False
+
         return {
             "pipeline": "standard",
             "text": str(config.get("title") or project_id),
@@ -289,10 +542,12 @@ class WorkbenchJobService:
             "asset_reuse": True,
             "existing_scene_assets": existing_assets,
             "composition_mode": config.get("composition_mode", "plain_image"),
-            "image_motion_enabled": bool(config.get("image_motion_enabled", config.get("enableMotion", True))),
+            "image_motion_enabled": motion_enabled,
             "subtitle_enabled": config.get("subtitle_enabled", config.get("enableSubtitles", True)) is not False,
             "subtitle_style": config.get("subtitle_style", config.get("subtitleStyle")),
-            "tts_inference_mode": config.get("tts_inference_mode", config.get("ttsMode", "local")),
+            "tts_inference_mode": normalize_tts_inference_mode(
+                config.get("tts_inference_mode", config.get("ttsMode", "local"))
+            ),
             "tts_voice": config.get("tts_voice", config.get("voice")),
             "tts_speed": config.get("tts_speed", config.get("speed")),
             "minimax_model": config.get("minimax_model", config.get("minimaxModel")),
@@ -346,11 +601,20 @@ class WorkbenchJobService:
     def _workflow(self):
         return self.core.config.get("comfyui", {}).get("image", {}).get("default_workflow")
 
-    def _width(self):
-        return int(self.core.config.get("workbench", {}).get("mediaWidth", 1024))
+    def _project_media_dimension(self, project_id: str, camel_key: str, snake_key: str, default: int) -> int:
+        project = self.repository.get_project(project_id)
+        project_config = project.config if project is not None else {}
+        value = project_config.get(camel_key, project_config.get(snake_key))
+        if value is None:
+            workbench_config = self.core.config.get("workbench", {})
+            value = workbench_config.get(camel_key, workbench_config.get(snake_key, default))
+        return int(value)
 
-    def _height(self):
-        return int(self.core.config.get("workbench", {}).get("mediaHeight", 1536))
+    def _width(self, project_id: str):
+        return self._project_media_dimension(project_id, "mediaWidth", "media_width", 1024)
+
+    def _height(self, project_id: str):
+        return self._project_media_dimension(project_id, "mediaHeight", "media_height", 1536)
 
     @staticmethod
     def _new_version_id():

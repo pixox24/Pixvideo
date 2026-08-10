@@ -33,7 +33,7 @@ export const ExportDialog: React.FC<Props> = ({ project, open, onClose, onExport
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div role="dialog" aria-modal="true" className="w-full max-w-lg border border-zinc-700 bg-[#101114] p-5 shadow-2xl">
+      <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-xl border border-zinc-700 bg-[var(--color-surface-2)] p-5 shadow-2xl animate-soft-scale-in">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">导出检查</h2>

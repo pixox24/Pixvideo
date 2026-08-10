@@ -128,11 +128,11 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
   onClose,
 }) => {
   return (
-    <aside className={`${isOpen ? "flex" : "hidden"} fixed inset-y-0 right-0 z-40 bg-[#101114] border-l border-zinc-900 w-[min(400px,100vw)] lg:static lg:w-96 xl:w-[400px] flex-shrink-0 flex-col h-full overflow-y-auto`} aria-label="任务运行面板">
+    <aside className={`${isOpen ? "flex" : "hidden"} fixed inset-y-0 right-0 z-40 bg-[var(--color-surface-2)] border-l border-zinc-800/80 w-[min(400px,100vw)] lg:static lg:w-96 xl:w-[400px] flex-shrink-0 flex-col h-full overflow-y-auto`} aria-label="任务运行面板">
       {/* 1. Header Title */}
-      <div className="p-3 border-b border-zinc-900 bg-[#0c0d10] flex items-center justify-between">
-        <span className="text-xs font-semibold text-zinc-300 font-mono tracking-wider uppercase">
-          运行控制后台 / Console
+      <div className="p-3 border-b border-zinc-800/80 bg-[var(--color-surface-1)] flex items-center justify-between">
+        <span className="text-xs font-semibold text-zinc-300 tracking-wide">
+          任务进度
         </span>
         <span className="flex h-2 w-2 relative">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>

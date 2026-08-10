@@ -19,6 +19,7 @@ from pixelle_video.models.workbench import (
     Project,
     Scene,
 )
+from pixelle_video.services.continuous_tts.assemble import normalize_tts_delivery
 
 _SECRET_EXACT_KEYS = {
     "api_key",
@@ -103,6 +104,21 @@ def _number(value: Any, default: float) -> float:
         return default
 
 
+def normalize_tts_inference_mode(mode: Any) -> str:
+    """Map frontend/backend TTS labels to the TTS service mode names."""
+    value = str(mode or "local").strip().lower()
+    if value in {"edge", "local"}:
+        return "local"
+    if value in {"minimax", "mimo", "comfyui"}:
+        return value
+    return "local"
+
+
+def _looks_like_edge_voice(voice: str | None) -> bool:
+    text = str(voice or "")
+    return text.startswith("zh-") or "Neural" in text
+
+
 def build_parameter_snapshot(
     project: Project,
     config_override: Mapping[str, Any] | None = None,
@@ -113,16 +129,24 @@ def build_parameter_snapshot(
     if config_override:
         merged = _deep_merge(merged, config_override)
 
-    tts_mode = _lookup(
-        merged,
-        "ttsMode",
-        "tts_mode",
-        "tts_inference_mode",
-        ("comfyui", "tts", "inference_mode"),
-    ) or "local"
-    tts_mode = str(tts_mode)
-    default_voice = "male-qn-qingse" if tts_mode == "minimax" else "zh-CN-YunjianNeural"
-    default_speed = 1.0 if tts_mode == "minimax" else 1.2
+    tts_mode = normalize_tts_inference_mode(
+        _lookup(
+            merged,
+            "ttsMode",
+            "tts_mode",
+            "tts_inference_mode",
+            ("comfyui", "tts", "inference_mode"),
+        )
+        or "local"
+    )
+    default_voice = (
+        "male-qn-qingse"
+        if tts_mode == "minimax"
+        else "mimo_default"
+        if tts_mode == "mimo"
+        else "zh-CN-YunjianNeural"
+    )
+    default_speed = 1.0 if tts_mode in {"minimax", "mimo"} else 1.2
     voice = _lookup(
         merged,
         "voice",
@@ -130,7 +154,11 @@ def build_parameter_snapshot(
         "voice_id",
         ("comfyui", "tts", "local", "voice"),
         ("comfyui", "tts", "minimax", "voice_id"),
+        ("comfyui", "tts", "mimo", "voice_id"),
     ) or default_voice
+    # Avoid feeding MiniMax/MiMo voice IDs into Edge TTS.
+    if tts_mode == "local" and not _looks_like_edge_voice(str(voice)):
+        voice = "zh-CN-YunjianNeural"
     speed = _lookup(
         merged,
         "speed",
@@ -144,17 +172,45 @@ def build_parameter_snapshot(
         "minimax_emotion",
         ("comfyui", "tts", "minimax", "emotion"),
     )
-    tts_model = _lookup(
+    # Model must match provider. Frontend always sends both minimaxModel and mimoModel;
+    # looking up MiniMax first caused MiMo calls to receive speech-2.8-turbo.
+    if tts_mode == "mimo":
+        tts_model = _lookup(
+            merged,
+            "mimoModel",
+            "mimo_model",
+            ("comfyui", "tts", "mimo", "model"),
+        ) or "mimo-v2.5-tts"
+    elif tts_mode == "minimax":
+        tts_model = _lookup(
+            merged,
+            "minimaxModel",
+            "minimax_model",
+            ("comfyui", "tts", "minimax", "model"),
+        ) or "speech-2.8-turbo"
+    else:
+        tts_model = None
+    mimo_style = _lookup(
         merged,
-        "minimaxModel",
-        "minimax_model",
-        ("comfyui", "tts", "minimax", "model"),
+        "mimoStyle",
+        "mimo_style",
+        ("comfyui", "tts", "mimo", "style"),
     )
     tts_workflow = _lookup(
         merged,
         "ttsWorkflow",
         "tts_workflow",
         ("comfyui", "tts", "comfyui", "default_workflow"),
+    )
+    # Phase-1 recommended default: continuous multi-scene synth + split.
+    tts_delivery = normalize_tts_delivery(
+        _lookup(
+            merged,
+            "ttsDelivery",
+            "tts_delivery",
+            ("comfyui", "tts", "delivery"),
+        )
+        or "continuous"
     )
 
     image_workflow = _lookup(
@@ -185,9 +241,11 @@ def build_parameter_snapshot(
             "provider": tts_mode,
             "voice": str(voice),
             "speed": _number(speed, default_speed),
-            "emotion": str(emotion).strip() if emotion is not None else None,
-            "model": str(tts_model).strip() if tts_model is not None else None,
-            "workflow": str(tts_workflow).strip() if tts_workflow is not None else None,
+            "emotion": str(emotion).strip() if emotion not in (None, "") else None,
+            "model": str(tts_model).strip() if tts_model not in (None, "") else None,
+            "style": str(mimo_style).strip() if mimo_style not in (None, "") else None,
+            "workflow": str(tts_workflow).strip() if tts_workflow not in (None, "") else None,
+            "delivery": tts_delivery,
         },
         "image": {
             "provider": str(_lookup(merged, "imageProvider", "image_provider") or "comfyui"),
@@ -256,7 +314,13 @@ class ProjectGenerationPlanner:
                 raise ValueError(f"scene not found: {sorted(unknown)[0]}")
             selected = [scene for scene in selected if scene.scene_id in requested]
 
+        delivery = normalize_tts_delivery(
+            (parameter_snapshot.get("tts") or {}).get("delivery")
+            if isinstance(parameter_snapshot.get("tts"), Mapping)
+            else "continuous"
+        )
         items = []
+        freshness_by_scene: dict[str, _SceneFreshness] = {}
         for scene in selected:
             narration_fingerprint = compute_narration_fingerprint(
                 scene.narration,
@@ -272,9 +336,32 @@ class ProjectGenerationPlanner:
                 narration_fingerprint,
                 image_fingerprint,
             )
+            freshness_by_scene[scene.scene_id] = freshness
+            items.append(
+                {
+                    "scene": scene,
+                    "narration_fingerprint": narration_fingerprint,
+                    "image_fingerprint": image_fingerprint,
+                    "freshness": freshness,
+                }
+            )
+
+        # Continuous delivery + multi-scene: default re-synth whole track when any
+        # narration is stale so every cut comes from the same synthesis pass.
+        force_full_tts = False
+        if delivery == "continuous" and len(selected) > 1:
+            force_full_tts = any(
+                not entry["freshness"].audio_ready for entry in items
+            )
+
+        planned: list[GenerationRunItem] = []
+        for entry in items:
+            scene = entry["scene"]
+            freshness = entry["freshness"]
+            audio_ready = freshness.audio_ready and not force_full_tts
             tts_status = (
                 GenerationPhase.SKIPPED
-                if freshness.audio_ready
+                if audio_ready
                 else GenerationPhase.PENDING
             )
             image_status = (
@@ -282,33 +369,35 @@ class ProjectGenerationPlanner:
                 if freshness.image_ready
                 else GenerationPhase.PENDING
             )
-            if freshness.audio_ready and freshness.image_ready:
+            if audio_ready and freshness.image_ready:
                 status = GenerationRunItemStatus.SKIPPED
                 skip_reason = "up_to_date"
             else:
                 status = GenerationRunItemStatus.QUEUED
                 ready_parts = []
-                if freshness.audio_ready:
+                if audio_ready:
                     ready_parts.append("audio_up_to_date")
+                elif force_full_tts and freshness.audio_ready:
+                    ready_parts.append("audio_resync_continuous")
                 if freshness.image_ready:
                     ready_parts.append("image_up_to_date")
                 skip_reason = ",".join(ready_parts) or None
-            items.append(
+            planned.append(
                 GenerationRunItem(
                     run_id="",
                     scene_id=scene.scene_id,
                     position=scene.position,
                     narration_snapshot=scene.narration,
                     prompt_snapshot=scene.visual_prompt,
-                    narration_fingerprint=narration_fingerprint,
-                    image_fingerprint=image_fingerprint,
+                    narration_fingerprint=entry["narration_fingerprint"],
+                    image_fingerprint=entry["image_fingerprint"],
                     tts_status=tts_status,
                     image_status=image_status,
                     status=status,
                     skip_reason=skip_reason,
                 )
             )
-        return items
+        return planned
 
     def plan_run(
         self,

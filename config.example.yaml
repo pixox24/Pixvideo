@@ -41,7 +41,7 @@ comfyui:
   
   # TTS-specific configuration
   tts:
-    inference_mode: local  # Options: local, comfyui, minimax
+    inference_mode: local  # Options: local, comfyui, minimax, mimo
     default_workflow: selfhost/tts_edge.json  # TTS workflow to use
     local:
       voice: zh-CN-YunjianNeural
@@ -56,6 +56,11 @@ comfyui:
       vol: 1.0
       pitch: 0
       emotion: null
+    mimo:
+      api_key: ""  # MiMo API key (or set MIMO_API_KEY environment variable)
+      model: mimo-v2.5-tts
+      voice_id: mimo_default
+      style: ""  # Natural-language style instruction (optional)
   
   # Image-specific configuration
   image:

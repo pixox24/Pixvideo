@@ -19,6 +19,7 @@ from pixelle_video.services.workbench_generation import (
     canonical_json,
     compute_image_fingerprint,
     compute_narration_fingerprint,
+    normalize_tts_inference_mode,
 )
 from pixelle_video.services.workbench_media import WorkbenchMediaStore
 from pixelle_video.services.workbench_repository import WorkbenchRepository
@@ -72,14 +73,13 @@ def test_parameter_snapshot_merges_settings_and_redacts_secrets():
         config_override={"speed": 1.2, "comfyui": {"runninghub_api_key": "runtime-secret"}},
     )
 
-    assert snapshot["tts"] == {
-        "provider": "minimax",
-        "voice": "voice-a",
-        "speed": 1.2,
-        "emotion": None,
-        "model": "model-a",
-        "workflow": None,
-    }
+    assert snapshot["tts"]["provider"] == "minimax"
+    assert snapshot["tts"]["voice"] == "voice-a"
+    assert snapshot["tts"]["speed"] == 1.2
+    assert snapshot["tts"]["emotion"] is None
+    assert snapshot["tts"]["model"] == "model-a"
+    assert snapshot["tts"]["workflow"] is None
+    assert snapshot["tts"].get("style") is None
     assert snapshot["image"]["width"] == 1280
     assert snapshot["image"]["height"] == 720
     assert snapshot["image"]["stylePrefix"] == "cinematic"
@@ -87,6 +87,70 @@ def test_parameter_snapshot_merges_settings_and_redacts_secrets():
     assert snapshot["config"]["comfyui"]["runninghub_api_key"] == "***"
     assert "project-secret" not in json.dumps(snapshot, ensure_ascii=False)
     assert "runtime-secret" not in json.dumps(snapshot, ensure_ascii=False)
+
+
+def test_normalize_tts_mode_maps_edge_to_local():
+    assert normalize_tts_inference_mode("edge") == "local"
+    assert normalize_tts_inference_mode("local") == "local"
+    assert normalize_tts_inference_mode("minimax") == "minimax"
+    assert normalize_tts_inference_mode("unknown") == "local"
+
+
+def test_parameter_snapshot_defaults_continuous_delivery():
+    snapshot = build_parameter_snapshot(Project("P", {}))
+    assert snapshot["tts"]["delivery"] == "continuous"
+
+
+def test_continuous_delivery_forces_full_tts_resync_when_any_stale(tmp_path):
+    repository, media_store, project, scenes = _setup(tmp_path, scene_count=2)
+    planner = ProjectGenerationPlanner(repository, media_store)
+    snapshot = build_parameter_snapshot(project)
+    # Mark scene-0 audio ready; scene-1 stale → continuous re-synth whole.
+    ready_fp = compute_narration_fingerprint(scenes[0].narration, snapshot)
+    audio_rel = f"assets/scenes/{scenes[0].scene_id}/audio/ready.mp3"
+    path = media_store.resolve(project.project_id, audio_rel)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"audio")
+    repository.update_scene(
+        scenes[0].scene_id,
+        audio_relative_path=audio_rel,
+        audio_fingerprint=ready_fp,
+    )
+    items = planner.plan_items(
+        repository.get_project(project.project_id),
+        repository.list_project_scenes(project.project_id),
+        snapshot,
+    )
+    assert all(item.tts_status == GenerationPhase.PENDING for item in items)
+    assert "audio_resync_continuous" in (items[0].skip_reason or "")
+
+
+def test_build_parameter_snapshot_maps_frontend_edge_mode():
+    project = Project(
+        "edge project",
+        {"ttsMode": "edge", "voice": "zh-CN-XiaoxiaoNeural", "speed": 1.0},
+    )
+    snapshot = build_parameter_snapshot(project)
+    assert snapshot["tts"]["provider"] == "local"
+    assert snapshot["tts"]["voice"] == "zh-CN-XiaoxiaoNeural"
+
+
+def test_build_parameter_snapshot_mimo_does_not_use_minimax_model():
+    project = Project(
+        "mimo project",
+        {
+            "ttsMode": "mimo",
+            "voice": "冰糖",
+            "minimaxModel": "speech-2.8-turbo",
+            "mimoModel": "mimo-v2.5-tts",
+            "mimoStyle": "轻快",
+        },
+    )
+    snapshot = build_parameter_snapshot(project)
+    assert snapshot["tts"]["provider"] == "mimo"
+    assert snapshot["tts"]["model"] == "mimo-v2.5-tts"
+    assert snapshot["tts"]["style"] == "轻快"
+    assert snapshot["tts"]["model"] != "speech-2.8-turbo"
 
 
 def test_narration_and_image_fingerprints_are_independent():

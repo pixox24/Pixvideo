@@ -61,7 +61,24 @@ async def _wait_for_terminal(repository, run_id):
 
 @pytest.mark.asyncio
 async def test_serial_tts_then_image_and_duration(tmp_path):
+    """Default continuous delivery: one TTS pass, then per-scene images."""
     provider, _, repository, _, service, scenes = _setup(tmp_path)
+    run = await service.start("project-1")
+    result = await _wait_for_terminal(repository, run.run_id)
+
+    assert result.status == GenerationRunStatus.COMPLETED
+    assert [(call.operation, call.scene_id) for call in provider.completed_calls] == [
+        ("tts", "scene-0"),
+        ("image", "scene-0"),
+        ("image", "scene-1"),
+    ]
+    assert repository.get_scene(scenes[0].scene_id).duration_seconds == 1.5
+
+
+@pytest.mark.asyncio
+async def test_per_scene_tts_when_delivery_disabled(tmp_path):
+    provider, _, repository, _, service, scenes = _setup(tmp_path)
+    repository.update_project("project-1", config={"ttsDelivery": "per_scene"})
     run = await service.start("project-1")
     result = await _wait_for_terminal(repository, run.run_id)
 

@@ -122,7 +122,7 @@ class VideoGenerateRequest(BaseModel):
     n_scenes: Optional[int] = Field(5, ge=1, le=100, description="Number of scenes (only used in 'generate' mode, ignored in 'fixed' mode)")
     
     # === TTS Parameters ===
-    tts_inference_mode: Literal["local", "comfyui", "minimax"] = Field(
+    tts_inference_mode: Literal["local", "comfyui", "minimax", "mimo"] = Field(
         "local",
         description="TTS inference mode"
     )
@@ -142,6 +142,8 @@ class VideoGenerateRequest(BaseModel):
     )
     minimax_model: Optional[str] = Field(None, description="MiniMax TTS model")
     minimax_emotion: Optional[str] = Field(None, description="MiniMax TTS emotion")
+    mimo_model: Optional[str] = Field(None, description="MiMo TTS model")
+    mimo_style: Optional[str] = Field(None, description="MiMo natural-language style instruction (optional)")
     
     # === LLM Parameters ===
     min_narration_words: int = Field(5, ge=1, le=100, description="Min narration words")

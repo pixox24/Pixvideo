@@ -667,7 +667,7 @@ class MediaService(ComfyBaseService):
             os.getenv("PIXELLE_TEST_IMAGE_LIBRARY", "").strip()
             or Path(__file__).resolve().parents[2] / "素材库"
         ).expanduser().resolve()
-        ratio_dir = library / ("16:9" if not height or not width or width >= height else "9:16")
+        ratio_dir = library / ("16x9" if not height or not width or width >= height else "9x16")
         images = sorted(
             (path for path in ratio_dir.iterdir() if path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}),
             key=lambda path: path.name.casefold(),

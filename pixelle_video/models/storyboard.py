@@ -40,13 +40,15 @@ class StoryboardConfig:
     video_fps: int = 30                        # Frame rate
 
     # Audio parameters
-    tts_inference_mode: str = "local"          # TTS inference mode: "local", "comfyui", or "minimax"
-    voice_id: Optional[str] = None             # Voice ID (for local: Edge TTS voice ID; for minimax: MiniMax voice_id)
+    tts_inference_mode: str = "local"          # TTS inference mode: "local", "comfyui", "minimax", or "mimo"
+    voice_id: Optional[str] = None             # Voice ID (for local: Edge TTS voice ID; for minimax/mimo: voice_id)
     tts_workflow: Optional[str] = None         # TTS workflow filename (for ComfyUI mode, None = use default)
     tts_speed: Optional[float] = None          # TTS speed multiplier (0.5-2.0, 1.0 = normal)
     ref_audio: Optional[str] = None            # Reference audio for voice cloning (ComfyUI mode only)
     minimax_model: Optional[str] = None        # MiniMax model name (MiniMax mode only)
     minimax_emotion: Optional[str] = None      # MiniMax emotion override (MiniMax mode only)
+    mimo_model: Optional[str] = None           # MiMo model name (MiMo mode only)
+    mimo_style: Optional[str] = None           # MiMo natural-language style instruction (MiMo mode only)
 
     # Media workflow
     media_workflow: Optional[str] = None       # Media workflow filename (image or video, None = use default)

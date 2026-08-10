@@ -6,26 +6,36 @@
   --font-display: "Plus Jakarta Sans", "Inter", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* Custom Amber theme variables */
+  /* Brand */
   --color-brand-50: #fffbeb;
   --color-brand-100: #fef3c7;
   --color-brand-500: #f59e0b;
   --color-brand-600: #d97706;
   --color-brand-700: #b45309;
 
+  /* Surfaces — slightly lifted for creative-tool feel */
+  --color-surface-0: #08090c;
+  --color-surface-1: #0d0e12;
+  --color-surface-2: #12141a;
+  --color-surface-3: #1a1c24;
+  --color-surface-4: #22252e;
+
+  --radius-card: 0.75rem;
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+
   --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 /* Custom fine-grained scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: #0f1013;
 }
 ::-webkit-scrollbar-thumb {
-  background: #272a31;
+  background: #2a2d36;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -33,12 +43,110 @@
 }
 
 body {
-  background-color: #07080a;
+  background-color: var(--color-surface-0);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 158, 11, 0.06), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(99, 102, 241, 0.04), transparent);
+  background-attachment: fixed;
   color: #f3f4f6;
   font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 :focus-visible {
   outline: 2px solid #f59e0b;
   outline-offset: 2px;
+}
+
+/* Prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Typography helpers */
+.text-label {
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  color: #a1a1aa;
+}
+
+.text-caption {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: #71717a;
+}
+
+/* Card surface utility */
+.ui-card {
+  border-radius: var(--radius-card);
+  border: 1px solid rgb(39 39 42 / 0.9);
+  background: var(--color-surface-2);
+  box-shadow: var(--shadow-card);
+}
+
+.ui-panel {
+  border-radius: 0.5rem;
+  border: 1px solid rgb(39 39 42 / 0.8);
+  background: var(--color-surface-3);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.22s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.18s ease-out;
+}
+
+@keyframes soft-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-soft-scale-in {
+  animation: soft-scale-in 0.2s ease-out;
+}
+
+/* Kbd chip for shortcut hints */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgb(63 63 70);
+  background: rgb(24 24 27);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: #d4d4d8;
 }

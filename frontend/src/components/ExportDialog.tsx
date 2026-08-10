@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { AlertTriangle, Download, X } from "lucide-react";
 import { ExportSubmission, Project } from "../types";
-import { effectiveSceneDuration } from "../lib/workbenchState";
+import { buildTimelineLayout, getTimelineDuration } from "../lib/workbenchState";
 
 interface Props {
   project: Project;
@@ -27,7 +27,7 @@ export const ExportDialog: React.FC<Props> = ({ project, open, onClose, onExport
   );
   if (!open) return null;
   const canSubmit = blocking.length === 0 || (allowIncomplete && confirmed);
-  const totalDuration = project.scenes.reduce((total, scene) => total + effectiveSceneDuration(scene.durationSeconds, scene.manualHoldSeconds), 0);
+  const totalDuration = getTimelineDuration(buildTimelineLayout(project.scenes));
   const bgm = String(project.config.bgm || project.config.bgm_path || "bgm-none");
   const bgmVolume = Number(project.config.bgmVolume || project.config.bgm_volume || 30);
 

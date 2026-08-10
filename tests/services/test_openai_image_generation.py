@@ -25,10 +25,21 @@ async def test_media_service_uses_existing_local_image_by_default(monkeypatch):
     )
 
     service = MediaService({}, core=DummyCore())
-    result = await service(prompt="must stay offline")
+    result = await service(prompt="must stay offline", width=2560, height=1440, scene_id="scene-1")
 
     assert result.media_type == "image"
-    assert result.url == str((Path(__file__).parents[2] / "resources" / "example.png").resolve())
+    assert Path(result.url).parent == (Path(__file__).parents[2] / "素材库" / "16:9").resolve()
+
+
+@pytest.mark.asyncio
+async def test_media_service_selects_portrait_storyboard_material(monkeypatch):
+    monkeypatch.delenv("PIXELLE_USE_REAL_IMAGE_API")
+    monkeypatch.delenv("PIXELLE_TEST_IMAGE_PATH", raising=False)
+
+    service = MediaService({}, core=DummyCore())
+    result = await service(prompt="portrait", width=1440, height=2560, scene_id="scene-2")
+
+    assert Path(result.url).parent == (Path(__file__).parents[2] / "素材库" / "9:16").resolve()
 
 
 @pytest.mark.asyncio

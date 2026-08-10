@@ -149,16 +149,9 @@ async def generate_narrations_from_topic(
         max_words=max_words
     )
     
-    response = await llm_service(
-        prompt=prompt,
-        temperature=0.8,
-        max_tokens=2000
-    )
-    
-    logger.debug(f"LLM response: {response[:200]}...")
-    
-    # Parse JSON
-    result = _parse_json(response)
+    result = await _request_narration_json(llm_service, prompt, n_scenes)
+    if isinstance(result, list):
+        result = {"narrations": result}
     
     if "narrations" not in result:
         raise ValueError("Invalid response format: missing 'narrations' key")
@@ -208,14 +201,9 @@ async def generate_narrations_from_content(
         max_words=max_words
     )
     
-    response = await llm_service(
-        prompt=prompt,
-        temperature=0.8,
-        max_tokens=2000
-    )
-    
-    # Parse JSON
-    result = _parse_json(response)
+    result = await _request_narration_json(llm_service, prompt, n_scenes)
+    if isinstance(result, list):
+        result = {"narrations": result}
     
     if "narrations" not in result:
         raise ValueError("Invalid response format: missing 'narrations' key")
@@ -312,6 +300,9 @@ async def generate_highlight_keywords(
     llm_service,
     text: str,
     max_keywords: int = 8,
+    style: str = "balanced",
+    density: Optional[str] = None,
+    avoid_words: Optional[List[str]] = None,
 ) -> List[dict]:
     """
     Extract highlight keywords (with optional colors) from narration text via LLM.
@@ -323,16 +314,32 @@ async def generate_highlight_keywords(
     if not cleaned:
         return []
 
-    max_keywords = max(1, min(24, int(max_keywords or 8)))
+    max_keywords = _keyword_limit(max_keywords, density)
+    avoid = _normalize_keyword_words(avoid_words)
+    style_description = {
+        "balanced": "均衡选择概念、卖点、情绪和数字信息",
+        "concept": "优先选择名词、方法、结论和关键概念",
+        "selling_point": "优先选择功能、利益点和差异化卖点",
+        "emotion": "优先选择冲突、态度、情绪和记忆点",
+        "numeric": "优先选择数字、比例、时间、结果和指标",
+        "action": "优先选择建议、动作、结论和行动词",
+    }.get(str(style), "均衡选择概念、卖点、情绪和数字信息")
+    density_description = {
+        "low": "少量高价值关键词，保持字幕画面干净",
+        "standard": "适中的关键词数量，适合普通短视频口播",
+        "high": "相对密集的关键词，适合卖点或信息密集文案",
+    }.get(str(density), "按请求上限选择关键词")
+    avoid_text = "、".join(sorted(avoid)) if avoid else "无"
     prompt = f"""你是短视频字幕高亮词提取助手。从下面旁白中提取最值得高亮的关键词/短语。
 
 要求：
 1. 只输出 JSON 数组，不要 markdown，不要解释
 2. 每项格式：{{"word":"关键词","color":"#RRGGBB"}}
-3. 最多 {max_keywords} 个词；优先专有名词、卖点、情绪词、数字亮点
-4. 关键词必须原样出现在原文中（可少数字）
+3. 最多 {max_keywords} 个词；{density_description}；{style_description}
+4. 关键词必须完整、原样出现在原文中
 5. 颜色用醒目高饱和十六进制色，彼此尽量区分
 6. 不要标点，不要整句
+7. 不要返回这些已选或已展示的词：{avoid_text}
 
 旁白：
 {cleaned[:2000]}
@@ -350,7 +357,7 @@ async def generate_highlight_keywords(
             raise ValueError("keywords payload is not a list")
     except Exception as exc:
         logger.warning(f"LLM keyword extraction failed, using heuristic: {exc}")
-        return _heuristic_keywords(cleaned, max_keywords)
+        return _heuristic_keywords(cleaned, max_keywords, avoid)
 
     results: List[dict] = []
     seen: set[str] = set()
@@ -369,6 +376,8 @@ async def generate_highlight_keywords(
         if word not in cleaned and word.casefold() not in cleaned.casefold():
             continue
         key = word.casefold()
+        if key in avoid:
+            continue
         if key in seen:
             continue
         if not re.fullmatch(r"#?[0-9a-fA-F]{6}", color):
@@ -381,12 +390,12 @@ async def generate_highlight_keywords(
             break
 
     if not results:
-        return _heuristic_keywords(cleaned, max_keywords)
+        return _heuristic_keywords(cleaned, max_keywords, avoid)
     logger.info(f"Extracted {len(results)} highlight keywords")
     return results
 
 
-def _heuristic_keywords(text: str, max_keywords: int) -> List[dict]:
+def _heuristic_keywords(text: str, max_keywords: int, avoid_words: Optional[set[str] | List[str]] = None) -> List[dict]:
     """Lightweight fallback: pick mid-length CJK/English tokens from the text."""
     # English-like tokens
     tokens = re.findall(r"[A-Za-z][A-Za-z0-9\-]{2,16}", text)
@@ -395,13 +404,14 @@ def _heuristic_keywords(text: str, max_keywords: int) -> List[dict]:
     for size in (4, 3, 2):
         for index in range(0, max(0, len(cjk_chars) - size + 1)):
             tokens.append("".join(cjk_chars[index : index + size]))
+    avoid = _normalize_keyword_words(avoid_words)
     stop = {
         "我们", "你们", "他们", "这个", "那个", "一个", "可以", "已经",
         "因为", "所以", "如果", "什么", "怎么", "成为", "进行", "以及",
     }
     # Prefer rarer mid-length phrases that appear once.
     ranked = sorted(
-        {t for t in tokens if t not in stop and 2 <= len(t) <= 6},
+        {t for t in tokens if t.casefold() not in stop and t.casefold() not in avoid and 2 <= len(t) <= 6},
         key=lambda t: (-(3 if 2 <= len(t) <= 4 else 1), text.find(t)),
     )
     results: List[dict] = []
@@ -415,6 +425,26 @@ def _heuristic_keywords(text: str, max_keywords: int) -> List[dict]:
         if len(results) >= max_keywords:
             break
     return results
+
+
+def _normalize_keyword_words(words: Optional[List[str] | set[str]]) -> set[str]:
+    return {
+        str(word).strip().casefold()
+        for word in list(words or [])[:48]
+        if str(word).strip() and len(str(word).strip()) <= 20
+    }
+
+
+def _keyword_limit(max_keywords: int, density: Optional[str]) -> int:
+    requested = max(1, min(24, int(max_keywords or 8)))
+    if density is None:
+        return requested
+    density_cap = {
+        "low": 4,
+        "standard": 8,
+        "high": 12,
+    }.get(str(density), 8)
+    return min(requested, density_cap)
 
 
 async def generate_image_prompts(
@@ -612,7 +642,29 @@ async def generate_video_prompts(
     return all_prompts
 
 
-def _parse_json(text: str) -> dict:
+async def _request_narration_json(llm_service, prompt: str, n_scenes: int):
+    """Request narration JSON, retrying once when a provider omits final content."""
+    retry_prompt = (
+        f"{prompt}\n\n上一次响应未提供可解析的最终结果。请立即输出 {n_scenes} 条旁白，"
+        '只能输出 JSON 对象：{"narrations":["..."]}，不要思考过程、Markdown 或解释。'
+    )
+    last_error = None
+    for attempt, request_prompt in enumerate((prompt, retry_prompt)):
+        response = await llm_service(
+            prompt=request_prompt,
+            temperature=0.8 if attempt == 0 else 0.2,
+            max_tokens=2000 if attempt == 0 else 4000,
+        )
+        raw = str(response or "").strip()
+        logger.debug("LLM narration response (attempt %s, %s chars): %s", attempt + 1, len(raw), raw[:200])
+        try:
+            return _parse_json(raw)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+    raise ValueError("LLM 未返回可解析的旁白 JSON，请检查模型配置或稍后重试") from last_error
+
+
+def _parse_json(text: str):
     """
     Parse JSON from text, with fallback to extract JSON from markdown code blocks
     
@@ -625,29 +677,22 @@ def _parse_json(text: str) -> dict:
     Raises:
         json.JSONDecodeError: If no valid JSON found
     """
-    # Try direct parsing first
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    
-    # Try to extract JSON from markdown code block
-    json_pattern = r'```(?:json)?\s*([\s\S]+?)\s*```'
-    match = re.search(json_pattern, text, re.DOTALL)
-    if match:
+    raw = str(text or "").strip()
+    candidates = [raw]
+    candidates.extend(re.findall(r"```(?:json)?\s*([\s\S]+?)\s*```", raw, re.IGNORECASE))
+    decoder = json.JSONDecoder()
+    for candidate in candidates:
         try:
-            return json.loads(match.group(1))
+            return json.loads(candidate)
         except json.JSONDecodeError:
             pass
-    
-    # Try to find any JSON object in the text
-    json_pattern = r'\{[^{}]*(?:"narrations"|"image_prompts")\s*:\s*\[[^\]]*\][^{}]*\}'
-    match = re.search(json_pattern, text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError:
-            pass
-    
-    # If all fails, raise error
-    raise json.JSONDecodeError("No valid JSON found", text, 0)
+        for index, char in enumerate(candidate):
+            if char not in "[{":
+                continue
+            try:
+                value, _ = decoder.raw_decode(candidate[index:])
+                if isinstance(value, (dict, list)):
+                    return value
+            except json.JSONDecodeError:
+                continue
+    raise json.JSONDecodeError("No valid JSON found", raw, 0)

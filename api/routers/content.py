@@ -92,6 +92,9 @@ async def extract_keywords(
             llm_service=pixelle_video.llm,
             text=request.text,
             max_keywords=request.max_keywords,
+            style=request.style,
+            density=request.density,
+            avoid_words=request.avoid_words,
         )
         return KeywordExtractResponse(keywords=keywords)
     except Exception as e:
@@ -167,4 +170,3 @@ async def generate_title_endpoint(
     except Exception as e:
         logger.error(f"Title generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

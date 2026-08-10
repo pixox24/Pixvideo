@@ -2,6 +2,7 @@ import pytest
 
 from pixelle_video.prompts import build_content_narration_prompt, build_topic_narration_prompt
 from pixelle_video.utils.content_generators import (
+    _parse_json,
     clean_narration_text,
     generate_narrations_from_topic,
     split_narration_script,
@@ -40,6 +41,27 @@ async def test_generated_topic_narrations_are_cleaned_before_return():
     )
 
     assert narrations == ["第一句旁白", "第二句旁白"]
+
+
+@pytest.mark.asyncio
+async def test_generated_topic_narrations_retries_when_provider_returns_empty_content():
+    responses = iter(["", '{"narrations": ["第一句旁白", "第二句旁白"]}'])
+
+    async def fake_llm_service(**kwargs):
+        return next(responses)
+
+    narrations = await generate_narrations_from_topic(
+        fake_llm_service,
+        topic="表达训练",
+        n_scenes=2,
+    )
+
+    assert narrations == ["第一句旁白", "第二句旁白"]
+
+
+def test_parse_json_accepts_arrays_and_nested_markdown_payloads():
+    assert _parse_json('```json\n["第一段", {"nested": true}]\n```') == ["第一段", {"nested": True}]
+    assert _parse_json('模型回复：{"narrations": ["第一段"]}') == {"narrations": ["第一段"]}
 
 
 @pytest.mark.asyncio

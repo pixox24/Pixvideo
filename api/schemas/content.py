@@ -14,7 +14,7 @@
 Content generation API schemas
 """
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -99,6 +99,17 @@ class KeywordExtractRequest(BaseModel):
     """Highlight keyword extraction request"""
     text: str = Field(..., min_length=1, description="Narration or script text")
     max_keywords: int = Field(8, ge=1, le=24, description="Maximum keywords to return")
+    style: Literal["balanced", "concept", "selling_point", "emotion", "numeric", "action"] = Field(
+        "balanced", description="Keyword extraction preference"
+    )
+    density: Optional[Literal["low", "standard", "high"]] = Field(
+        None, description="Keyword density preference; omitted requests keep the legacy limit"
+    )
+    avoid_words: List[str] = Field(
+        default_factory=list,
+        max_length=48,
+        description="Words to avoid in new suggestions",
+    )
 
 
 class KeywordItem(BaseModel):
@@ -118,4 +129,3 @@ class TitleGenerateResponse(BaseModel):
     success: bool = True
     message: str = "Success"
     title: str = Field(..., description="Generated title")
-

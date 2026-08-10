@@ -91,3 +91,55 @@ async def test_timeline_persists_order_and_hold_without_shortening_audio(tmp_pat
 def test_timeline_rejects_negative_hold():
     with pytest.raises(Exception):
         TimelineUpdateRequest(sceneIds=["s1"], holds={"s1": -1})
+
+
+@pytest.mark.asyncio
+async def test_timeline_hold_edits_never_accumulate(tmp_path):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scene = Scene(project.project_id, 0, "旁白", "画面", duration_seconds=4)
+    core.workbench_repository.create_project(project, [scene])
+
+    await update_timeline(
+        project.project_id,
+        TimelineUpdateRequest(sceneIds=[scene.scene_id], holds={scene.scene_id: 2}),
+        core,
+    )
+    updated = core.workbench_repository.get_scene(scene.scene_id)
+    assert updated.duration_seconds == 6
+
+    await update_timeline(
+        project.project_id,
+        TimelineUpdateRequest(sceneIds=[scene.scene_id], holds={scene.scene_id: 3}),
+        core,
+    )
+    updated = core.workbench_repository.get_scene(scene.scene_id)
+    assert updated.duration_seconds == 7
+
+    await update_timeline(
+        project.project_id,
+        TimelineUpdateRequest(sceneIds=[scene.scene_id], holds={scene.scene_id: 0}),
+        core,
+    )
+    updated = core.workbench_repository.get_scene(scene.scene_id)
+    assert updated.duration_seconds == 4
+    assert updated.manual_hold_seconds == 0
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_timeline_rejects_holds_for_unknown_scene(tmp_path):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scene = Scene(project.project_id, 0, "旁白", "画面", duration_seconds=2)
+    core.workbench_repository.create_project(project, [scene])
+
+    with pytest.raises(HTTPException) as error:
+        await update_timeline(
+            project.project_id,
+            TimelineUpdateRequest(sceneIds=[scene.scene_id], holds={"unknown-scene": 1}),
+            core,
+        )
+
+    assert error.value.status_code == 422
+    core.workbench_repository.close()

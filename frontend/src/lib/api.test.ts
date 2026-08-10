@@ -1,6 +1,39 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mapApiTask, mapHistoryTask, submitVideoTask } from "./api";
+import { extractHighlightKeywords, mapApiTask, mapHistoryTask, submitVideoTask } from "./api";
+
+test("extractHighlightKeywords forwards style, density and avoid words", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestBody: any;
+
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify({ keywords: [{ word: "核心卖点", color: "#FF0000" }] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const keywords = await extractHighlightKeywords("产品的核心卖点", {
+      maxKeywords: 12,
+      style: "selling_point",
+      density: "high",
+      avoidWords: ["产品"],
+    });
+    assert.deepEqual(keywords, [{ word: "核心卖点", color: "#FF0000" }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(requestBody, {
+    text: "产品的核心卖点",
+    max_keywords: 12,
+    style: "selling_point",
+    density: "high",
+    avoid_words: ["产品"],
+  });
+});
 
 test("submitVideoTask clamps subtitle numbers to backend limits", async () => {
   const originalFetch = globalThis.fetch;

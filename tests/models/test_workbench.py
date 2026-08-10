@@ -1,9 +1,11 @@
 from pixelle_video.models.workbench import (
+    DEFAULT_EMPTY_SCENE_SECONDS,
     AssetSource,
     AssetVersion,
     GenerationKind,
     Project,
     Scene,
+    effective_scene_duration,
 )
 
 
@@ -31,6 +33,13 @@ def test_asset_version_keeps_prompt_snapshot_and_source():
 
 def test_generation_kind_values_are_stable_for_task_metadata():
     assert {item.value for item in GenerationKind} == {"scene", "image", "tts", "export"}
+
+
+def test_empty_scene_duration_matches_frontend_timeline_default():
+    assert DEFAULT_EMPTY_SCENE_SECONDS == 3.0
+    assert effective_scene_duration(0, 0) == DEFAULT_EMPTY_SCENE_SECONDS
+    assert effective_scene_duration(0, 1.25) == 1.25
+    assert effective_scene_duration(2.5, 1.25) == 3.75
 
 
 def test_project_and_scene_ids_are_generated_when_omitted():

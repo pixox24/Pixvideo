@@ -29,7 +29,12 @@ import {
 } from "lucide-react";
 import { Preset, QuickCreateInput, SubtitleStyle, WorkbenchResources } from "../types";
 import { VOICE_OPTIONS } from "../data";
-import { extractHighlightKeywords, formatApiErrorValue } from "../lib/api";
+import {
+  extractHighlightKeywords,
+  formatApiErrorValue,
+  type KeywordExtractionDensity,
+  type KeywordExtractionStyle,
+} from "../lib/api";
 
 interface QuickCreateProps {
   onGenerateTask: (taskInput: any) => Promise<string | null>;
@@ -51,6 +56,39 @@ interface QuickCreateProps {
 
 const DEFAULT_PREVIEW_TTS_TEXT = "这是一段 TTS 试听文案，用来检查音色、语速和发音效果。";
 const QUICK_CREATE_DRAFT_KEY = "pixvideo.quick-create.draft.v1";
+
+type KeywordStatus = "idle" | "loading" | "ready" | "stale" | "error";
+type KeywordSuggestion = { word: string; color: string };
+type KeywordPreferences = {
+  autoExtract: boolean;
+  style: KeywordExtractionStyle;
+  density: KeywordExtractionDensity;
+};
+
+const DEFAULT_KEYWORD_PREFERENCES: KeywordPreferences = {
+  autoExtract: true,
+  style: "balanced",
+  density: "standard",
+};
+
+const KEYWORD_DENSITY_LIMIT: Record<KeywordExtractionDensity, number> = {
+  low: 4,
+  standard: 8,
+  high: 12,
+};
+
+const normalizeKeywordPreferences = (value: unknown): KeywordPreferences => {
+  const input = value && typeof value === "object" ? value as Partial<KeywordPreferences> : {};
+  return {
+    autoExtract: typeof input.autoExtract === "boolean" ? input.autoExtract : true,
+    style: ["balanced", "concept", "selling_point", "emotion", "numeric", "action"].includes(String(input.style))
+      ? input.style as KeywordExtractionStyle
+      : "balanced",
+    density: ["low", "standard", "high"].includes(String(input.density))
+      ? input.density as KeywordExtractionDensity
+      : "standard",
+  };
+};
 
 const QUICK_CREATE_STAGES = [
   { id: "content", label: "内容", anchor: "stage-content" },
@@ -124,21 +162,21 @@ const clampNumber = (value: unknown, fallback: number, min: number, max: number)
 };
 
 const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
-  mode: "ass",
-  preset: "short-video-bold",
+  mode: "hyperframes",
+  preset: "caption-box",
   fontFamily: "",
   fontPath: "",
-  fontSize: 52,
+  fontSize: 80,
   primaryColor: "#FFFFFF",
-  accentColor: "#FFD43B",
+  accentColor: "#F97316",
   outlineColor: "#000000",
   backColor: "#000000",
-  outlineWidth: 3,
+  outlineWidth: 0,
   shadow: 0,
-  marginV: 120,
+  marginV: 200,
   alignment: 2,
-  maxCharsPerLine: 14,
-  maxLines: 2,
+  maxCharsPerLine: 20,
+  maxLines: 1,
   animation: "fade",
   segmentMode: "sentence",
   highlightWords: [],
@@ -227,11 +265,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [aiTopic, setAiTopic] = useState("探索未来世界的智能机器人生活碎片");
   const [aiSceneCount, setAiSceneCount] = useState(5);
   const [aiLoading, setAiLoading] = useState(false);
-  const [copyDraftMode, setCopyDraftMode] = useState<"full" | "segmented">("full");
+  const [copyDraftMode, setCopyDraftMode] = useState<"full" | "segmented">("segmented");
   const [copyDraft, setCopyDraft] = useState("");
   const [copyDraftLoading, setCopyDraftLoading] = useState(false);
-  const [copyCharCount, setCopyCharCount] = useState(() => suggestCopyCharCount(5));
-  const [copyCharCountTouched, setCopyCharCountTouched] = useState(false);
+  const [copyCharCount, setCopyCharCount] = useState(100);
+  const [copyCharCountTouched, setCopyCharCountTouched] = useState(true);
   const [copyCharCountMode, setCopyCharCountMode] = useState<"around" | "within">("around");
 
   // Manual Creation states (Scenes list)
@@ -246,7 +284,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [splitType, setSplitType] = useState<"paragraph" | "line" | "sentence">("line");
 
   // BGM states
-  const [bgm, setBgm] = useState("bgm-none");
+  const [bgm, setBgm] = useState("");
   const [volume, setVolume] = useState(30);
   const [playingBgm, setPlayingBgm] = useState<string | null>(null);
   const bgmPreviewRef = React.useRef<HTMLAudioElement | null>(null);
@@ -272,10 +310,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [enableMotion, setEnableMotion] = useState(true);
   const [enableSubtitles, setEnableSubtitles] = useState(true);
   const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(DEFAULT_SUBTITLE_STYLE);
-  const [keywordLoading, setKeywordLoading] = useState(false);
-  const [imageAspectRatio, setImageAspectRatio] = useState("1024x1536");
-  const [imageWidth, setImageWidth] = useState(1024);
-  const [imageHeight, setImageHeight] = useState(1536);
+  const [keywordPreferences, setKeywordPreferences] = useState<KeywordPreferences>(DEFAULT_KEYWORD_PREFERENCES);
+  const [aiKeywordSuggestions, setAiKeywordSuggestions] = useState<KeywordSuggestion[]>([]);
+  const [keywordStatus, setKeywordStatus] = useState<KeywordStatus>("idle");
+  const [keywordSourceSnapshot, setKeywordSourceSnapshot] = useState("");
+  const [imageAspectRatio, setImageAspectRatio] = useState("2560x1440");
+  const [imageWidth, setImageWidth] = useState(2560);
+  const [imageHeight, setImageHeight] = useState(1440);
 
   // Render Workflow states
   const [workflowId, setWorkflowId] = useState("");
@@ -289,7 +330,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [presetNameDraft, setPresetNameDraft] = useState("");
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [reviewConfirmed, setReviewConfirmed] = useState(true);
   const [activeStage, setActiveStage] = useState<(typeof QUICK_CREATE_STAGES)[number]["id"]>("content");
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [reuseSourceTaskId, setReuseSourceTaskId] = useState<string | null>(null);
@@ -297,6 +338,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const draftRecoveredRef = React.useRef(false);
   const reviewReadyRef = React.useRef(false);
   const submissionLockRef = React.useRef(false);
+  const suppressInitialReviewResetRef = React.useRef(false);
+  const keywordRequestIdRef = React.useRef(0);
 
   const bgmOptions = resources.bgm;
   const workflowOptions = resources.workflows;
@@ -308,13 +351,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const normalizeSubtitleStyle = (value?: Partial<SubtitleStyle>): SubtitleStyle => ({
     ...DEFAULT_SUBTITLE_STYLE,
     ...(value || {}),
-    fontSize: clampNumber(value?.fontSize, 52, 12, 120),
-    outlineWidth: clampNumber(value?.outlineWidth, 3, 0, 12),
+    fontSize: clampNumber(value?.fontSize, 80, 12, 120),
+    outlineWidth: clampNumber(value?.outlineWidth, 0, 0, 12),
     shadow: clampNumber(value?.shadow, 0, 0, 12),
-    marginV: clampNumber(value?.marginV, 120, 0, 600),
+    marginV: clampNumber(value?.marginV, 200, 0, 600),
     alignment: clampNumber(value?.alignment, 2, 1, 9),
-    maxCharsPerLine: clampNumber(value?.maxCharsPerLine, 14, 4, 40),
-    maxLines: clampNumber(value?.maxLines, 2, 1, 4),
+    maxCharsPerLine: clampNumber(value?.maxCharsPerLine, 20, 4, 40),
+    maxLines: clampNumber(value?.maxLines, 1, 1, 4),
     highlightScale: clampNumber(value?.highlightScale, 125, 100, 180),
     backgroundOpacity: clampNumber(value?.backgroundOpacity, 72, 0, 100),
     fadeInMs: clampNumber(value?.fadeInMs, 120, 0, 1000),
@@ -379,6 +422,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           if (typeof draft.imageHeight === "number") setImageHeight(draft.imageHeight);
           if (typeof draft.reuseSourceTaskId === "string") setReuseSourceTaskId(draft.reuseSourceTaskId);
           if (draft.subtitleStyle) setSubtitleStyle(normalizeSubtitleStyle(draft.subtitleStyle));
+          setKeywordPreferences(normalizeKeywordPreferences(draft.keywordPreferences));
           setDraftSavedAt(typeof draft.savedAt === "string" ? draft.savedAt : null);
         }
       }
@@ -423,16 +467,21 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         imageHeight,
         reuseSourceTaskId,
         subtitleStyle: normalizeSubtitleStyle(subtitleStyle),
+        keywordPreferences,
       }));
       setDraftSavedAt(savedAt);
     }, 500);
     return () => window.clearTimeout(timeoutId);
-  }, [mode, title, aiTopic, aiSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, voice, speed, minimaxModel, emotion, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId]);
+  }, [mode, title, aiTopic, aiSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, voice, speed, minimaxModel, emotion, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, keywordPreferences]);
 
   // Invalidate the review whenever a submitted production setting changes.
   React.useEffect(() => {
     if (!reviewReadyRef.current) {
       reviewReadyRef.current = true;
+      return;
+    }
+    if (suppressInitialReviewResetRef.current) {
+      suppressInitialReviewResetRef.current = false;
       return;
     }
     setReviewConfirmed(false);
@@ -452,10 +501,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   }, [workflowOptions, workflowId]);
 
   React.useEffect(() => {
-    if (bgmOptions.length === 0) return;
-    if (!bgmOptions.some((item) => item.id === bgm)) {
-      setBgm("bgm-none");
-    }
+    if (bgm || bgmOptions.length === 0) return;
+    setBgm(bgmOptions.find((item) => item.id !== "bgm-none")?.id || "bgm-none");
   }, [bgmOptions, bgm]);
 
   React.useEffect(() => {
@@ -559,34 +606,132 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         "#FFD43B";
     }
     updateSubtitleStyle({ highlightWords: nextWords, keywordColors: nextColors });
+    const nextKeys = new Set(nextWords.map((word) => word.toLocaleLowerCase()));
+    setAiKeywordSuggestions((current) => current.filter((item) => !nextKeys.has(item.word.toLocaleLowerCase())));
   };
 
-  const handleExtractKeywords = async () => {
-    const text = keywordSourceText();
-    if (!text) {
+  const updateKeywordPreferences = (patch: Partial<KeywordPreferences>) => {
+    keywordRequestIdRef.current += 1;
+    setKeywordPreferences((current) => ({ ...current, ...patch }));
+    setKeywordStatus(aiKeywordSuggestions.length ? "stale" : "idle");
+  };
+
+  const applyKeywordSuggestions = (suggestions: KeywordSuggestion[]) => {
+    const currentWords = subtitleStyle.highlightWords || [];
+    const currentKeys = new Set(currentWords.map((word) => word.toLocaleLowerCase()));
+    const additions = suggestions
+      .filter((item) => !currentKeys.has(item.word.toLocaleLowerCase()))
+      .slice(0, Math.max(0, 24 - currentWords.length));
+    if (!additions.length) {
+      addToast(currentWords.length >= 24 ? "最多支持 24 个高亮词。" : "这些关键词已经添加。", "info");
+      return;
+    }
+    applyHighlightKeywords(
+      [...currentWords, ...additions.map((item) => item.word)],
+      Object.fromEntries(additions.map((item) => [item.word, item.color])),
+    );
+    const applied = new Set(additions.map((item) => item.word.toLocaleLowerCase()));
+    setAiKeywordSuggestions((current) => current.filter((item) => !applied.has(item.word.toLocaleLowerCase())));
+  };
+
+  const requestKeywordSuggestions = async (text: string, replaceBatch = false) => {
+    const source = text.trim();
+    if (!source) {
       addToast("请先填写旁白或主题，再提取高亮词。", "error");
       return;
     }
-    setKeywordLoading(true);
+    const requestId = ++keywordRequestIdRef.current;
+    setKeywordStatus("loading");
     try {
-      const keywords = await extractHighlightKeywords(text, 8);
-      if (!keywords.length) {
-        addToast("未提取到可用高亮词，请手动填写。", "info");
-        return;
-      }
-      const colors: Record<string, string> = {};
-      for (const item of keywords) colors[item.word] = item.color;
-      applyHighlightKeywords(
-        keywords.map((item) => item.word),
-        colors,
-      );
-      addToast(`已提取 ${keywords.length} 个高亮词`, "success");
+      const selectedWords = subtitleStyle.highlightWords || [];
+      const avoidWords = replaceBatch
+        ? [...selectedWords, ...aiKeywordSuggestions.map((item) => item.word)]
+        : selectedWords;
+      const keywords = await extractHighlightKeywords(source, {
+        maxKeywords: KEYWORD_DENSITY_LIMIT[keywordPreferences.density],
+        style: keywordPreferences.style,
+        density: keywordPreferences.density,
+        avoidWords,
+      });
+      if (requestId !== keywordRequestIdRef.current) return;
+      const selectedKeys = new Set(selectedWords.map((word) => word.toLocaleLowerCase()));
+      setAiKeywordSuggestions(keywords.filter((item) => !selectedKeys.has(item.word.toLocaleLowerCase())));
+      setKeywordSourceSnapshot(source);
+      setKeywordStatus("ready");
+      if (!keywords.length) addToast("没有找到更多可用高亮词。", "info");
     } catch (err: any) {
+      if (requestId !== keywordRequestIdRef.current) return;
+      setKeywordStatus("error");
       addToast(err.message || "高亮词提取失败。", "error");
-    } finally {
-      setKeywordLoading(false);
     }
   };
+
+  const handleExtractKeywords = () => requestKeywordSuggestions(keywordSourceText());
+
+  const handleSwapKeywordSuggestions = () => requestKeywordSuggestions(keywordSourceText(), true);
+
+  const handleCopyDraftChange = (value: string) => {
+    keywordRequestIdRef.current += 1;
+    setCopyDraft(value);
+    if (!value.trim()) {
+      setAiKeywordSuggestions([]);
+      setKeywordStatus("idle");
+    } else if (
+      keywordStatus === "loading" ||
+      (keywordSourceSnapshot && value.trim() !== keywordSourceSnapshot)
+    ) {
+      setKeywordStatus("stale");
+    }
+  };
+
+  const renderSelectedKeywordEditor = () => (
+    <div className="space-y-1.5">
+      <label className="block">
+        <span className="block text-[10px] text-zinc-500 mb-1">已选高亮词（逗号分隔）</span>
+        <textarea
+          value={(subtitleStyle.highlightWords || []).join("，")}
+          onChange={(e) => applyHighlightKeywords(parseHighlightWords(e.target.value))}
+          rows={2}
+          placeholder="例如：表达力，重点"
+          className="w-full resize-y min-h-16 max-h-32 bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+        />
+      </label>
+      {(subtitleStyle.highlightWords || []).length > 0 && (
+        <div className="space-y-1.5">
+          {(subtitleStyle.highlightWords || []).map((word) => (
+            <div key={word} className="flex items-center gap-2 rounded border border-zinc-800 bg-[#0c0d10] px-2 py-1.5">
+              <span
+                className="min-w-0 flex-1 truncate text-xs font-semibold"
+                style={{ color: subtitleStyle.keywordColors?.[word] || subtitleStyle.accentColor }}
+              >
+                {word}
+              </span>
+              <input
+                type="color"
+                value={subtitleStyle.keywordColors?.[word] || subtitleStyle.accentColor || "#FFD43B"}
+                onChange={(e) => updateSubtitleStyle({ keywordColors: { ...(subtitleStyle.keywordColors || {}), [word]: e.target.value } })}
+                className="h-7 w-10 cursor-pointer rounded border border-zinc-800 bg-transparent p-0.5"
+                title={`${word} 颜色`}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const nextWords = (subtitleStyle.highlightWords || []).filter((item) => item !== word);
+                  const nextColors = { ...(subtitleStyle.keywordColors || {}) };
+                  delete nextColors[word];
+                  updateSubtitleStyle({ highlightWords: nextWords, keywordColors: nextColors });
+                }}
+                className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                title="移除"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   const openCustomBgmFolder = async () => {
     try {
@@ -845,6 +990,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       }
 
       lastAppliedPresetId.current = activePreset.id;
+      if (!draftRecoveredRef.current) suppressInitialReviewResetRef.current = true;
       setPresetNameDraft(activePreset.name);
       setTtsMode(activePreset.ttsMode);
       setVoice(activePreset.voice);
@@ -898,6 +1044,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       return;
     }
 
+    keywordRequestIdRef.current += 1;
     setCopyDraftLoading(true);
     addToast(
       copyDraftMode === "full" ? "AI 正在生成口播稿草稿..." : "AI 正在生成分镜旁白草稿...",
@@ -921,8 +1068,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       if (response.ok && resData.success) {
         const draftText = resData.draftText || "";
         setCopyDraft(draftText);
+        setAiKeywordSuggestions([]);
+        setKeywordSourceSnapshot("");
+        setKeywordStatus("idle");
         maybeSyncCopyDraftToPreviewTts(draftText);
         addToast("AI 文案草稿已生成，你可以先预览或编辑。", "success");
+        if (keywordPreferences.autoExtract) void requestKeywordSuggestions(draftText);
       } else {
         addToast(formatApiErrorValue(resData.detail) || formatApiErrorValue(resData.error) || "文案草稿生成异常，请检查 LLM 设置。", "error");
       }
@@ -1093,39 +1244,6 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       };
     });
 
-  const buildVisualPromptFallback = async (scenes: Array<{ ttsText: string; visualPrompt: string }>): Promise<Array<{ ttsText: string; visualPrompt: string }>> => {
-    const missing = scenes.filter((scene) => !String(scene.visualPrompt || "").trim());
-    if (missing.length === 0) return scenes;
-    addToast(`正在为 ${missing.length} 个分镜自动生成画面提示词…`, "info");
-    const response = await fetch("/api/generate-script", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        topic: (aiTopic || title).trim(),
-        sceneCount: missing.length,
-        draftMode: "segmented",
-        splitType: "paragraph",
-        confirmedText: missing.map((scene) => scene.ttsText).join("\n\n"),
-      }),
-    });
-    const resData = await response.json();
-    if (!response.ok || !resData.success) {
-      addToast(formatApiErrorValue(resData.detail) || formatApiErrorValue(resData.error) || "画面提示词自动生成失败，分镜将沿用旁白作为画面描述。", "info");
-      return scenes;
-    }
-    const prompts: string[] = (resData.data || []).map((item: any) => String(item.visualPrompt || "").trim()).filter(Boolean);
-    if (prompts.length === 0) {
-      addToast("画面提示词自动生成失败，分镜将沿用旁白作为画面描述。", "info");
-      return scenes;
-    }
-    let promptIndex = 0;
-    return scenes.map((scene) => {
-      if (String(scene.visualPrompt || "").trim()) return scene;
-      if (promptIndex >= prompts.length) return scene;
-      return { ...scene, visualPrompt: prompts[promptIndex++] };
-    });
-  };
-
   // Trigger main generator callback
   const handleTriggerRender = async (directGenerate = false) => {
     if (submissionLockRef.current) return;
@@ -1181,8 +1299,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       };
 
       if (mode !== "batch" && onCreateProject && !directGenerate) {
-        const enrichedScenes = await buildVisualPromptFallback(renderScenes);
-        await onCreateProject({ ...taskInput, scenes: enrichedScenes });
+        await onCreateProject({
+          ...taskInput,
+          scenes: renderScenes.map((scene) => ({
+            ...scene,
+            visualPrompt: scene.visualPrompt.trim() || scene.ttsText,
+          })),
+        });
         setReviewConfirmed(false);
         return;
       }
@@ -1529,7 +1652,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 </div>
                 <textarea
                   value={copyDraft}
-                  onChange={(e) => setCopyDraft(e.target.value)}
+                  onChange={(e) => handleCopyDraftChange(e.target.value)}
                   placeholder={
                     copyDraftMode === "full"
                       ? "点击“生成口播稿草稿”后，AI 会在这里生成一整篇可编辑口播稿。你也可以直接粘贴自己的成稿。"
@@ -1537,6 +1660,119 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   }
                   className="w-full min-h-36 max-h-80 bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 placeholder-zinc-650 resize-y leading-relaxed"
                 />
+              </div>
+              <div id="keyword-extraction" className="mt-3 border-t border-zinc-800 pt-3 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-medium text-zinc-300">AI 自动抽词</div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5">
+                      {keywordStatus === "loading" && "正在分析当前文案..."}
+                      {keywordStatus === "stale" && "文案已修改，建议重新抽词"}
+                      {keywordStatus === "error" && "抽词失败，可重新尝试"}
+                      {keywordStatus === "ready" && (aiKeywordSuggestions.length ? `已生成 ${aiKeywordSuggestions.length} 个候选` : "候选已处理")}
+                      {keywordStatus === "idle" && "尚未抽取"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <label className="inline-flex items-center gap-2 text-[11px] text-zinc-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={keywordPreferences.autoExtract}
+                        onChange={(e) => updateKeywordPreferences({ autoExtract: e.target.checked })}
+                        className="h-3.5 w-3.5 accent-amber-500"
+                      />
+                      生成文案后自动抽词
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleExtractKeywords}
+                      disabled={keywordStatus === "loading" || !keywordSourceText()}
+                      className="inline-flex items-center justify-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                    >
+                      {keywordStatus === "loading" ? <Loader className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      {keywordStatus === "stale" || keywordStatus === "error" || keywordStatus === "ready" ? "重新抽取" : "AI 抽词"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="block text-[10px] text-zinc-500 mb-1">抽取风格</span>
+                    <Select
+                      value={keywordPreferences.style}
+                      onChange={(e) => {
+                        updateKeywordPreferences({ style: e.target.value as KeywordExtractionStyle });
+                      }}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="balanced">综合</option>
+                      <option value="concept">核心概念</option>
+                      <option value="selling_point">产品卖点</option>
+                      <option value="emotion">情绪表达</option>
+                      <option value="numeric">数字信息</option>
+                      <option value="action">行动号召</option>
+                    </Select>
+                  </label>
+                  <label className="block">
+                    <span className="block text-[10px] text-zinc-500 mb-1">抽取密度</span>
+                    <Select
+                      value={keywordPreferences.density}
+                      onChange={(e) => {
+                        updateKeywordPreferences({ density: e.target.value as KeywordExtractionDensity });
+                      }}
+                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="low">少</option>
+                      <option value="standard">标准</option>
+                      <option value="high">多</option>
+                    </Select>
+                  </label>
+                </div>
+
+                {aiKeywordSuggestions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-zinc-500">AI 推荐</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => applyKeywordSuggestions(aiKeywordSuggestions)}
+                          disabled={keywordStatus === "loading"}
+                          className="text-[10px] text-amber-300 hover:text-amber-200 disabled:opacity-50"
+                        >
+                          全部应用
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSwapKeywordSuggestions}
+                          disabled={keywordStatus === "loading" || !keywordSourceText()}
+                          className="inline-flex items-center gap-1 rounded border border-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:border-amber-500/40 hover:text-zinc-200 disabled:opacity-50"
+                        >
+                          {keywordStatus === "loading" ? <Loader className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                          换一批
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {aiKeywordSuggestions.map((item) => (
+                        <button
+                          key={item.word}
+                          type="button"
+                          onClick={() => applyKeywordSuggestions([item])}
+                          title={`应用“${item.word}”`}
+                          className="inline-flex items-center gap-1 rounded border border-zinc-800 bg-[#0c0d10] px-2 py-1 text-xs hover:border-amber-500/50"
+                          style={{ color: item.color }}
+                        >
+                          {item.word}
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {renderSelectedKeywordEditor()}
+
               </div>
             </div>
             
@@ -2363,77 +2599,22 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <div className="border-t border-zinc-800 pt-3 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
-                      高亮词（可单独配色）
+                      高亮显示
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleExtractKeywords}
-                      disabled={keywordLoading}
-                      className="inline-flex items-center justify-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
-                    >
-                      {keywordLoading ? <Loader className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                      AI 自动抽词
-                    </button>
+                    {mode === "ai" ? (
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById("keyword-extraction")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                        className="inline-flex items-center justify-center gap-1.5 rounded border border-zinc-800 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-amber-500/40 hover:text-zinc-200"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        已选 {(subtitleStyle.highlightWords || []).length} 个词 · 编辑
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-zinc-500">已选 {(subtitleStyle.highlightWords || []).length} 个词</span>
+                    )}
                   </div>
-                  <label className="block">
-                    <span className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
-                      批量编辑（逗号分隔）
-                    </span>
-                    <textarea
-                      value={(subtitleStyle.highlightWords || []).join("，")}
-                      onChange={(e) => {
-                        const words = parseHighlightWords(e.target.value);
-                        applyHighlightKeywords(words);
-                      }}
-                      rows={2}
-                      placeholder="例如：表达力，重点"
-                      className="w-full resize-y min-h-16 max-h-32 bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-                    />
-                  </label>
-                  {(subtitleStyle.highlightWords || []).length > 0 && (
-                    <div className="space-y-1.5">
-                      {(subtitleStyle.highlightWords || []).map((word) => (
-                        <div
-                          key={word}
-                          className="flex items-center gap-2 rounded border border-zinc-800 bg-[#0c0d10] px-2 py-1.5"
-                        >
-                          <span
-                            className="min-w-0 flex-1 truncate text-xs font-semibold"
-                            style={{ color: subtitleStyle.keywordColors?.[word] || subtitleStyle.accentColor }}
-                          >
-                            {word}
-                          </span>
-                          <input
-                            type="color"
-                            value={subtitleStyle.keywordColors?.[word] || subtitleStyle.accentColor || "#FFD43B"}
-                            onChange={(e) =>
-                              updateSubtitleStyle({
-                                keywordColors: {
-                                  ...(subtitleStyle.keywordColors || {}),
-                                  [word]: e.target.value,
-                                },
-                              })
-                            }
-                            className="h-7 w-10 cursor-pointer rounded border border-zinc-800 bg-transparent p-0.5"
-                            title={`${word} 颜色`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const nextWords = (subtitleStyle.highlightWords || []).filter((item) => item !== word);
-                              const nextColors = { ...(subtitleStyle.keywordColors || {}) };
-                              delete nextColors[word];
-                              updateSubtitleStyle({ highlightWords: nextWords, keywordColors: nextColors });
-                            }}
-                            className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-                            title="移除"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {mode !== "ai" && renderSelectedKeywordEditor()}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {dynamicSubtitleEnabled && (
                       <>

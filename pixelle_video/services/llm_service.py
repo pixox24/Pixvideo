@@ -192,7 +192,7 @@ class LLMService:
                     **kwargs
                 )
                 
-                result = response.choices[0].message.content
+                result = self._message_text(response.choices[0].message)
                 logger.debug(f"LLM response length: {len(result)} chars")
                 
                 return result
@@ -200,6 +200,29 @@ class LLMService:
         except Exception as e:
             logger.error(f"LLM call error (model={final_model}, base_url={client.base_url}): {e}")
             raise
+
+    @staticmethod
+    def _message_text(message) -> str:
+        def value(obj, key):
+            return obj.get(key) if isinstance(obj, dict) else getattr(obj, key, None)
+
+        content = value(message, "content")
+        if isinstance(content, str) and content.strip():
+            return content
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                text = value(item, "text")
+                if text is None and value(item, "type") == "text":
+                    text = value(item, "content")
+                if text:
+                    parts.append(str(text))
+            if parts:
+                return "".join(parts)
+        reasoning = value(message, "reasoning_content")
+        if isinstance(reasoning, list):
+            return "".join(str(value(item, "text") or value(item, "content") or "") for item in reasoning)
+        return str(reasoning or "")
     
     async def _call_with_structured_output(
         self,
@@ -241,7 +264,7 @@ class LLMService:
             max_tokens=max_tokens,
             **kwargs
         )
-        content = response.choices[0].message.content
+        content = self._message_text(response.choices[0].message)
         
         logger.debug(f"Structured output response length: {len(content)} chars")
         
@@ -336,4 +359,3 @@ You MUST respond with ONLY a valid JSON object (no markdown, no extra text)."""
         model = self.active
         base_url = self._get_config_value("base_url", "default")
         return f"<LLMService model={model!r} base_url={base_url!r}>"
-

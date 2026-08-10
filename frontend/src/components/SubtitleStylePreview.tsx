@@ -35,7 +35,7 @@ const colorWithOpacity = (color: string, opacity: number) => {
 const CUSTOM_PREVIEW_FONT_FAMILY = "PixelleSubtitlePreviewFont";
 
 export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ style }) => {
-  const [scene, setScene] = useState<PreviewScene>("bright");
+  const [scene, setScene] = useState<PreviewScene>("dark");
   const [aspect, setAspect] = useState<PreviewAspect>("landscape");
   const [isPlaying, setIsPlaying] = useState(false);
   const [segmentIndex, setSegmentIndex] = useState(0);

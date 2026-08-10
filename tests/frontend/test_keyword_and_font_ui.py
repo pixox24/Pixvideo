@@ -8,6 +8,10 @@ def test_quick_create_exposes_keyword_color_editor_and_ai_extract():
     assert "AI 自动抽词" in component
     assert "keywordColors" in component
     assert "extractHighlightKeywords" in component
+    assert "aiKeywordSuggestions" in component
+    assert "keywordPreferences" in component
+    assert "换一批" in component
+    assert component.count("AI 自动抽词") == 1
     assert 'type="color"' in component
     assert "/api/content/keywords" in api
 

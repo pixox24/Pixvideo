@@ -117,7 +117,7 @@ def test_ass_presets_have_distinct_rendered_styles(tmp_path):
 
     assert len(set(style_lines.values())) == 4
     assert ",1,4,0,2,60,60,120,1" in style_lines["short-video-bold"]
-    assert ",3,0,0,2,60,60,120,1" in style_lines["caption-box"]
+    assert ",3,0,0,2,60,60,200,1" in style_lines["caption-box"]
     # 72% opacity is encoded as ASS alpha 0x47 (0 transparent, 255 opaque).
     assert "&H47000000" in style_lines["caption-box"]
 

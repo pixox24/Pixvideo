@@ -19,6 +19,7 @@ Automatically detects output type based on ExecuteResult.
 
 import asyncio
 import base64
+import hashlib
 import os
 import uuid
 from pathlib import Path
@@ -212,13 +213,10 @@ class MediaService(ComfyBaseService):
         if media_type == "image" and os.getenv("PIXELLE_USE_REAL_IMAGE_API", "").strip().lower() not in {
             "1", "true", "yes", "on",
         }:
-            fixture = Path(
-                os.getenv("PIXELLE_TEST_IMAGE_PATH")
-                or Path(__file__).resolve().parents[2] / "resources" / "example.png"
-            ).expanduser().resolve()
+            fixture = self._local_storyboard_image(prompt, width, height, params.get("scene_id"))
             if not fixture.is_file():
                 raise FileNotFoundError(f"Local test image does not exist: {fixture}")
-            logger.info(f"Using local test image instead of an image provider: {fixture}")
+            logger.info(f"Using storyboard material instead of an image provider: {fixture}")
             return MediaResult(media_type="image", url=str(fixture))
 
         if media_type == "image" and self._has_openai_image_generation_config():
@@ -658,3 +656,24 @@ class MediaService(ComfyBaseService):
 
         timeout_seconds = self.BIZYAIR_MAX_POLL_ATTEMPTS * self.BIZYAIR_POLL_INTERVAL_SECONDS
         raise TimeoutError(f"BizyAir task {request_id} timed out after {timeout_seconds}s")
+
+    @staticmethod
+    def _local_storyboard_image(prompt: str, width: int | None, height: int | None, scene_id: str | None) -> Path:
+        configured = os.getenv("PIXELLE_TEST_IMAGE_PATH", "").strip()
+        if configured:
+            return Path(configured).expanduser().resolve()
+
+        library = Path(
+            os.getenv("PIXELLE_TEST_IMAGE_LIBRARY", "").strip()
+            or Path(__file__).resolve().parents[2] / "素材库"
+        ).expanduser().resolve()
+        ratio_dir = library / ("16:9" if not height or not width or width >= height else "9:16")
+        images = sorted(
+            (path for path in ratio_dir.iterdir() if path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}),
+            key=lambda path: path.name.casefold(),
+        ) if ratio_dir.is_dir() else []
+        if images:
+            key = scene_id or prompt
+            index = int.from_bytes(hashlib.sha256(key.encode("utf-8")).digest()[:8], "big") % len(images)
+            return images[index]
+        return (Path(__file__).resolve().parents[2] / "resources" / "example.png").resolve()

@@ -14,9 +14,13 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+DEFAULT_EMPTY_SCENE_SECONDS = 3.0
+
+
 def effective_scene_duration(audio_seconds: float, manual_hold_seconds: float) -> float:
     """Visual duration is audio-driven and may only be extended by a hold."""
-    return max(float(audio_seconds), float(audio_seconds) + max(float(manual_hold_seconds), 0.0))
+    duration = max(float(audio_seconds), float(audio_seconds) + max(float(manual_hold_seconds), 0.0))
+    return duration if duration > 0 else DEFAULT_EMPTY_SCENE_SECONDS
 
 
 class AssetSource(str, Enum):

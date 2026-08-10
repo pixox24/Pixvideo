@@ -8,7 +8,8 @@ def test_quick_create_exposes_project_entry_callback():
     assert "onCreateProject" in source
     assert "onGenerateTask" in source
     assert 'handleTriggerRender(true)' in source
-    assert "onCreateProject({ ...taskInput, scenes: enrichedScenes })" in source
+    assert "onCreateProject({" in source
+    assert "visualPrompt: scene.visualPrompt.trim() || scene.ttsText" in source
     assert "仅生成成片" in source
     assert "生成初稿并打开工作台" in source
 

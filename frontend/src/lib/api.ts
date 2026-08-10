@@ -198,16 +198,32 @@ export function mapBackendConfigToSettings(data: any, fallback: SystemSettings):
   };
 }
 
+export type KeywordExtractionStyle = "balanced" | "concept" | "selling_point" | "emotion" | "numeric" | "action";
+export type KeywordExtractionDensity = "low" | "standard" | "high";
+
+export interface KeywordExtractionOptions {
+  maxKeywords?: number;
+  style?: KeywordExtractionStyle;
+  density?: KeywordExtractionDensity;
+  avoidWords?: string[];
+}
+
 export async function extractHighlightKeywords(
   text: string,
-  maxKeywords = 8,
+  options: KeywordExtractionOptions = {},
 ): Promise<Array<{ word: string; color: string }>> {
   const data = await fetchJson<{ keywords?: Array<{ word: string; color: string }> }>(
     "/api/content/keywords",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, max_keywords: maxKeywords }),
+      body: JSON.stringify({
+        text,
+        max_keywords: options.maxKeywords ?? 8,
+        style: options.style ?? "balanced",
+        density: options.density ?? "standard",
+        avoid_words: options.avoidWords ?? [],
+      }),
     },
   );
   return (data.keywords || [])

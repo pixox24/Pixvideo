@@ -48,6 +48,9 @@ class GenerateScriptRequest(BaseModel):
     splitType: str = "line"
     draftMode: str = "full"
     confirmedText: str | None = None
+    # continuous | per_scene — continuous disables soft comma-expand so holds
+    # do not inject mid-sentence pauses after clause-level splits.
+    ttsDelivery: str | None = None
 
 
 class GenerateCopyDraftRequest(BaseModel):
@@ -193,6 +196,13 @@ def _strip_segment_prefix(text: str) -> str:
 
 
 async def _narrations_from_confirmed_copy(request: GenerateScriptRequest, llm_service) -> list[str]:
+    """
+    Build storyboard narrations from confirmed copy.
+
+    Full drafts use *deterministic semantic packing* (same rules as the React
+    workbench) instead of LLM re-split. The old LLM path rewrote text into a
+    fixed scene count and often mid-cut words (e.g. 「科学家发」/「现，光速」).
+    """
     confirmed_text = (request.confirmedText or "").strip()
     if not confirmed_text:
         return await generate_narrations_from_topic(
@@ -203,8 +213,9 @@ async def _narrations_from_confirmed_copy(request: GenerateScriptRequest, llm_se
             max_words=40,
         )
 
+    split_type = _normalize_split_type(request.splitType)
+
     if _normalize_draft_mode(request.draftMode) == "segmented":
-        split_type = _normalize_split_type(request.splitType)
         segments = await split_narration_script(confirmed_text, split_mode=split_type)
         narrations = [_strip_segment_prefix(segment) for segment in segments]
         narrations = [narration for narration in narrations if narration]
@@ -212,13 +223,30 @@ async def _narrations_from_confirmed_copy(request: GenerateScriptRequest, llm_se
             raise ValueError("确认文案为空，无法生成分镜脚本。")
         return narrations
 
-    return await generate_narrations_from_content(
-        llm_service=llm_service,
-        content=confirmed_text,
-        n_scenes=request.sceneCount,
-        min_words=5,
-        max_words=40,
+    # full draft: semantic pack (no character-equal LLM rewrite)
+    from pixelle_video.utils.storyboard_split import build_storyboard_narrations
+
+    # soft_expand creates multi-clip sentences (clause-level). Prefer off when
+    # continuous TTS is selected so hold/pad does not inject mid-sentence pauses.
+    tts_delivery = str(
+        getattr(request, "ttsDelivery", None)
+        or getattr(request, "tts_delivery", None)
+        or ""
+    ).strip().lower()
+    soft_expand = tts_delivery not in {"continuous", "cont", "1", "true"}
+
+    narrations = build_storyboard_narrations(
+        confirmed_text,
+        split_type=split_type,  # type: ignore[arg-type]
+        target_count=request.sceneCount,
+        soft_expand=soft_expand,
+        heal=True,
     )
+    narrations = [_strip_segment_prefix(segment) for segment in narrations]
+    narrations = [narration for narration in narrations if narration]
+    if not narrations:
+        raise ValueError("确认文案为空，无法生成分镜脚本。")
+    return narrations
 
 
 def _frontend_tts_mode(mode: str | None) -> str:
@@ -647,16 +675,20 @@ async def generate_copy_draft(request: GenerateCopyDraftRequest, pixelle_video: 
             )
             draft_text = _format_segmented_draft(narrations)
         else:
+            # Step 1 of two-step storyboard flow: pure copy only.
+            # Do NOT bind the draft to a fixed sceneCount — that used to force ~N
+            # paragraphs and make later "semantic suggestions" self-fulfilling.
             length_phrase = _char_count_phrase(request.targetCharCount, request.charCountMode)
             prompt = (
                 "请基于下面的创作主题，写一篇适合短视频旁白的完整中文口播稿。\n"
                 f"创作主题：{request.topic}\n\n"
-                f"目标：整篇文案总字数控制在 {length_phrase}；后续会拆成约 {request.sceneCount} 个分镜，所以内容要有清晰的起承转合。\n"
+                f"目标：整篇文案总字数控制在 {length_phrase}。\n"
                 "要求：\n"
-                "1. 只输出口播正文，不要标题、编号、Markdown 或解释。\n"
-                "2. 语气自然、有画面感，适合 TTS 朗读。\n"
-                "3. 不要分镜提示词，不要镜头描述。\n"
-                "4. 内容应方便创作者继续编辑。"
+                "1. 只输出口播正文，不要标题、编号、Markdown、分镜序号或解释。\n"
+                "2. 语气自然、有画面感，适合 TTS 朗读；用完整句子，句末保留。！？等标点。\n"
+                "3. 不要分镜提示词，不要镜头描述，不要写成「第一镜/第二镜」。\n"
+                "4. 不要按固定分镜数量切割正文；先把故事讲完整，分镜由后续步骤分析。\n"
+                "5. 内容应有自然的起承转合，方便创作者继续编辑。"
             )
             draft_text = str(
                 await pixelle_video.llm(

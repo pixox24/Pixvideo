@@ -38,7 +38,7 @@ class SceneAudioSlice:
     scene_id: str
     start: float
     end: float
-    method: str  # "alignment" | "proportional"
+    method: str  # "alignment" | "proportional" | "silence_snap"
 
     @property
     def duration(self) -> float:

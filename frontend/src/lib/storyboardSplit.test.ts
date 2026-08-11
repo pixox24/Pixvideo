@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  analyzeStoryboardRecommendation,
   buildStoryboardNarrations,
+  healMidCuts,
   packSemanticUnits,
   softExpandByPause,
   splitDraftByRule,
+  suggestRhythmSceneCount,
   suggestSceneCount,
 } from "./storyboardSplit";
 
@@ -20,11 +23,21 @@ test("sentence split respects terminal punctuation", () => {
 
 test("soft expand splits long pause-joined clauses", () => {
   const expanded = softExpandByPause(["荣格说中年是第二次成年，前半生为别人活，后半生该找回真正的自己。"]);
+  // Pause marks stay on the left so clause boundaries remain speakable.
   assert.deepEqual(expanded, [
-    "荣格说中年是第二次成年",
-    "前半生为别人活",
+    "荣格说中年是第二次成年，",
+    "前半生为别人活，",
     "后半生该找回真正的自己。",
   ]);
+});
+
+test("healMidCuts joins hard mid-word pairs", () => {
+  const healed = healMidCuts([
+    "抬头看天空，那会不会是渲染出来的背景？科学家发",
+    "现，光速就像系统设定的上限",
+  ]);
+  assert.equal(healed.length, 1);
+  assert.ok(healed[0]!.includes("科学家发现"));
 });
 
 test("soft expand does not break short pause fragments", () => {
@@ -64,4 +77,19 @@ test("suggestSceneCount follows semantic units after soft expand", () => {
   const text = "荣格说中年是第二次成年，前半生为别人活，后半生该找回真正的自己。";
   const n = suggestSceneCount(text, "sentence");
   assert.equal(n, 3);
+});
+
+test("rhythm suggestion scales with char count not fixed five", () => {
+  assert.equal(suggestRhythmSceneCount(200, { charsPerScene: 40 }), 5);
+  assert.equal(suggestRhythmSceneCount(400, { charsPerScene: 40 }), 10);
+  assert.ok(suggestRhythmSceneCount(80, { charsPerScene: 40 }) >= 2);
+});
+
+test("analyzeStoryboardRecommendation returns dual suggestions", () => {
+  const text = "第一句完整表达一个观点。第二句继续推进叙事。第三句收束主题。";
+  const rec = analyzeStoryboardRecommendation(text, "sentence", { softExpand: false });
+  assert.equal(rec.semantic, 3);
+  assert.ok(rec.rhythm >= 1);
+  assert.equal(rec.preferred, rec.semantic);
+  assert.ok(rec.charCount > 0);
 });

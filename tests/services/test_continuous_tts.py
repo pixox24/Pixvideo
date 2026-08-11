@@ -60,6 +60,48 @@ def test_proportional_slices_cover_full_duration():
     assert slices[0].method == "proportional"
 
 
+def test_snap_proportional_cuts_to_silence_prefers_phrase_onset():
+    """Proportional cut mid-speech should move to end of nearby silence."""
+    from pixelle_video.services.continuous_tts import (
+        SceneAudioSlice,
+        snap_proportional_cuts_to_silence,
+    )
+
+    # Prop cut at 1.5s sits inside speech after silence 1.0-1.2.
+    base = [
+        SceneAudioSlice("s0", 0.0, 1.5, "proportional"),
+        SceneAudioSlice("s1", 1.5, 3.0, "proportional"),
+    ]
+    silences = [(1.0, 1.2)]
+    snapped = snap_proportional_cuts_to_silence(base, silences, total_duration=3.0)
+    assert snapped[0].method == "silence_snap"
+    # Prefer silence end (phrase onset of next scene).
+    assert abs(snapped[0].end - 1.2) < 1e-6
+    assert abs(snapped[1].start - 1.2) < 1e-6
+    assert abs(snapped[-1].end - 3.0) < 1e-6
+
+
+def test_snap_respects_min_span_when_silence_too_early():
+    from pixelle_video.services.continuous_tts import (
+        SceneAudioSlice,
+        snap_proportional_cuts_to_silence,
+    )
+
+    base = [
+        SceneAudioSlice("s0", 0.0, 1.0, "proportional"),
+        SceneAudioSlice("s1", 1.0, 2.0, "proportional"),
+    ]
+    # Silence near 0 is outside valid window after min_span clamp.
+    silences = [(0.02, 0.08)]
+    snapped = snap_proportional_cuts_to_silence(
+        base, silences, total_duration=2.0, min_span=0.25
+    )
+    # Cannot snap to 0.08 because s0 would be shorter than min_span from 0.
+    # Cut stays near proportional or clamped >= 0.25.
+    assert snapped[0].end >= 0.25 - 1e-6
+    assert snapped[0].end <= 1.0 + 1e-6
+
+
 def test_plan_scene_slices_prefers_alignment(tmp_path):
     audio = tmp_path / "full.mp3"
     audio.write_bytes(b"fake-audio-bytes-for-test")

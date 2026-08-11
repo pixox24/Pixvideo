@@ -20,11 +20,21 @@ import json
 import re
 from typing import Optional, Type, TypeVar, Union
 
+import httpx
 from loguru import logger
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def _openai_http_client() -> httpx.AsyncClient:
+    """Bypass a dead Windows system proxy for cloud LLM calls.
+
+    If Internet Settings still point at 127.0.0.1:xxxx after a VPN/proxy client
+    quits, the OpenAI SDK (via httpx trust_env) fails with connection refused.
+    """
+    return httpx.AsyncClient(trust_env=False)
 
 
 class LLMService:
@@ -108,7 +118,10 @@ class LLMService:
         )
         
         # Create client
-        client_kwargs = {"api_key": final_api_key}
+        client_kwargs: dict = {
+            "api_key": final_api_key,
+            "http_client": _openai_http_client(),
+        }
         if final_base_url:
             client_kwargs["base_url"] = final_base_url
         

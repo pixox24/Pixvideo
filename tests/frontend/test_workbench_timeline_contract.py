@@ -3,11 +3,14 @@ from pathlib import Path
 
 def test_timeline_has_audio_driven_clips_and_reorder_controls():
     source = (Path(__file__).parents[2] / "frontend/src/components/WorkbenchTimeline.tsx").read_text(encoding="utf-8")
-    assert "getSceneTimelineDuration" in source
+    state = (Path(__file__).parents[2] / "frontend/src/lib/workbenchState.ts").read_text(encoding="utf-8")
+    assert "getSceneTimelineDuration" in state
     assert "onReorder" in source
     assert "manualHoldSeconds" in source
     assert "draggable" in source
-    assert "window.setTimeout(() => onHold(sceneId, value), 350)" in source
+    assert "window.setTimeout(() => onHold(sceneId, next), 280)" in source
+    assert "buildEqualWidthTimelineLayout" in source
+    assert "layoutMode" in source
 
 
 def test_timeline_pure_functions_are_exported_from_state_lib():
@@ -16,6 +19,9 @@ def test_timeline_pure_functions_are_exported_from_state_lib():
         "getSceneAudioDuration",
         "getSceneTimelineDuration",
         "buildTimelineLayout",
+        "buildEqualWidthTimelineLayout",
+        "mapRealTimeToViewTime",
+        "mapViewTimeToRealTime",
         "getTimelineDuration",
         "findSceneAtTime",
         "clampTimelineTime",
@@ -53,31 +59,35 @@ def test_timeline_receives_playback_props():
 
 def test_timeline_renders_ruler_playhead_zoom_and_clicks():
     source = (Path(__file__).parents[2] / "frontend/src/components/WorkbenchTimeline.tsx").read_text(encoding="utf-8")
+    css = (Path(__file__).parents[2] / "frontend/src/index.css").read_text(encoding="utf-8")
     for marker in [
         "setPointerCapture",
         "releasePointerCapture",
-        "cursor-ew-resize",
-        "overflow-x-auto",
         "aria-label=\"缩放比例\"",
         "aria-label=\"适应全部\"",
         "timeFromClientX",
         "clampTimelineTime",
+        "tl-playhead",
+        "generationRun",
     ]:
         assert marker in source
-    assert "pointer-events-none" in source
+    assert "cursor: ew-resize" in css or "cursor-ew-resize" in source
+    assert "overflow-x: auto" in css or "overflow-x-auto" in source
+    assert "pointer-events: none" in css or "pointer-events-none" in source
 
 
 def test_timeline_edge_resize_uses_pointer_events_and_single_save():
     source = (Path(__file__).parents[2] / "frontend/src/components/WorkbenchTimeline.tsx").read_text(encoding="utf-8")
+    css = (Path(__file__).parents[2] / "frontend/src/index.css").read_text(encoding="utf-8")
     for marker in [
         "handleResizePointerDown",
         "handleResizePointerUp",
-        "cursor-col-resize",
         "setPointerCapture",
         "changeHold(state.sceneId, nextHold)",
         "onPointerCancel",
     ]:
         assert marker in source
+    assert "cursor: col-resize" in css or "cursor-col-resize" in source
 
 
 def test_timeline_exposes_undo_redo_controls():

@@ -77,9 +77,65 @@ export function buildTimelineLayout(scenes: WorkbenchScene[], holds?: Record<str
   });
 }
 
+/**
+ * Equal-width layout for generation monitoring: each scene gets one unit of
+ * virtual time so status is scannable regardless of real audio length.
+ * Real audio/hold values are still attached for footer display.
+ */
+export function buildEqualWidthTimelineLayout(
+  scenes: WorkbenchScene[],
+  holds?: Record<string, number>,
+  unitSeconds = 1,
+): TimelineLayoutItem[] {
+  const unit = unitSeconds > 0 ? unitSeconds : 1;
+  return scenes.map((scene, index) => {
+    const hold = clampNonNegative(holds?.[scene.sceneId] ?? scene.manualHoldSeconds);
+    const start = index * unit;
+    return {
+      sceneId: scene.sceneId,
+      index,
+      startSeconds: start,
+      endSeconds: start + unit,
+      durationSeconds: unit,
+      audioDurationSeconds: getSceneAudioDuration(scene),
+      holdSeconds: hold,
+    };
+  });
+}
+
 export function getTimelineDuration(layout: TimelineLayoutItem[]): number {
   const last = layout[layout.length - 1];
   return last ? last.endSeconds : 0;
+}
+
+/** Map real timeline time → visual position time when view layout differs. */
+export function mapRealTimeToViewTime(
+  realLayout: TimelineLayoutItem[],
+  viewLayout: TimelineLayoutItem[],
+  realTime: number,
+): number {
+  if (realLayout.length === 0 || viewLayout.length === 0) return 0;
+  const realItem = findSceneAtTime(realLayout, realTime);
+  if (!realItem) return 0;
+  const viewItem = viewLayout[realItem.index] || viewLayout[viewLayout.length - 1]!;
+  const local = getSceneLocalTime(realItem, realTime);
+  const ratio = realItem.durationSeconds > 0 ? Math.min(1, local / realItem.durationSeconds) : 0;
+  return viewItem.startSeconds + ratio * viewItem.durationSeconds;
+}
+
+/** Map visual scrub time → real timeline time. */
+export function mapViewTimeToRealTime(
+  realLayout: TimelineLayoutItem[],
+  viewLayout: TimelineLayoutItem[],
+  viewTime: number,
+): number {
+  if (realLayout.length === 0 || viewLayout.length === 0) return 0;
+  const viewItem = findSceneAtTime(viewLayout, viewTime);
+  if (!viewItem) return 0;
+  const realItem = realLayout[viewItem.index] || realLayout[realLayout.length - 1]!;
+  const local = getSceneLocalTime(viewItem, viewTime);
+  const ratio = viewItem.durationSeconds > 0 ? Math.min(1, local / viewItem.durationSeconds) : 0;
+  return realItem.startSeconds + ratio * realItem.durationSeconds;
 }
 
 /**

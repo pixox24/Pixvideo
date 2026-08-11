@@ -14,6 +14,7 @@
 TTS (Text-to-Speech) Service - Supports local, ComfyUI, MiniMax, and Mimo inference
 """
 
+import asyncio
 import base64
 import binascii
 import json
@@ -27,6 +28,20 @@ from loguru import logger
 from pixelle_video.services.comfy_base_service import ComfyBaseService
 from pixelle_video.tts_voices import speed_to_rate
 from pixelle_video.utils.tts_util import edge_tts
+
+
+def _async_http_client(**kwargs):
+    """httpx client that ignores a dead Windows system proxy.
+
+    When a local proxy (e.g. Clash on 127.0.0.1:19828) is still enabled in
+    Internet Settings but the client is not running, httpx's default
+    ``trust_env=True`` fails every cloud TTS call with connection refused.
+    Cloud MiniMax / MiMo endpoints do not need that proxy.
+    """
+    import httpx
+
+    kwargs.setdefault("trust_env", False)
+    return httpx.AsyncClient(**kwargs)
 
 
 class TTSService(ComfyBaseService):
@@ -254,7 +269,7 @@ class TTSService(ComfyBaseService):
             )
             from pixelle_video.utils.tts_audio_postprocess import postprocess_tts_clip
 
-            postprocess_tts_clip(output_path)
+            await asyncio.to_thread(postprocess_tts_clip, output_path)
             logger.info(f"✅ Generated audio (local Edge TTS): {output_path}")
             return output_path
         
@@ -403,7 +418,7 @@ class TTSService(ComfyBaseService):
         logger.info(f"🎙️  Using MiniMax TTS: model={final_model}, voice={final_voice}, speed={final_speed}x")
 
         try:
-            async with httpx.AsyncClient(timeout=params.get("minimax_timeout", 120.0)) as client:
+            async with _async_http_client(timeout=params.get("minimax_timeout", 120.0)) as client:
                 response = await client.post(endpoint, json=payload, headers=headers)
                 response.raise_for_status()
                 response_json = response.json()
@@ -443,7 +458,7 @@ class TTSService(ComfyBaseService):
         await self._save_minimax_alignment(data, output_path, params)
         from pixelle_video.utils.tts_audio_postprocess import postprocess_tts_clip
 
-        postprocess_tts_clip(output_path)
+        await asyncio.to_thread(postprocess_tts_clip, output_path)
 
         extra_info = response_json.get("extra_info") or {}
         audio_length_ms = extra_info.get("audio_length")
@@ -473,7 +488,7 @@ class TTSService(ComfyBaseService):
                 import httpx
 
                 timeout = params.get("minimax_timeout", 120.0)
-                async with httpx.AsyncClient(timeout=timeout) as client:
+                async with _async_http_client(timeout=timeout) as client:
                     response = await client.get(str(subtitle_file))
                     response.raise_for_status()
                     content_type = (response.headers.get("content-type") or "").lower()
@@ -613,7 +628,7 @@ class TTSService(ComfyBaseService):
         )
 
         try:
-            async with httpx.AsyncClient(timeout=params.get("mimo_timeout", 120.0)) as client:
+            async with _async_http_client(timeout=params.get("mimo_timeout", 120.0)) as client:
                 response = await client.post(endpoint, json=payload, headers=headers)
                 response.raise_for_status()
                 response_json = response.json()
@@ -644,7 +659,7 @@ class TTSService(ComfyBaseService):
         output_file.write_bytes(audio_bytes)
         from pixelle_video.utils.tts_audio_postprocess import postprocess_tts_clip
 
-        postprocess_tts_clip(output_path)
+        await asyncio.to_thread(postprocess_tts_clip, output_path)
         logger.info(f"✅ Generated audio (Mimo): {output_path}")
         return output_path
 
@@ -755,7 +770,7 @@ class TTSService(ComfyBaseService):
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 
                 logger.info(f"Downloading audio from {audio_path} to {output_path}")
-                async with httpx.AsyncClient() as client:
+                async with _async_http_client() as client:
                     response = await client.get(audio_path)
                     response.raise_for_status()
                     

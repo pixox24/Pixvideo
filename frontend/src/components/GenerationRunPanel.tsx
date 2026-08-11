@@ -1,5 +1,5 @@
-import React from "react";
-import { AlertTriangle, Pause, Play, RotateCcw, Square } from "lucide-react";
+import React, { useState } from "react";
+import { AlertTriangle, ChevronDown, ChevronUp, Pause, Play, RotateCcw, Square } from "lucide-react";
 import { GenerationRun, GenerationRunItem } from "../types";
 
 interface Props {
@@ -34,93 +34,169 @@ const failedStage = (item: GenerationRunItem) => {
 };
 
 export const GenerationRunPanel: React.FC<Props> = ({
-  run, busy, onStart, onPause, onResume, onCancel, onRetry, onLocateFailure, pendingCount,
+  run,
+  busy,
+  onStart,
+  onPause,
+  onResume,
+  onCancel,
+  onRetry,
+  onLocateFailure,
+  pendingCount,
   exportStatus = null,
   exportPurpose = null,
 }) => {
+  const [failuresOpen, setFailuresOpen] = useState(false);
   const status = run?.status ?? "idle";
-  const terminal = status === "completed" || status === "completed_with_failures" || status === "cancelled" || status === "failed";
-  const can = (action: string, fallback: boolean) => run?.allowedActions ? run.allowedActions.includes(action) : fallback;
+  const terminal =
+    status === "completed"
+    || status === "completed_with_failures"
+    || status === "cancelled"
+    || status === "failed";
+  const can = (action: string, fallback: boolean) =>
+    (run?.allowedActions ? run.allowedActions.includes(action) : fallback);
   const progress = run && run.totalCount
-    ? Math.round(((run.completedCount + run.skippedCount + run.failedCount + run.candidateReviewCount) / run.totalCount) * 100)
+    ? Math.round(
+      ((run.completedCount + run.skippedCount + run.failedCount + run.candidateReviewCount)
+        / run.totalCount) * 100,
+    )
     : 0;
   const failedItems = run?.items.filter((item) => item.status === "failed") ?? [];
   const activeItem = run?.items.find((item) => item.sceneId === run.currentSceneId);
   const activeSceneLabel = activeItem
-    ? `正在处理分镜 #${activeItem.position + 1}/${run?.totalCount || "?"}（${activeItem.status === "running_tts" ? "配音" : activeItem.status === "running_image" ? "画面" : "素材"}）`
+    ? `#${activeItem.position + 1}/${run?.totalCount || "?"} ${
+      activeItem.status === "running_tts"
+        ? "配音"
+        : activeItem.status === "running_image"
+          ? "画面"
+          : "素材"
+    }`
     : null;
   const exportActive = exportStatus === "pending" || exportStatus === "running";
-  const detailLine = !run
+
+  const detailCompact = !run
     ? "尚未开始生成"
     : !terminal
-      ? `${activeSceneLabel || `待处理 ${pendingCount} 项`} · ${progress}% · ${STATUS_LABELS[status] || status}`
+      ? `${activeSceneLabel || `待处理 ${pendingCount}`} · ${progress}% · ${STATUS_LABELS[status] || status}`
       : exportActive
-        ? `分镜素材已全部完成 · 正在${exportPurpose === "initial" ? "合成初稿视频" : "导出成片"}（与最后一镜无关，通常还需约 1–3 分钟）`
-        : `分镜素材 ${progress}% · ${STATUS_LABELS[status] || status}`;
+        ? `素材已完成 · 正在${exportPurpose === "initial" ? "合成初稿" : "导出成片"}`
+        : `${STATUS_LABELS[status] || status}${failedItems.length ? ` · ${failedItems.length} 失败` : ""}`;
+
+  // Hide entirely when idle with no run — keeps workbench quiet after completion
+  // unless there are failures or export running.
+  if (!run && !exportActive) {
+    return (
+      <section className="grp shrink-0 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-3 py-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-caption text-zinc-500">{detailCompact}</p>
+          <button
+            type="button"
+            onClick={onStart}
+            disabled={busy !== null}
+            className="ui-btn ui-btn-primary ui-btn-sm"
+          >
+            <Play className="h-3.5 w-3.5" />
+            开始生成
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section className="shrink-0 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-3 py-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-xs font-semibold text-zinc-100">项目生成</div>
-          <div className="text-caption leading-relaxed text-zinc-500">
-            {detailLine}
-          </div>
+    <section className="grp shrink-0 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="shrink-0 text-[11px] font-semibold text-zinc-200">生成</span>
+          <p className="min-w-0 truncate text-caption text-zinc-500" title={detailCompact}>
+            {detailCompact}
+          </p>
+          {run && !terminal && (
+            <div className="hidden h-1 w-20 shrink-0 overflow-hidden rounded-full bg-[var(--color-surface-3)] sm:block md:w-28">
+              <div
+                className="h-full rounded-full bg-amber-500 transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {failedItems.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setFailuresOpen((open) => !open)}
+              className="ui-btn ui-btn-outline ui-btn-sm !h-7 border-rose-500/30 text-rose-200"
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {failedItems.length} 失败
+              {failuresOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+          )}
           {!run || (terminal && status !== "completed_with_failures") ? (
-            <button type="button" onClick={onStart} disabled={busy !== null} className="ui-btn ui-btn-primary ui-btn-sm">
-              <Play className="h-3.5 w-3.5" />开始生成
+            <button type="button" onClick={onStart} disabled={busy !== null} className="ui-btn ui-btn-primary ui-btn-sm !h-7">
+              <Play className="h-3.5 w-3.5" />
+              开始生成
             </button>
           ) : null}
           {run && can("pause", status === "queued" || status === "running") && (
-            <button type="button" onClick={onPause} disabled={busy !== null} className="ui-btn ui-btn-secondary ui-btn-sm">
-              <Pause className="h-3.5 w-3.5" />暂停
+            <button type="button" onClick={onPause} disabled={busy !== null} className="ui-btn ui-btn-secondary ui-btn-sm !h-7">
+              <Pause className="h-3.5 w-3.5" />
+              暂停
             </button>
           )}
           {run && can("resume", status === "paused") && (
-            <button type="button" onClick={onResume} disabled={busy !== null} className="ui-btn ui-btn-primary ui-btn-sm">
-              <Play className="h-3.5 w-3.5" />继续生成
+            <button type="button" onClick={onResume} disabled={busy !== null} className="ui-btn ui-btn-primary ui-btn-sm !h-7">
+              <Play className="h-3.5 w-3.5" />
+              继续
             </button>
           )}
           {run && can("cancel", !terminal) && (
-            <button type="button" onClick={onCancel} disabled={busy !== null} className="ui-btn ui-btn-danger ui-btn-sm">
-              <Square className="h-3.5 w-3.5" />取消
+            <button type="button" onClick={onCancel} disabled={busy !== null} className="ui-btn ui-btn-danger ui-btn-sm !h-7">
+              <Square className="h-3.5 w-3.5" />
+              取消
             </button>
           )}
           {run && can("retry-failed", status === "completed_with_failures") && (
-            <button type="button" onClick={onRetry} disabled={busy !== null} className="ui-btn ui-btn-outline ui-btn-sm text-amber-200">
-              <RotateCcw className="h-3.5 w-3.5" />仅重试失败项
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={busy !== null}
+              className="ui-btn ui-btn-outline ui-btn-sm !h-7 text-amber-200"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              重试失败
             </button>
           )}
         </div>
       </div>
+
       {run && !terminal && (
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--color-surface-3)]">
+        <div className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-[var(--color-surface-3)] sm:hidden">
           <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${progress}%` }} />
         </div>
       )}
+
       {terminal && exportActive && (
-        <div className="mt-2 rounded-[var(--radius-md)] border border-amber-500/25 bg-amber-500/5 px-2.5 py-2 text-[11px] text-amber-100/90">
-          分镜配音/画面已经生成完毕。当前在后台把各镜头合成初稿 MP4，界面可能仍显示忙碌，但不是某一镜卡住。
-        </div>
+        <p className="mt-1.5 text-[11px] leading-snug text-amber-100/80">
+          分镜素材已齐，后台正在合成 MP4（通常 1–3 分钟），不是某一镜卡住。
+        </p>
       )}
-      {failedItems.length > 0 && (
-        <div role="alert" className="mt-2 rounded-[var(--radius-md)] border border-rose-500/30 bg-rose-950/20 p-2 text-xs text-rose-100">
-          <div className="flex items-center gap-1 font-semibold">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            {failedItems.length} 个分镜生成失败
-          </div>
-          <div className="mt-2 grid gap-1">
+
+      {failuresOpen && failedItems.length > 0 && (
+        <div role="alert" className="mt-1.5 max-h-28 overflow-y-auto rounded-[var(--radius-sm)] border border-rose-500/25 bg-rose-950/20 p-1.5">
+          <div className="grid gap-0.5">
             {failedItems.map((item) => (
               <button
                 key={item.itemId}
                 type="button"
                 onClick={() => onLocateFailure(item.sceneId)}
-                className="flex items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-rose-500/20 px-2 py-1.5 text-left hover:bg-rose-900/20"
+                className="flex items-center justify-between gap-2 rounded px-2 py-1 text-left text-[11px] text-rose-100 hover:bg-rose-900/25"
               >
-                <span>分镜 #{item.position + 1} · {failedStage(item)}失败</span>
-                <span className="max-w-[55%] truncate text-rose-200" title={item.error || undefined}>
+                <span className="shrink-0">
+                  #{item.position + 1} · {failedStage(item)}失败
+                </span>
+                <span className="min-w-0 truncate text-rose-200/80" title={item.error || undefined}>
                   {item.error || "请重试"}
                 </span>
               </button>

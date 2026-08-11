@@ -678,14 +678,37 @@ class StandardPipeline(LinearVideoPipeline):
         segment_paths = [frame.video_segment_path for frame in storyboard.frames]
         
         video_service = VideoService()
-        
-        final_video_path = video_service.concat_videos(
-            videos=segment_paths,
-            output=ctx.final_video_path,
-            bgm_path=ctx.params.get("bgm_path"),
-            bgm_volume=ctx.params.get("bgm_volume", 0.2),
-            bgm_mode=ctx.params.get("bgm_mode", "loop")
-        )
+
+        # Continuous TTS / workbench: visual holds must not insert speech silence
+        # between scenes (音画分离). Video freezes per hold; narrations concat gaplessly.
+        use_gapless_speech = bool(ctx.params.get("continuous_av_hold_split"))
+        speech_audios = [frame.audio_path for frame in storyboard.frames]
+        if use_gapless_speech and all(path and Path(path).is_file() for path in speech_audios):
+            logger.info(
+                "Using gapless speech mux (continuous A/V hold split) for {} segments",
+                len(segment_paths),
+            )
+            final_video_path = video_service.concat_videos_gapless_speech(
+                video_segments=segment_paths,
+                speech_audios=speech_audios,
+                output=ctx.final_video_path,
+                bgm_path=ctx.params.get("bgm_path"),
+                bgm_volume=ctx.params.get("bgm_volume", 0.2),
+                bgm_mode=ctx.params.get("bgm_mode", "loop"),
+            )
+        else:
+            if use_gapless_speech:
+                logger.warning(
+                    "continuous_av_hold_split requested but speech audio missing; "
+                    "falling back to legacy concat (holds will insert silence)"
+                )
+            final_video_path = video_service.concat_videos(
+                videos=segment_paths,
+                output=ctx.final_video_path,
+                bgm_path=ctx.params.get("bgm_path"),
+                bgm_volume=ctx.params.get("bgm_volume", 0.2),
+                bgm_mode=ctx.params.get("bgm_mode", "loop")
+            )
         
         storyboard.final_video_path = final_video_path
         storyboard.completed_at = datetime.now()

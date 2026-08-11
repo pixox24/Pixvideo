@@ -28,3 +28,11 @@ def test_postprocess_skips_missing_file(tmp_path):
     missing = tmp_path / "missing.mp3"
     with pytest.raises(FileNotFoundError):
         postprocess_tts_clip(missing)
+
+
+def test_postprocess_timeout_scales_with_duration():
+    from pixelle_video.utils.tts_audio_postprocess import _postprocess_timeout_seconds
+
+    assert _postprocess_timeout_seconds(1.0) == 30.0
+    assert _postprocess_timeout_seconds(40.0) == 120.0
+    assert _postprocess_timeout_seconds(1000.0) == 180.0

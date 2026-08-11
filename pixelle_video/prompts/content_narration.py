@@ -33,7 +33,8 @@ The user will provide content (which may be long or short), and you need to extr
 - Language consistency requirement: Strictly output copy according to the user's input language type - if input is English, output must be English, and so on
 - Purpose: For TTS to generate short video audio
 - Word count limit: Strictly control to {min_words}~{max_words} words (minimum not less than {min_words} words)
-- Ending format: Do not use punctuation at the end
+- Ending format: Prefer natural sentence-ending punctuation (。！？) so each storyboard is a complete spoken unit
+- Integrity (CRITICAL): Each narration must be a complete phrase or sentence. NEVER cut a Chinese word or English word in half across storyboards (bad: 「科学家发」+「现，光速」). If you must shorten, drop whole clauses, not mid-word.
 - Refinement strategy:
   * If user content is long: Extract {n_storyboard} core points, remove redundant information
   * If user content is short: Appropriately expand while retaining core viewpoints, add examples or explanations

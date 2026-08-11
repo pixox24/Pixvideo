@@ -370,7 +370,10 @@ class MediaService(ComfyBaseService):
         submit_url = f"{base_url}/images/generations"
         logger.info(f"Submitting OpenAI-compatible image generation: model={config['model']}, size={size}")
 
-        async with httpx.AsyncClient(timeout=params.get("image_generation_timeout", 120.0)) as client:
+        async with httpx.AsyncClient(
+            timeout=params.get("image_generation_timeout", 120.0),
+            trust_env=False,
+        ) as client:
             response = await client.post(submit_url, headers=headers, json=payload)
             if response.is_error:
                 raise RuntimeError(
@@ -534,7 +537,7 @@ class MediaService(ComfyBaseService):
 
         logger.info(f"Submitting BizyAir Model Zoo task: endpoint={endpoint}")
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, trust_env=False) as client:
             response = await client.post(submit_url, headers=headers, json=payload)
             response.raise_for_status()
             result = response.json()
@@ -619,7 +622,7 @@ class MediaService(ComfyBaseService):
         headers = {"Authorization": f"Bearer {api_key}"}
         poll_url = f"{self.BIZYAIR_API_BASE}/{request_id}"
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
             for attempt in range(self.BIZYAIR_MAX_POLL_ATTEMPTS):
                 if attempt > 0:
                     await asyncio.sleep(self.BIZYAIR_POLL_INTERVAL_SECONDS)

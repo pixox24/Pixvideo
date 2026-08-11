@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import shutil
+import subprocess
 import tempfile
 import uuid
 from pathlib import Path
@@ -17,6 +19,15 @@ from pixelle_video.services.subtitle_alignment import (
     map_segments_to_alignment,
     normalize_align_text,
 )
+
+# Silence snap: avoid proportional cuts that slice mid-phrase when Edge/local
+# TTS has no word-level alignment.
+_MIN_SCENE_SPAN = 0.25
+_DEFAULT_SILENCE_NOISE_DB = -32.0
+_DEFAULT_MIN_SILENCE = 0.12
+_SNAP_WINDOW_MIN = 0.6
+_SNAP_WINDOW_MAX = 2.5
+_SNAP_WINDOW_RATIO = 0.18
 
 
 def _ffmpeg_scratch_dir() -> Path:
@@ -35,6 +46,8 @@ def proportional_slices(
     scene_ids: Sequence[str],
     scene_texts: Sequence[str],
     total_duration: float,
+    *,
+    method: str = "proportional",
 ) -> list[SceneAudioSlice]:
     """Fallback: allocate continuous duration by normalized character weight."""
     weights = [max(1, len(normalize_align_text(text) or "·")) for text in scene_texts]
@@ -53,7 +66,7 @@ def proportional_slices(
                 scene_id=scene_id,
                 start=cursor,
                 end=max(cursor + 0.05, end),
-                method="proportional",
+                method=method,
             )
         )
         cursor = slices[-1].end
@@ -62,9 +75,134 @@ def proportional_slices(
             scene_id=slices[-1].scene_id,
             start=slices[-1].start,
             end=total,
-            method="proportional",
+            method=method,
         )
     return slices
+
+
+def detect_silence_islands(
+    audio_path: str | Path,
+    *,
+    noise_db: float = _DEFAULT_SILENCE_NOISE_DB,
+    min_silence: float = _DEFAULT_MIN_SILENCE,
+    total_duration: float | None = None,
+) -> list[tuple[float, float]]:
+    """
+    Return ``(start, end)`` silence intervals in seconds.
+
+    Prefers ffmpeg ``silencedetect``; returns [] when audio is missing or
+    analysis fails (caller keeps pure proportional cuts).
+    """
+    path = Path(audio_path)
+    if not path.is_file():
+        return []
+    duration = float(total_duration or 0.0) or (_probe_duration(path) or 0.0)
+    islands = _silencedetect_ffmpeg(path, noise_db=noise_db, min_silence=min_silence)
+    if islands:
+        return _clamp_islands(islands, duration)
+    return []
+
+
+def snap_proportional_cuts_to_silence(
+    slices: Sequence[SceneAudioSlice],
+    silences: Sequence[tuple[float, float]],
+    *,
+    total_duration: float,
+    min_span: float = _MIN_SCENE_SPAN,
+) -> list[SceneAudioSlice]:
+    """
+    Move internal proportional cut points onto nearby silence.
+
+    Prefer the **end** of a silence island (start of the next speech burst) so
+    the following scene begins on a clean phrase onset rather than mid-word.
+    Falls back to silence midpoint, then leaves the cut unchanged.
+    """
+    if len(slices) < 2 or not silences:
+        return list(slices)
+
+    total = max(float(total_duration), float(slices[-1].end), 0.05)
+    # Internal cut times (end of each scene except the last).
+    cuts = [float(item.end) for item in slices[:-1]]
+    snapped: list[float] = []
+    snapped_any = False
+
+    for index, cut in enumerate(cuts):
+        prev = 0.0 if index == 0 else snapped[index - 1]
+        # Leave room for remaining scenes (including current and tail).
+        remaining_scenes = len(slices) - index  # current + after
+        # Lower bound: previous cut + min span for current scene.
+        low = prev + min_span
+        # Upper bound: leave min_span for each remaining scene after this cut.
+        # After this cut we still need (remaining_scenes - 1) more segments.
+        scenes_after = remaining_scenes - 1  # scenes that start at/after this cut
+        high = total - min_span * max(1, scenes_after)
+        if high <= low:
+            snapped.append(min(total - min_span, max(low, cut)))
+            continue
+
+        # Window scales with local proportional scene length.
+        local_span = float(slices[index].end) - float(slices[index].start)
+        window = max(_SNAP_WINDOW_MIN, min(_SNAP_WINDOW_MAX, local_span * _SNAP_WINDOW_RATIO + 0.8))
+
+        best_t = cut
+        best_score: tuple[float, float, int] | None = None  # (dist, -silence_len, priority)
+        for sil_start, sil_end in silences:
+            if sil_end < low - 0.05 or sil_start > high + 0.05:
+                continue
+            # Candidate points inside this silence, clamped to [low, high].
+            candidates = [
+                (sil_end, 0),           # end of silence = phrase onset (preferred)
+                ((sil_start + sil_end) / 2.0, 1),  # mid-silence
+                (sil_start, 2),         # start of silence (last resort)
+            ]
+            sil_len = max(0.0, sil_end - sil_start)
+            for raw_t, priority in candidates:
+                t = min(high, max(low, float(raw_t)))
+                if t < low - 1e-6 or t > high + 1e-6:
+                    continue
+                dist = abs(t - cut)
+                if dist > window:
+                    continue
+                # Prefer closer, then longer silence, then end-of-silence.
+                score = (dist, -sil_len, priority)
+                if best_score is None or score < best_score:
+                    best_score = score
+                    best_t = t
+
+        if abs(best_t - cut) > 1e-3:
+            snapped_any = True
+        snapped.append(best_t)
+
+    # Rebuild slices with monotonic ends.
+    rebuilt: list[SceneAudioSlice] = []
+    cursor = 0.0
+    for index, item in enumerate(slices):
+        if index < len(snapped):
+            end = max(cursor + min_span, min(total, snapped[index]))
+        else:
+            end = total
+        if index == len(slices) - 1:
+            end = total
+        method = "silence_snap" if snapped_any else item.method
+        # If this boundary didn't move but another did, still mark silence_snap.
+        rebuilt.append(
+            SceneAudioSlice(
+                scene_id=item.scene_id,
+                start=cursor,
+                end=max(cursor + 0.05, end),
+                method=method,
+            )
+        )
+        cursor = rebuilt[-1].end
+
+    if rebuilt:
+        rebuilt[-1] = SceneAudioSlice(
+            scene_id=rebuilt[-1].scene_id,
+            start=rebuilt[-1].start,
+            end=total,
+            method=rebuilt[-1].method,
+        )
+    return rebuilt
 
 
 def plan_scene_slices(
@@ -76,7 +214,11 @@ def plan_scene_slices(
     cues: Sequence[AlignmentCue] | None = None,
 ) -> list[SceneAudioSlice]:
     """
-    Prefer alignment-mapped windows; fall back to character-proportional split.
+    Prefer alignment-mapped windows.
+
+    Fallback chain when alignment is missing/incomplete:
+      1. character-proportional anchors
+      2. snap internal cuts onto nearby silence (avoid mid-phrase chops)
     """
     path = Path(continuous_audio_path)
     duration = float(total_duration or 0.0)
@@ -98,12 +240,128 @@ def plan_scene_slices(
             ]
         logger.warning(
             "Continuous TTS alignment map incomplete ({} cues → {} ranges for {} scenes); "
-            "using proportional split",
+            "using proportional + silence snap",
             len(resolved_cues),
             0 if not mapped else len(mapped),
             len(scene_ids),
         )
-    return proportional_slices(scene_ids, scene_texts, duration)
+
+    base = proportional_slices(scene_ids, scene_texts, duration)
+    if len(base) < 2:
+        return base
+
+    silences = detect_silence_islands(path, total_duration=duration)
+    if not silences:
+        logger.info(
+            "Continuous TTS: no silence islands detected; using pure proportional split "
+            "({} scenes, {:.2f}s)",
+            len(base),
+            duration,
+        )
+        return base
+
+    snapped = snap_proportional_cuts_to_silence(
+        base,
+        silences,
+        total_duration=duration,
+    )
+    moved = [
+        (i, base[i].end, snapped[i].end)
+        for i in range(len(base) - 1)
+        if abs(base[i].end - snapped[i].end) > 0.02
+    ]
+    if moved:
+        logger.info(
+            "Continuous TTS silence snap adjusted {} cut(s): {}",
+            len(moved),
+            "; ".join(f"#{i} {old:.3f}->{new:.3f}s" for i, old, new in moved),
+        )
+    else:
+        logger.debug(
+            "Continuous TTS silence snap found {} island(s) but cuts already near silence",
+            len(silences),
+        )
+    return snapped
+
+
+def _silencedetect_ffmpeg(
+    path: Path,
+    *,
+    noise_db: float,
+    min_silence: float,
+) -> list[tuple[float, float]]:
+    """Parse silence intervals from ffmpeg silencedetect."""
+    if not shutil.which("ffmpeg"):
+        return []
+    # -vn: audio only; null mux discards samples while filter still runs.
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostats",
+        "-i",
+        str(path),
+        "-af",
+        f"silencedetect=noise={noise_db}dB:d={min_silence}",
+        "-f",
+        "null",
+        "-",
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.debug("silencedetect failed for {}: {}", path.name, exc)
+        return []
+
+    # ffmpeg writes filter logs to stderr; encoding may be GBK on Chinese Windows.
+    stderr = result.stderr or b""
+    text = ""
+    for encoding in ("utf-8", "gbk", "cp936", "latin-1"):
+        try:
+            text = stderr.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    if not text:
+        text = stderr.decode("utf-8", errors="replace")
+
+    starts = [
+        float(match.group(1))
+        for match in re.finditer(r"silence_start:\s*([0-9.]+)", text)
+    ]
+    ends = [
+        float(match.group(1))
+        for match in re.finditer(r"silence_end:\s*([0-9.]+)", text)
+    ]
+    islands: list[tuple[float, float]] = []
+    # Pair starts with ends in order; handle trailing open silence.
+    end_iter = iter(ends)
+    for start in starts:
+        end = next(end_iter, None)
+        if end is None:
+            # Open-ended silence until EOF — ignore for internal cuts.
+            break
+        if end > start + 0.05:
+            islands.append((start, end))
+    return islands
+
+
+def _clamp_islands(
+    islands: Sequence[tuple[float, float]],
+    duration: float,
+) -> list[tuple[float, float]]:
+    if duration <= 0:
+        return [(float(s), float(e)) for s, e in islands if e > s]
+    clamped: list[tuple[float, float]] = []
+    for start, end in islands:
+        s = max(0.0, float(start))
+        e = min(float(duration), float(end))
+        if e > s + 0.05:
+            clamped.append((s, e))
+    return clamped
 
 
 def extract_audio_segment(

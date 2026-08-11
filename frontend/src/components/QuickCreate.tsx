@@ -41,11 +41,11 @@ import { CreateStepper } from "./quickCreate/CreateStepper";
 import { CreateStickyFooter } from "./quickCreate/CreateStickyFooter";
 import { dismissCreateTip, isCreateTipDismissed } from "../lib/onboarding";
 import {
+  analyzeStoryboardRecommendation,
   buildStoryboardNarrations,
   clampSceneCount,
   STORYBOARD_SCENE_MAX,
   STORYBOARD_SCENE_MIN,
-  suggestSceneCount,
   type DraftSplitType,
 } from "../lib/storyboardSplit";
 
@@ -288,13 +288,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [aiSceneCount, setAiSceneCount] = useState(5);
   /** True once the user manually edits scene count (or loads a preset/draft with an explicit count). */
   const [aiSceneCountTouched, setAiSceneCountTouched] = useState(false);
-  /** Last semantic suggestion derived from copy (for UI + adopt button). */
+  /** Semantic suggestion (sentence/line units) after pure-copy step. */
   const [suggestedSceneCount, setSuggestedSceneCount] = useState<number | null>(null);
+  /** Rhythm suggestion (chars ÷ ~40) — secondary, not forced. */
+  const [rhythmSceneCount, setRhythmSceneCount] = useState<number | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [copyDraftMode, setCopyDraftMode] = useState<"full" | "segmented">("segmented");
+  /** Default full: step1 pure copy → step2 semantic recommend (not locked to N). */
+  const [copyDraftMode, setCopyDraftMode] = useState<"full" | "segmented">("full");
   const [copyDraft, setCopyDraft] = useState("");
   const [copyDraftLoading, setCopyDraftLoading] = useState(false);
-  const [copyCharCount, setCopyCharCount] = useState(100);
+  const [copyCharCount, setCopyCharCount] = useState(200);
   const [copyCharCountTouched, setCopyCharCountTouched] = useState(true);
   const [copyCharCountMode, setCopyCharCountMode] = useState<"around" | "within">("around");
 
@@ -1126,6 +1129,50 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     });
   };
 
+  /**
+   * Step 2 after pure copy: rule-based semantic + rhythm recommendation.
+   * Does not call LLM; optional auto-adopt when the user has not locked scene count.
+   */
+  const reanalyzeStoryboardFromCopy = (
+    draftText: string,
+    options?: { adoptIfUnlocked?: boolean; toastOnResult?: boolean; draftJustGenerated?: boolean },
+  ) => {
+    const text = String(draftText || "").trim();
+    if (!text) {
+      setSuggestedSceneCount(null);
+      setRhythmSceneCount(null);
+      return null;
+    }
+    const continuousTts = String(ttsDelivery || "").toLowerCase() === "continuous";
+    const rule: DraftSplitType = copyDraftMode === "segmented" ? "line" : splitType;
+    // continuous: no soft comma-expand (avoids mid-sentence holds)
+    const softExpand = copyDraftMode === "full" && !continuousTts;
+    const analysis = analyzeStoryboardRecommendation(text, rule, { softExpand });
+    setSuggestedSceneCount(analysis.semantic);
+    setRhythmSceneCount(analysis.rhythm);
+
+    const adopt = options?.adoptIfUnlocked !== false && !aiSceneCountTouched;
+    if (adopt) {
+      setAiSceneCount(analysis.preferred);
+    }
+
+    if (options?.toastOnResult) {
+      const prefix = options?.draftJustGenerated ? "AI 文案草稿已生成。" : "分镜分析完成。";
+      if (adopt) {
+        addToast(
+          `${prefix}语义建议 ${analysis.semantic} 镜（已填入）· 节奏约 ${analysis.rhythm} 镜（${analysis.charCount} 字）`,
+          "success",
+        );
+      } else {
+        addToast(
+          `${prefix}语义建议 ${analysis.semantic} 镜 · 节奏约 ${analysis.rhythm} 镜（你已锁定分镜数 ${aiSceneCount}）`,
+          "success",
+        );
+      }
+    }
+    return analysis;
+  };
+
   const handleGenerateCopyDraft = async () => {
     if (!aiTopic.trim()) {
       addToast("请输入创作主题，以便 AI 生成文案草稿", "error");
@@ -1159,24 +1206,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         setAiKeywordSuggestions([]);
         setKeywordSourceSnapshot("");
         setKeywordStatus("idle");
-        // Semantic-driven scene count: fill from draft structure when user has not locked the field.
-        // segmented drafts are already one scene per line — do not soft-expand commas.
-        const rule: DraftSplitType = copyDraftMode === "segmented" ? "line" : splitType;
-        const suggested = suggestSceneCount(draftText, rule, {
-          softExpand: copyDraftMode === "full",
+        // Step 2: rule-based semantic + rhythm recommendation (no second LLM rewrite).
+        const analysis = reanalyzeStoryboardFromCopy(draftText, {
+          adoptIfUnlocked: true,
+          toastOnResult: true,
+          draftJustGenerated: true,
         });
-        setSuggestedSceneCount(suggested);
-        if (!aiSceneCountTouched) {
-          setAiSceneCount(suggested);
-          addToast(
-            `AI 文案草稿已生成。根据语义建议 ${suggested} 个分镜（已填入分镜数量，可修改）。`,
-            "success",
-          );
-        } else {
-          addToast(
-            `AI 文案草稿已生成。语义建议 ${suggested} 个分镜（你已手动设置数量，未自动覆盖）。`,
-            "success",
-          );
+        if (!analysis) {
+          addToast("AI 文案草稿已生成。", "success");
         }
         maybeSyncCopyDraftToPreviewTts(draftText);
         if (keywordPreferences.autoExtract) void requestKeywordSuggestions(draftText);
@@ -1184,7 +1221,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         addToast(formatApiErrorValue(resData.detail) || formatApiErrorValue(resData.error) || "文案草稿生成异常，请检查 LLM 设置。", "error");
       }
     } catch (err: any) {
-      addToast("连接服务器超时，请确保 dev 服务器就绪。", "error");
+      const detail = err?.message || String(err || "");
+      addToast(
+        detail.includes("Failed to fetch") || detail.includes("NetworkError") || detail.includes("fetch")
+          ? "无法连接后端服务，请确认 http://127.0.0.1:8000 已启动后重试。"
+          : `生成文案失败：${detail || "网络或服务器异常"}`,
+        "error",
+      );
     } finally {
       setCopyDraftLoading(false);
     }
@@ -1212,7 +1255,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           confirmedText: copyDraft.trim(),
           draftMode: copyDraftMode,
           sceneCount: aiSceneCount,
-          splitType
+          splitType,
+          ttsDelivery,
         }),
       });
       const resData = await response.json();
@@ -1238,7 +1282,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         addToast(formatApiErrorValue(resData.detail) || formatApiErrorValue(resData.error) || "脚本构思异常，请检查 LLM 设置。", "error");
       }
     } catch (err: any) {
-      addToast("连接服务器超时，请确保 dev 服务器就绪。", "error");
+      const detail = err?.message || String(err || "");
+      addToast(
+        detail.includes("Failed to fetch") || detail.includes("NetworkError") || detail.includes("fetch")
+          ? "无法连接后端服务，请确认 http://127.0.0.1:8000 已启动后重试。"
+          : `生成分镜脚本失败：${detail || "网络或服务器异常"}`,
+        "error",
+      );
     } finally {
       setAiLoading(false);
     }
@@ -1273,9 +1323,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
       // segmented drafts are already one narration per line; full drafts use splitType.
       // packSemanticUnits merges when too many, keeps intact when fewer than target (no char-slice).
+      // continuous TTS: disable soft comma-expand — clause-level clips + hold = mid-sentence pause.
       const rule: DraftSplitType = copyDraftMode === "segmented" ? "line" : splitType;
+      const continuousTts = String(ttsDelivery || "").toLowerCase() === "continuous";
       const draftSegments = buildStoryboardNarrations(draftText, rule, aiSceneCount, {
-        softExpand: copyDraftMode === "full",
+        softExpand: copyDraftMode === "full" && !continuousTts,
       });
 
       return draftSegments.map((ttsText, index) => ({
@@ -1360,6 +1412,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setAiSceneCount(5);
     setAiSceneCountTouched(false);
     setSuggestedSceneCount(null);
+    setRhythmSceneCount(null);
     setScenes([
       { id: 1, ttsText: "这是一个科技感爆棚的高能概念画卷。", visualPrompt: "Cinematic digital art of high-tech lab, warm amber lighting, futuristic, 4k" },
       { id: 2, ttsText: "每一个齿轮的咬合，都是精工美学的体现。", visualPrompt: "Macro close-up of amber golden machine gears interlocking in motion, cinematic depth of field" },
@@ -1965,7 +2018,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     AI 生成文案草稿 / Editable Copy Draft
                   </label>
                   <span className="text-[10px] text-zinc-600">
-                    {copyDraftMode === "full" ? "先确认完整口播，再智能拆分" : "一段对应一个分镜旁白"}
+                    {copyDraftMode === "full"
+                      ? "两步：① 纯净口播稿 ② 语义/节奏推荐分镜（不绑死镜数）"
+                      : "按当前分镜数直接生成多段旁白"}
                   </span>
                 </div>
                 <textarea
@@ -1973,7 +2028,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   onChange={(e) => handleCopyDraftChange(e.target.value)}
                   placeholder={
                     copyDraftMode === "full"
-                      ? "点击“生成口播稿草稿”后，AI 会在这里生成一整篇可编辑口播稿。你也可以直接粘贴自己的成稿。"
+                      ? "点击生成后，先得到纯净口播（不按固定镜数切割）；随后自动做语义+节奏分镜建议。也可粘贴成稿后点「重新分析」。"
                       : "点击“生成分镜旁白草稿”后，AI 会在这里按段落生成旁白列表。你可以逐段修改，每段会进入一个分镜。"
                   }
                   className="w-full min-h-36 max-h-80 bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 placeholder-zinc-650 resize-y leading-relaxed"
@@ -2105,54 +2160,6 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">分镜数量</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={STORYBOARD_SCENE_MIN}
-                    max={STORYBOARD_SCENE_MAX}
-                    step={1}
-                    value={aiSceneCount}
-                    onChange={(e) => {
-                      const next = clampSceneCount(parseInt(e.target.value || String(STORYBOARD_SCENE_MIN), 10));
-                      setAiSceneCount(next);
-                      setAiSceneCountTouched(true);
-                    }}
-                    className="ui-input"
-                  />
-                  <span className="shrink-0 text-caption">个</span>
-                </div>
-                <p className="mt-1 text-caption leading-relaxed">
-                  {suggestedSceneCount != null ? (
-                    aiSceneCountTouched && suggestedSceneCount !== aiSceneCount ? (
-                      <>
-                        语义建议 {suggestedSceneCount} 个分镜
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAiSceneCount(suggestedSceneCount);
-                            setAiSceneCountTouched(false);
-                          }}
-                          className="ml-1.5 text-amber-400 hover:text-amber-300 underline-offset-2 hover:underline"
-                        >
-                          采用建议
-                        </button>
-                      </>
-                    ) : (
-                      <>根据文案语义建议 {suggestedSceneCount} 个分镜{!aiSceneCountTouched ? "（已自动填入）" : ""}</>
-                    )
-                  ) : (
-                    <>生成文案后将按语义自动建议分镜数 · 可改 {STORYBOARD_SCENE_MIN}–{STORYBOARD_SCENE_MAX}</>
-                  )}
-                </p>
-                {sceneCountMismatch && (
-                  <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
-                    目标 {aiSceneCount} 镜 · 当前可安全切分 {liveStoryboardPreview.length} 镜（语义优先，未强制字切）
-                  </p>
-                )}
-              </div>
-
-              <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1">文案总字数</label>
                 <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-1.5">
                   <input
@@ -2177,8 +2184,96 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   </Select>
                 </div>
                 <p className="mt-1 text-[10px] text-zinc-500 leading-relaxed">
-                  预计口播 {estimatedCopySeconds} 秒 · 每分镜约 {averageCopyCharsPerStoryboard} 字
+                  步骤 1：按字数生成纯净口播（不绑死分镜数）· 预计 {estimatedCopySeconds} 秒
                 </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">分镜数量</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={STORYBOARD_SCENE_MIN}
+                    max={STORYBOARD_SCENE_MAX}
+                    step={1}
+                    value={aiSceneCount}
+                    onChange={(e) => {
+                      const next = clampSceneCount(parseInt(e.target.value || String(STORYBOARD_SCENE_MIN), 10));
+                      setAiSceneCount(next);
+                      setAiSceneCountTouched(true);
+                    }}
+                    className="ui-input"
+                  />
+                  <span className="shrink-0 text-caption">个</span>
+                </div>
+                <p className="mt-1 text-caption leading-relaxed">
+                  {suggestedSceneCount != null ? (
+                    <>
+                      <span className="text-zinc-400">步骤 2 · </span>
+                      语义 <span className="text-zinc-200 font-medium">{suggestedSceneCount}</span>
+                      {rhythmSceneCount != null && (
+                        <>
+                          {" "}· 节奏 <span className="text-zinc-200 font-medium">{rhythmSceneCount}</span>
+                          <span className="text-zinc-600">（约 40 字/镜）</span>
+                        </>
+                      )}
+                      {!aiSceneCountTouched && suggestedSceneCount === aiSceneCount ? (
+                        <span className="text-zinc-500"> · 已用语义填入</span>
+                      ) : null}
+                      <span className="ml-1.5 inline-flex flex-wrap gap-x-2 gap-y-0.5">
+                        {suggestedSceneCount !== aiSceneCount && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAiSceneCount(suggestedSceneCount);
+                              setAiSceneCountTouched(false);
+                            }}
+                            className="text-amber-400 hover:text-amber-300 underline-offset-2 hover:underline"
+                          >
+                            采用语义
+                          </button>
+                        )}
+                        {rhythmSceneCount != null && rhythmSceneCount !== aiSceneCount && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAiSceneCount(rhythmSceneCount);
+                              setAiSceneCountTouched(true);
+                            }}
+                            className="text-amber-400/90 hover:text-amber-300 underline-offset-2 hover:underline"
+                          >
+                            采用节奏
+                          </button>
+                        )}
+                        {copyDraft.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const result = reanalyzeStoryboardFromCopy(copyDraft, {
+                                adoptIfUnlocked: false,
+                                toastOnResult: true,
+                              });
+                              if (!result) addToast("请先填写或生成文案", "info");
+                            }}
+                            className="text-zinc-400 hover:text-zinc-200 underline-offset-2 hover:underline"
+                          >
+                            重新分析
+                          </button>
+                        )}
+                      </span>
+                    </>
+                  ) : (
+                    <>步骤 2：生成纯净文案后，按语义 + 节奏推荐分镜 · 可改 {STORYBOARD_SCENE_MIN}–{STORYBOARD_SCENE_MAX}</>
+                  )}
+                </p>
+                <p className="mt-0.5 text-[10px] text-zinc-600 leading-relaxed">
+                  分镜数不由总字数直接决定；语义看句/意群，节奏按字数粗估。当前目标每镜约 {averageCopyCharsPerStoryboard} 字。
+                </p>
+                {sceneCountMismatch && (
+                  <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
+                    目标 {aiSceneCount} 镜 · 当前可安全切分 {liveStoryboardPreview.length} 镜（语义优先，未强制字切）
+                  </p>
+                )}
               </div>
 
               <div>

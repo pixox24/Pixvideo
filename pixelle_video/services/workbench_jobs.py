@@ -176,8 +176,10 @@ class WorkbenchJobService:
             shutil.copyfile(result, audio_path)
         if not audio_path.is_file():
             raise FileNotFoundError("TTS provider did not create an audio file")
-        # Cross-scene consistency: loudness + short fades (does not re-synthesize).
-        postprocess_tts_clip(audio_path)
+        # TTS providers already post-process; keep a thread-offloaded pass for
+        # paths that skip provider postprocess (e.g. copied external files).
+        # Never block the asyncio event loop with sync ffmpeg.
+        await asyncio.to_thread(postprocess_tts_clip, audio_path)
         duration = await self._audio_duration(audio_path)
         changes = {
             "narration": narration_snapshot,
@@ -251,8 +253,10 @@ class WorkbenchJobService:
         if not continuous_path.is_file():
             raise FileNotFoundError("Continuous TTS provider did not create an audio file")
 
-        # Light normalize on the whole track before cutting.
-        postprocess_tts_clip(continuous_path)
+        # Do NOT re-run loudnorm on the full continuous track here:
+        # - Edge / MiniMax / MiMo already post-process the file they write
+        # - a second full-track loudnorm can take minutes and used to block the
+        #   FastAPI event loop, leaving the workbench stuck on「正在生成素材」
         total_duration = await self._audio_duration(continuous_path)
         if total_duration <= 0:
             # Fake / non-media fixtures: scale by scene count for proportional split.
@@ -284,10 +288,10 @@ class WorkbenchJobService:
                 (scene_id, audio_path, slice_info.start, slice_info.end, audio_relative)
             )
 
-        extract_audio_segments(
-            continuous_path,
-            [(path, start, end) for _scene_id, path, start, end, _rel in cut_jobs],
-            batch_size=16,
+        # Sync ffmpeg batch cut — offload so polling/API stay responsive.
+        cut_specs = [(path, start, end) for _scene_id, path, start, end, _rel in cut_jobs]
+        await asyncio.to_thread(
+            lambda: extract_audio_segments(continuous_path, cut_specs, batch_size=16)
         )
 
         for scene_id, audio_path, start, end, audio_relative in cut_jobs:
@@ -532,6 +536,28 @@ class WorkbenchJobService:
         if purpose == "initial":
             motion_enabled = False
 
+        tts_delivery = str(
+            config.get("ttsDelivery")
+            or config.get("tts_delivery")
+            or config.get("ttsDeliveryMode")
+            or ""
+        ).strip().lower().replace("-", "_")
+        # continuous (default for workbench multi-scene): hold freezes picture only;
+        # speech is muxed gaplessly so mid-sentence pauses are not inserted.
+        continuous_av_hold_split = tts_delivery in {
+            "",
+            "continuous",
+            "cont",
+            "1",
+            "true",
+        } or tts_delivery not in {"per_scene", "perscene", "segment", "scene", "legacy", "sequential"}
+        # Explicit per_scene disables gapless speech mux.
+        if tts_delivery in {"per_scene", "perscene", "segment", "scene", "legacy", "sequential"}:
+            continuous_av_hold_split = False
+        # If any hold > 0 or multi-scene continuous, prefer gapless speech path.
+        if not continuous_av_hold_split and tts_delivery in {"continuous", "cont"}:
+            continuous_av_hold_split = True
+
         return {
             "pipeline": "standard",
             "text": str(config.get("title") or project_id),
@@ -558,6 +584,8 @@ class WorkbenchJobService:
             "prompt_prefix": config.get("prompt_prefix", config.get("promptPrefix")),
             "bgm_path": bgm,
             "bgm_volume": max(0.0, min(1.0, volume)),
+            "continuous_av_hold_split": continuous_av_hold_split,
+            "tts_delivery": tts_delivery or "continuous",
         }
 
     def _require_scene(self, scene_id, project_id):

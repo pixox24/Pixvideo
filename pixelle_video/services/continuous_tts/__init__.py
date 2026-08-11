@@ -12,10 +12,12 @@ from pixelle_video.services.continuous_tts.models import (
     SceneAudioSlice,
 )
 from pixelle_video.services.continuous_tts.split import (
+    detect_silence_islands,
     extract_audio_segment,
     extract_audio_segments,
     plan_scene_slices,
     proportional_slices,
+    snap_proportional_cuts_to_silence,
 )
 
 __all__ = [
@@ -24,10 +26,12 @@ __all__ = [
     "ContinuousSplitResult",
     "SceneAudioSlice",
     "assemble_continuous_script",
+    "detect_silence_islands",
     "extract_audio_segment",
     "extract_audio_segments",
     "normalize_tts_delivery",
     "plan_scene_slices",
     "proportional_slices",
     "should_use_continuous_tts",
+    "snap_proportional_cuts_to_silence",
 ]

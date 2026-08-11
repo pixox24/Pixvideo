@@ -10,7 +10,7 @@ import { GenerationQueue } from "./GenerationQueue";
 import { WorkbenchTimeline } from "./WorkbenchTimeline";
 import { ExportDialog } from "./ExportDialog";
 import { GenerationRunPanel } from "./GenerationRunPanel";
-import { SceneProgressGrid } from "./SceneProgressGrid";
+import { frameAspectFromConfig } from "../lib/sceneStatus";
 import { dismissWorkbenchKeysTip, isWorkbenchKeysTipDismissed } from "../lib/onboarding";
 
 const PLAYBACK_MAX_FRAME_DELTA = 0.25;
@@ -234,6 +234,54 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
     setTimelinePresent(result.present);
     setTimelineFuture([]);
     void applyTimeline(result.present.sceneIds, result.present.holds, "停留时长已保存");
+  };
+  /** Relative hold for all scenes, or only multi-selected when any are checked. */
+  const handleTimelineHoldDelta = (delta: number) => {
+    if (!project || !Number.isFinite(delta) || delta === 0) return;
+    const present = timelinePresentRef.current.sceneIds.length > 0
+      ? timelinePresentRef.current
+      : snapshotFromScenes(project.scenes);
+    const useSelected = selectedSceneIds.size > 0;
+    let targetIds = useSelected
+      ? present.sceneIds.filter((id) => selectedSceneIds.has(id))
+      : [...present.sceneIds];
+    // Continuous-friendly: prefer adding hold only after sentence-terminal clips
+    // so mid-clause soft splits do not get mid-sentence silence.
+    const delivery = String(project.config?.ttsDelivery ?? project.config?.tts_delivery ?? "").toLowerCase();
+    const continuous = delivery === "continuous" || delivery === "cont";
+    const terminal = /[。！？.!?…]$/;
+    if (continuous && !useSelected && delta > 0) {
+      const byId = new Map(project.scenes.map((scene) => [scene.sceneId, scene]));
+      const sentenceEnds = targetIds.filter((id) => terminal.test((byId.get(id)?.narration || "").trim()));
+      if (sentenceEnds.length > 0) targetIds = sentenceEnds;
+    }
+    if (targetIds.length === 0) {
+      addToast("没有可调整的分镜", "info");
+      return;
+    }
+    const holdByScene = new Map(project.scenes.map((scene) => [scene.sceneId, scene.manualHoldSeconds]));
+    const holds = { ...present.holds };
+    for (const id of targetIds) {
+      const current = holds[id] ?? holdByScene.get(id) ?? 0;
+      holds[id] = Math.max(0, Math.round((current + delta) * 10) / 10);
+    }
+    const next = { sceneIds: [...present.sceneIds], holds };
+    const result = pushTimelineHistory(timelinePast, present, next);
+    setTimelinePast(result.past);
+    timelinePresentRef.current = result.present;
+    setTimelinePresent(result.present);
+    setTimelineFuture([]);
+    const signed = delta > 0 ? `+${delta}` : `${delta}`;
+    const scope = useSelected
+      ? `选中 ${targetIds.length} 个分镜`
+      : continuous && delta > 0
+        ? `${targetIds.length} 个句末分镜`
+        : `全部 ${targetIds.length} 个分镜`;
+    void applyTimeline(
+      result.present.sceneIds,
+      result.present.holds,
+      `已为${scope}各 ${signed}s 停留`,
+    );
   };
   const handleUndo = () => {
     if (timelinePast.length === 0 || !project) return;
@@ -722,13 +770,6 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
         </div>
       )}
 
-      <SceneProgressGrid
-        scenes={project.scenes}
-        run={generation.run}
-        selectedSceneId={selectedSceneId}
-        onSelect={(id) => { setSelectedSceneId(id); setMobilePanel(null); }}
-      />
-
       {showKeysTip && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/15 bg-amber-500/5 px-3 py-1.5 animate-fade-in">
           <p className="text-caption text-amber-100/80">
@@ -771,6 +812,8 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
           scenes={project.scenes}
           selectedSceneId={selectedSceneId}
           selectedSceneIds={selectedSceneIds}
+          frameAspect={frameAspectFromConfig(project.config)}
+          generationRun={generation.run}
           onSelect={(id) => { setSelectedSceneId(id); setMobilePanel(null); }}
           onToggle={toggleScene}
         />
@@ -894,27 +937,28 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
         />
       </div>
 
-      <div className="shrink-0 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] p-2">
-        <div className="ui-panel !p-2">
-          <WorkbenchTimeline
-            scenes={project.scenes}
-            selectedSceneId={selectedSceneId}
-            currentTime={currentTime}
-            totalDuration={totalDuration}
-            isPlaying={isPlaying}
-            pixelsPerSecond={pixelsPerSecond}
-            canUndo={timelinePast.length > 0}
-            canRedo={timelineFuture.length > 0}
-            onZoomChange={(value) => setPixelsPerSecond(Math.min(120, Math.max(8, value)))}
-            onSeek={seek}
-            onPause={() => setIsPlaying(false)}
-            onSelect={setSelectedSceneId}
-            onReorder={handleTimelineReorder}
-            onHold={handleTimelineHold}
-            onUndo={handleUndo}
-            onRedo={handleRedo}
-          />
-        </div>
+      <div className="shrink-0 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-3 py-2.5">
+        <WorkbenchTimeline
+          scenes={project.scenes}
+          selectedSceneId={selectedSceneId}
+          selectedSceneIds={selectedSceneIds}
+          currentTime={currentTime}
+          totalDuration={totalDuration}
+          isPlaying={isPlaying}
+          pixelsPerSecond={pixelsPerSecond}
+          canUndo={timelinePast.length > 0}
+          canRedo={timelineFuture.length > 0}
+          generationRun={generation.run}
+          onZoomChange={(value) => setPixelsPerSecond(Math.min(120, Math.max(8, value)))}
+          onSeek={seek}
+          onPause={() => setIsPlaying(false)}
+          onSelect={(id) => { setSelectedSceneId(id); setMobilePanel(null); }}
+          onReorder={handleTimelineReorder}
+          onHold={handleTimelineHold}
+          onHoldDelta={handleTimelineHoldDelta}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+        />
       </div>
 
       <GenerationQueue jobs={project.jobs} expanded={queueExpanded} onToggle={() => setQueueExpanded((v) => !v)} />

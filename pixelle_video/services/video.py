@@ -130,6 +130,310 @@ class VideoService:
             check_ffmpeg()
             self._ffmpeg_checked = True
 
+    def concat_videos_gapless_speech(
+        self,
+        video_segments: List[str],
+        speech_audios: List[str],
+        output: str,
+        bgm_path: Optional[str] = None,
+        bgm_volume: float = 0.2,
+        bgm_mode: Literal["once", "loop"] = "loop",
+    ) -> str:
+        """
+        Concatenate video segments with gapless speech mux (音画分离).
+
+        Visual tracks keep per-scene freeze holds (segments are already longer
+        than pure speech when manual hold is set). Speech is taken from the
+        original narration clips and concatenated without inter-scene silence,
+        then muxed under the full picture timeline.
+
+        Effect:
+            - Hold freezes the picture only
+            - Narration does not insert mid-sentence silence between scenes
+            - When holds exist, speech may continue over the freeze of the
+              previous scene (intentional A/V split for continuous delivery)
+
+        Args:
+            video_segments: Ordered video segment paths (with embedded holds)
+            speech_audios: Ordered pure speech audio paths (no hold silence)
+            output: Final output video path
+            bgm_path: Optional background music path/preset
+            bgm_volume: BGM volume (0.0-1.0)
+            bgm_mode: "once" or "loop"
+
+        Returns:
+            Path to the output video
+        """
+        self._ensure_ffmpeg()
+
+        if not video_segments:
+            raise ValueError("video_segments list cannot be empty")
+        if len(video_segments) != len(speech_audios):
+            raise ValueError(
+                f"video_segments ({len(video_segments)}) and speech_audios "
+                f"({len(speech_audios)}) length mismatch"
+            )
+        for path in video_segments:
+            if not path or not Path(path).is_file():
+                raise FileNotFoundError(f"Video segment not found: {path}")
+        for path in speech_audios:
+            if not path or not Path(path).is_file():
+                raise FileNotFoundError(f"Speech audio not found: {path}")
+
+        logger.info(
+            "Gapless speech mux (音画分离): {} segments, bgm={}",
+            len(video_segments),
+            bool(bgm_path),
+        )
+
+        temp_paths: List[str] = []
+        try:
+            # 1) Strip padded segment audio (holds pad silence into speech tracks)
+            silent_segments: List[str] = []
+            for index, segment in enumerate(video_segments):
+                silent_path = self._get_unique_temp_path(
+                    "silent_seg",
+                    f"{index:02d}_{Path(segment).name}",
+                )
+                self._strip_audio_copy(segment, silent_path)
+                silent_segments.append(silent_path)
+                temp_paths.append(silent_path)
+
+            # 2) Concatenate picture-only timeline (holds preserved)
+            video_only = self._get_unique_temp_path("gapless_video", Path(output).name)
+            temp_paths.append(video_only)
+            if len(silent_segments) == 1:
+                shutil.copy(silent_segments[0], video_only)
+            else:
+                try:
+                    self._concat_demuxer(silent_segments, video_only)
+                except Exception as demuxer_exc:
+                    logger.warning(
+                        "Video-only demuxer concat failed, falling back to filter: {}",
+                        demuxer_exc,
+                    )
+                    self._concat_video_only_filter(silent_segments, video_only)
+
+            # 3) Concatenate pure speech without inter-scene silence
+            speech_path = self._get_unique_temp_path("gapless_speech", "speech.m4a")
+            temp_paths.append(speech_path)
+            self._concat_audio_files(speech_audios, speech_path)
+
+            # 4) Mux gapless speech under full visual timeline
+            muxed = output
+            if bgm_path:
+                muxed = self._get_unique_temp_path("gapless_mux", Path(output).name)
+                temp_paths.append(muxed)
+
+            self._mux_gapless_speech_onto_video(
+                video=video_only,
+                speech=speech_path,
+                output=muxed,
+            )
+
+            # 5) Optional BGM mix
+            if bgm_path:
+                return self._add_bgm_to_video(
+                    video=muxed,
+                    bgm_path=bgm_path,
+                    output=output,
+                    volume=bgm_volume,
+                    mode=bgm_mode,
+                )
+
+            logger.success(f"Gapless speech video created: {output}")
+            return output
+        finally:
+            for path in temp_paths:
+                try:
+                    if path and os.path.exists(path) and os.path.abspath(path) != os.path.abspath(output):
+                        os.unlink(path)
+                except OSError:
+                    pass
+
+    def _strip_audio_copy(self, video: str, output: str) -> str:
+        """Copy video stream only (drop audio, keep holds/visual length)."""
+        self._ensure_ffmpeg()
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            (
+                ffmpeg
+                .input(video)
+                .output(output, vcodec="copy", an=None, map="0:v:0")
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+            return output
+        except ffmpeg.Error as e:
+            # ffmpeg-python maps kwargs awkwardly for -an / -map; use CLI fallback.
+            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
+            logger.debug("strip_audio via ffmpeg-python failed, CLI fallback: {}", error_msg)
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", video,
+                "-map", "0:v:0",
+                "-c:v", "copy",
+                "-an",
+                output,
+            ]
+            result = subprocess.run(cmd, capture_output=True)
+            if result.returncode != 0:
+                err = decode_ffmpeg_output(result.stderr)
+                raise RuntimeError(f"Failed to strip audio from video: {err}") from e
+            return output
+
+    def _concat_video_only_filter(self, videos: List[str], output: str) -> str:
+        """Concatenate video streams only (no audio) via filter concat."""
+        self._ensure_ffmpeg()
+        n = len(videos)
+        if n == 0:
+            raise ValueError("videos list cannot be empty")
+        if n == 1:
+            shutil.copy(videos[0], output)
+            return output
+
+        stream_spec = "".join([f"[{i}:v]" for i in range(n)])
+        filter_complex = f"{stream_spec}concat=n={n}:v=1:a=0[v]"
+        cmd = ["ffmpeg"]
+        for video in videos:
+            cmd.extend(["-i", video])
+        cmd.extend([
+            "-filter_complex", filter_complex,
+            "-map", "[v]",
+            "-an",
+            "-y",
+            output,
+        ])
+        result = subprocess.run(cmd, capture_output=True)
+        if result.returncode != 0:
+            err = decode_ffmpeg_output(result.stderr)
+            raise RuntimeError(f"Failed to concatenate video-only segments: {err}")
+        return output
+
+    def _concat_audio_files(self, audios: List[str], output: str) -> str:
+        """Concatenate pure speech clips gaplessly into one audio file."""
+        self._ensure_ffmpeg()
+        if not audios:
+            raise ValueError("audios list cannot be empty")
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+
+        if len(audios) == 1:
+            # Re-encode to a stable AAC track for muxing
+            try:
+                (
+                    ffmpeg
+                    .input(audios[0])
+                    .output(output, acodec="aac", audio_bitrate="192k", vn=None)
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
+                )
+            except ffmpeg.Error as e:
+                cmd = [
+                    "ffmpeg", "-y", "-i", audios[0],
+                    "-vn", "-c:a", "aac", "-b:a", "192k", output,
+                ]
+                result = subprocess.run(cmd, capture_output=True)
+                if result.returncode != 0:
+                    err = decode_ffmpeg_output(result.stderr)
+                    raise RuntimeError(f"Failed to encode speech audio: {err}") from e
+            return output
+
+        n = len(audios)
+        stream_spec = "".join([f"[{i}:a]" for i in range(n)])
+        filter_complex = f"{stream_spec}concat=n={n}:v=0:a=1[a]"
+        cmd = ["ffmpeg"]
+        for audio in audios:
+            cmd.extend(["-i", audio])
+        cmd.extend([
+            "-filter_complex", filter_complex,
+            "-map", "[a]",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-y",
+            output,
+        ])
+        result = subprocess.run(cmd, capture_output=True)
+        if result.returncode != 0:
+            err = decode_ffmpeg_output(result.stderr)
+            raise RuntimeError(f"Failed to concatenate speech audio: {err}")
+        return output
+
+    def _mux_gapless_speech_onto_video(
+        self,
+        video: str,
+        speech: str,
+        output: str,
+    ) -> str:
+        """
+        Mux gapless speech under a (possibly longer) visual timeline.
+
+        When holds make video longer than speech, pad speech with trailing silence
+        so duration matches the picture (holds at end stay silent on the speech track).
+        Speech itself has no inter-scene gaps.
+        """
+        self._ensure_ffmpeg()
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+
+        video_duration = self._get_video_duration(video)
+        speech_duration = self._get_audio_duration(speech)
+        target_duration = max(video_duration, speech_duration, 0.1)
+
+        # Pad speech to video length when holds extend the picture timeline.
+        # Do not insert silence between scenes — only trailing pad if needed.
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video,
+            "-i", speech,
+            "-filter_complex",
+            (
+                f"[1:a]apad=whole_dur={target_duration:.6f}[a];"
+                f"[0:v]setpts=PTS-STARTPTS[v]"
+            ),
+            "-map", "[v]",
+            "-map", "[a]",
+            "-c:v", "libx264",
+            "-preset", "medium",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-t", f"{target_duration:.6f}",
+            output,
+        ]
+        result = subprocess.run(cmd, capture_output=True)
+        if result.returncode != 0:
+            # Stream-copy video when re-encode fails (geometry already compatible)
+            err1 = decode_ffmpeg_output(result.stderr)
+            logger.warning("Gapless mux re-encode failed, trying copy video: {}", err1)
+            cmd_copy = [
+                "ffmpeg", "-y",
+                "-i", video,
+                "-i", speech,
+                "-filter_complex",
+                f"[1:a]apad=whole_dur={target_duration:.6f}[a]",
+                "-map", "0:v:0",
+                "-map", "[a]",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-t", f"{target_duration:.6f}",
+                output,
+            ]
+            result2 = subprocess.run(cmd_copy, capture_output=True)
+            if result2.returncode != 0:
+                err2 = decode_ffmpeg_output(result2.stderr)
+                raise RuntimeError(
+                    f"Failed to mux gapless speech onto video: {err1}; {err2}"
+                )
+        logger.success(
+            "Muxed gapless speech (video={:.2f}s speech={:.2f}s target={:.2f}s): {}",
+            video_duration,
+            speech_duration,
+            target_duration,
+            output,
+        )
+        return output
+
     def concat_videos(
         self,
         videos: List[str],

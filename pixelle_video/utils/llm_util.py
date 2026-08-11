@@ -57,7 +57,8 @@ def fetch_available_models(api_key: str, base_url: str, timeout: float = 10.0) -
     
     logger.debug(f"Fetching models from: {models_url}")
     
-    with httpx.Client(timeout=timeout) as client:
+    # trust_env=False: avoid dead local system proxies (e.g. Clash left enabled).
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
         response = client.get(models_url, headers=headers)
         response.raise_for_status()
         

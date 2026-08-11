@@ -36,8 +36,18 @@ import {
   type KeywordExtractionStyle,
 } from "../lib/api";
 import { ConfirmModal } from "./ConfirmModal";
-import { WIZARD_STEPS, type WizardStepId } from "./quickCreate/wizard";
+import { type WizardStepId, WIZARD_STAGE_ID } from "./quickCreate/wizard";
+import { CreateStepper } from "./quickCreate/CreateStepper";
+import { CreateStickyFooter } from "./quickCreate/CreateStickyFooter";
 import { dismissCreateTip, isCreateTipDismissed } from "../lib/onboarding";
+import {
+  buildStoryboardNarrations,
+  clampSceneCount,
+  STORYBOARD_SCENE_MAX,
+  STORYBOARD_SCENE_MIN,
+  suggestSceneCount,
+  type DraftSplitType,
+} from "../lib/storyboardSplit";
 
 interface ServiceReadyState {
   llm: boolean;
@@ -276,6 +286,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   // AI Creation states
   const [aiTopic, setAiTopic] = useState("探索未来世界的智能机器人生活碎片");
   const [aiSceneCount, setAiSceneCount] = useState(5);
+  /** True once the user manually edits scene count (or loads a preset/draft with an explicit count). */
+  const [aiSceneCountTouched, setAiSceneCountTouched] = useState(false);
+  /** Last semantic suggestion derived from copy (for UI + adopt button). */
+  const [suggestedSceneCount, setSuggestedSceneCount] = useState<number | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [copyDraftMode, setCopyDraftMode] = useState<"full" | "segmented">("segmented");
   const [copyDraft, setCopyDraft] = useState("");
@@ -293,7 +307,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   // Batch Creation states
   const [batchInput, setBatchInput] = useState("主题一: 智能机器人在雨夜撑伞\n主题二: 机械宠物狗在客厅嬉戏\n主题三: 未来城市空中飞车速递");
   const [batchCount, setBatchCount] = useState(3);
-  const [splitType, setSplitType] = useState<"paragraph" | "line" | "sentence">("line");
+  const [splitType, setSplitType] = useState<DraftSplitType>("line");
 
   // BGM states
   const [bgm, setBgm] = useState("");
@@ -430,7 +444,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           ) {
             setScenes(draft.scenes);
           }
-          if (typeof draft.aiSceneCount === "number") setAiSceneCount(draft.aiSceneCount);
+          if (typeof draft.aiSceneCount === "number") {
+            setAiSceneCount(clampSceneCount(draft.aiSceneCount));
+            setAiSceneCountTouched(true);
+          }
+          if (typeof draft.aiSceneCountTouched === "boolean") setAiSceneCountTouched(draft.aiSceneCountTouched);
+          if (typeof draft.suggestedSceneCount === "number") {
+            setSuggestedSceneCount(clampSceneCount(draft.suggestedSceneCount));
+          }
           if (["full", "segmented"].includes(draft.copyDraftMode)) setCopyDraftMode(draft.copyDraftMode);
           if (typeof draft.copyCharCount === "number") {
             setCopyCharCount(draft.copyCharCount);
@@ -496,6 +517,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         title,
         aiTopic,
         aiSceneCount,
+        aiSceneCountTouched,
+        suggestedSceneCount,
         copyDraft,
         copyDraftMode,
         copyCharCount,
@@ -528,7 +551,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setDraftSavedAt(savedAt);
     }, 500);
     return () => window.clearTimeout(timeoutId);
-  }, [mode, title, aiTopic, aiSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, reuseAssetsEnabled, keywordPreferences]);
+  }, [mode, title, aiTopic, aiSceneCount, aiSceneCountTouched, suggestedSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, reuseAssetsEnabled, keywordPreferences]);
 
   // Invalidate the review whenever a submitted production setting changes.
   React.useEffect(() => {
@@ -1067,7 +1090,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setEmotion(activePreset.emotion || "");
       setMimoModel(activePreset.mimoModel || "mimo-v2.5-tts");
       setMimoStyle(activePreset.mimoStyle || "");
-      if (activePreset.sceneCount) setAiSceneCount(activePreset.sceneCount);
+      if (activePreset.sceneCount) {
+        setAiSceneCount(clampSceneCount(activePreset.sceneCount));
+        setAiSceneCountTouched(true);
+      }
       if (activePreset.copyCharCount) {
         setCopyCharCount(activePreset.copyCharCount);
         setCopyCharCountTouched(true);
@@ -1133,8 +1159,26 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         setAiKeywordSuggestions([]);
         setKeywordSourceSnapshot("");
         setKeywordStatus("idle");
+        // Semantic-driven scene count: fill from draft structure when user has not locked the field.
+        // segmented drafts are already one scene per line — do not soft-expand commas.
+        const rule: DraftSplitType = copyDraftMode === "segmented" ? "line" : splitType;
+        const suggested = suggestSceneCount(draftText, rule, {
+          softExpand: copyDraftMode === "full",
+        });
+        setSuggestedSceneCount(suggested);
+        if (!aiSceneCountTouched) {
+          setAiSceneCount(suggested);
+          addToast(
+            `AI 文案草稿已生成。根据语义建议 ${suggested} 个分镜（已填入分镜数量，可修改）。`,
+            "success",
+          );
+        } else {
+          addToast(
+            `AI 文案草稿已生成。语义建议 ${suggested} 个分镜（你已手动设置数量，未自动覆盖）。`,
+            "success",
+          );
+        }
         maybeSyncCopyDraftToPreviewTts(draftText);
-        addToast("AI 文案草稿已生成，你可以先预览或编辑。", "success");
         if (keywordPreferences.autoExtract) void requestKeywordSuggestions(draftText);
       } else {
         addToast(formatApiErrorValue(resData.detail) || formatApiErrorValue(resData.error) || "文案草稿生成异常，请检查 LLM 设置。", "error");
@@ -1181,7 +1225,15 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         }));
         setScenes(generated);
         setMode("manual"); // switch to manual scene editor so user can review and edit
-        addToast(`AI 分镜脚本生成就绪！已帮您切分成 ${generated.length} 个分镜，您可直接在下方编辑或点击渲染。`, "success");
+        const actualCount = generated.length;
+        setSuggestedSceneCount(actualCount);
+        if (!aiSceneCountTouched) {
+          setAiSceneCount(clampSceneCount(actualCount));
+        }
+        addToast(
+          `AI 分镜脚本生成就绪！已按语义切成 ${actualCount} 个分镜，您可直接在下方编辑或点击渲染。`,
+          "success",
+        );
       } else {
         addToast(formatApiErrorValue(resData.detail) || formatApiErrorValue(resData.error) || "脚本构思异常，请检查 LLM 设置。", "error");
       }
@@ -1206,53 +1258,6 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setScenes(scenes.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
   };
 
-  const splitDraftByCurrentRule = (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return [];
-
-    if (splitType === "paragraph") {
-      return trimmed.split(/\n\s*\n/).map((segment) => segment.trim()).filter(Boolean);
-    }
-
-    if (splitType === "sentence") {
-      return trimmed.match(/[^。！？.!?\n]+[。！？.!?]?/g)?.map((segment) => segment.trim()).filter(Boolean) || [];
-    }
-
-    return trimmed.split(/\r?\n/).map((segment) => segment.trim()).filter(Boolean);
-  };
-
-  const rebalanceDraftSegments = (segments: string[], targetCount: number) => {
-    const cleanSegments = segments.map((segment) => segment.trim()).filter(Boolean);
-    const safeTargetCount = Math.max(1, targetCount);
-
-    if (cleanSegments.length === safeTargetCount) return cleanSegments;
-
-    if (cleanSegments.length > safeTargetCount) {
-      return Array.from({ length: safeTargetCount }, (_, index) => {
-        const start = Math.floor((index * cleanSegments.length) / safeTargetCount);
-        const end = Math.floor(((index + 1) * cleanSegments.length) / safeTargetCount);
-        return cleanSegments.slice(start, Math.max(end, start + 1)).join("").trim();
-      }).filter(Boolean);
-    }
-
-    const mergedText = cleanSegments.join("");
-    if (!mergedText) return [];
-
-    const chars = Array.from(mergedText);
-    const chunkSize = Math.ceil(chars.length / safeTargetCount);
-    return Array.from({ length: safeTargetCount }, (_, index) =>
-      chars.slice(index * chunkSize, (index + 1) * chunkSize).join("").trim()
-    ).filter(Boolean);
-  };
-
-  const splitFullCopyDraftForRender = (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return [];
-
-    const units = splitDraftByCurrentRule(text);
-    return rebalanceDraftSegments(units, aiSceneCount);
-  };
-
   const buildScenesForRender = () => {
     if (mode === "manual") {
       return scenes.map((scene) => ({
@@ -1266,10 +1271,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       const draftText = copyDraft.trim();
       if (!draftText) return [];
 
-      const draftSegments =
-        copyDraftMode === "full"
-          ? splitFullCopyDraftForRender(draftText)
-          : splitDraftByCurrentRule(draftText);
+      // segmented drafts are already one narration per line; full drafts use splitType.
+      // packSemanticUnits merges when too many, keeps intact when fewer than target (no char-slice).
+      const rule: DraftSplitType = copyDraftMode === "segmented" ? "line" : splitType;
+      const draftSegments = buildStoryboardNarrations(draftText, rule, aiSceneCount, {
+        softExpand: copyDraftMode === "full",
+      });
 
       return draftSegments.map((ttsText, index) => ({
         id: index + 1,
@@ -1350,6 +1357,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setTitle("新品发布创意科技短视频");
     setAiTopic("探索未来世界的智能机器人生活碎片");
     setCopyDraft("");
+    setAiSceneCount(5);
+    setAiSceneCountTouched(false);
+    setSuggestedSceneCount(null);
     setScenes([
       { id: 1, ttsText: "这是一个科技感爆棚的高能概念画卷。", visualPrompt: "Cinematic digital art of high-tech lab, warm amber lighting, futuristic, 4k" },
       { id: 2, ttsText: "每一个齿轮的咬合，都是精工美学的体现。", visualPrompt: "Macro close-up of amber golden machine gears interlocking in motion, cinematic depth of field" },
@@ -1373,7 +1383,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       if (Object.keys(errors).length > 0) {
         if (errors.title) scrollToField("stage-content");
         else if (errors.content) scrollToField("stage-storyboard");
-        else if (errors.tts) scrollToField("stage-production");
+        else if (errors.tts) scrollToField("stage-voice");
         else if (errors.review) scrollToField("stage-review");
         addToast(Object.values(errors)[0] || "请先完善必填项", "error");
         return;
@@ -1574,21 +1584,25 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   ];
   const readinessIssues = readinessItems.filter((item) => !item.ok);
   const liveStoryboardPreview = mode === "ai" ? buildScenesForRender() : [];
+  const sceneCountMismatch =
+    mode === "ai" &&
+    Boolean(copyDraft.trim()) &&
+    liveStoryboardPreview.length > 0 &&
+    liveStoryboardPreview.length !== aiSceneCount;
   const reuseLabel =
     latestCompletedTaskTitle ||
     (latestCompletedTaskId ? `最近完成任务 ${latestCompletedTaskId.slice(0, 8)}…` : null);
   const showContentStep = expertMode || wizardStep === "content";
-  const showProductionStep = expertMode || wizardStep === "production";
+  const showStyleStep = expertMode || wizardStep === "style";
+  const showVoiceStep = expertMode || wizardStep === "voice";
   const showReviewStep = expertMode || wizardStep === "review";
   const contentReady = Boolean(title.trim()) && buildScenesForRender().length > 0;
-  const productionReady = Boolean(workflowId && voice);
+  const styleReady = Boolean(workflowId);
+  const voiceReady = Boolean(voice);
   const goWizard = (step: WizardStepId) => {
     setWizardStep(step);
     window.requestAnimationFrame(() => {
-      const anchor =
-        step === "content" ? "stage-content" :
-        step === "production" ? "stage-production" :
-        "stage-review";
+      const anchor = WIZARD_STAGE_ID[step];
       document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
@@ -1609,17 +1623,26 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         return;
       }
       setFieldErrors({});
-      goWizard("production");
+      goWizard("style");
       return;
     }
-    if (wizardStep === "production") {
-      if (!productionReady) {
-        addToast("请选择音色与工作流后再继续", "error");
-        scrollToField("stage-production");
+    if (wizardStep === "style") {
+      if (!styleReady) {
+        addToast("请选择画面工作流后再继续", "error");
+        scrollToField("stage-style");
+        return;
+      }
+      goWizard("voice");
+      return;
+    }
+    if (wizardStep === "voice") {
+      if (!voiceReady) {
+        addToast("请选择配音音色后再继续", "error");
+        scrollToField("stage-voice");
         return;
       }
       if (fieldErrors.tts) {
-        scrollToField("stage-production");
+        scrollToField("stage-voice");
         addToast(fieldErrors.tts, "error");
         return;
       }
@@ -1627,12 +1650,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     }
   };
   const handleWizardBack = () => {
-    if (wizardStep === "production") goWizard("content");
-    else if (wizardStep === "review") goWizard("production");
+    if (wizardStep === "style") goWizard("content");
+    else if (wizardStep === "voice") goWizard("style");
+    else if (wizardStep === "review") goWizard("voice");
   };
 
   return (
-    <div className="space-y-5 animate-fade-in w-full max-w-[1240px] mx-auto pb-28">
+    <div className="mx-auto w-full max-w-[1240px] animate-fade-in space-y-5 pb-28">
       <ConfirmModal
         open={deletePresetConfirmOpen}
         danger
@@ -1673,7 +1697,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         <div className="flex flex-col gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between animate-fade-in-up">
           <p className="text-sm text-amber-50/95">
             <span className="font-medium text-amber-200">快速上手：</span>
-            先写主题 → 点「生成文案」→ 下一步设定配音 → 核对后生成初稿。
+            先写主题 → 生成文案 → 风格 / 声音 → 确认后生成初稿。
           </p>
           <button
             type="button"
@@ -1725,81 +1749,23 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         </div>
       )}
 
-      <nav className="sticky top-0 z-20 -mx-1 space-y-2 rounded-lg border border-zinc-900 bg-[#07080a]/95 p-2 backdrop-blur" aria-label="快捷创作步骤">
-        <ol className="grid grid-cols-3 gap-1">
-          {WIZARD_STEPS.map((step, index) => {
-            const completed =
-              step.id === "content" ? contentReady :
-              step.id === "production" ? productionReady :
-              reviewConfirmed;
-            const current = !expertMode && wizardStep === step.id;
-            return (
-              <li key={step.id}>
-                <button
-                  type="button"
-                  aria-current={current ? "step" : undefined}
-                  onClick={() => {
-                    if (expertMode) {
-                      goWizard(step.id);
-                      return;
-                    }
-                    // Allow free navigation to completed/previous steps; forward only if prior ready.
-                    if (step.id === "production" && !contentReady && wizardStep === "content") {
-                      handleWizardNext();
-                      return;
-                    }
-                    if (step.id === "review" && wizardStep !== "review") {
-                      if (!contentReady) {
-                        handleWizardNext();
-                        return;
-                      }
-                      if (!productionReady) {
-                        goWizard("production");
-                        addToast("请先完成成片设定", "info");
-                        return;
-                      }
-                    }
-                    goWizard(step.id);
-                  }}
-                  className={`flex min-h-11 w-full items-center justify-center gap-1 rounded border px-1.5 py-1.5 text-xs transition-colors ${
-                    current
-                      ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
-                      : "border-zinc-900 bg-[#101114] text-zinc-400 hover:text-zinc-200"
-                  }`}
-                >
-                  <span className="font-mono text-caption">{completed ? "✓" : index + 1}</span>
-                  <span className="hidden sm:inline">{step.label}</span>
-                  <span className="sm:hidden">{step.short}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <p className="text-caption" aria-live="polite">
-            {expertMode
-              ? "专家模式：一次显示全部步骤"
-              : wizardStep === "content"
-              ? "步骤 1/3 · 写好文案后再进入设定"
-              : wizardStep === "production"
-              ? "步骤 2/3 · 确认配音、画幅与工作流"
-              : "步骤 3/3 · 核对后提交生成"}
-            {draftSavedAt ? ` · 草稿 ${new Date(draftSavedAt).toLocaleTimeString()}` : ""}
-          </p>
-          <button
-            type="button"
-            onClick={() => setExpertMode((value) => !value)}
-            className="text-xs text-zinc-400 underline-offset-2 hover:text-amber-300 hover:underline"
-          >
-            {expertMode ? "退出专家模式" : "专家模式（展开全部）"}
-          </button>
-        </div>
-      </nav>
+      <CreateStepper
+        wizardStep={wizardStep}
+        expertMode={expertMode}
+        contentReady={contentReady}
+        styleReady={styleReady}
+        voiceReady={voiceReady}
+        reviewConfirmed={reviewConfirmed}
+        draftSavedAt={draftSavedAt}
+        onGoStep={goWizard}
+        onRequestNext={handleWizardNext}
+        onToggleExpert={() => setExpertMode((value) => !value)}
+      />
 
       {/* Step 1: Content */}
       <div className={showContentStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
       {/* Task Header Title */}
-      <div id="stage-content" className="bg-[#101114] border border-zinc-900 rounded-md p-3.5 space-y-3 scroll-mt-24">
+      <div id="stage-content" className="ui-card space-y-3 scroll-mt-24">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex-1">
           <label htmlFor="quick-create-title" className="block text-label mb-0.5">
@@ -1955,7 +1921,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       </div>
 
       {/* 2. Content Input panel */}
-      <div id="stage-storyboard" className="bg-[#101114] border border-zinc-900 rounded-lg p-4 space-y-4 scroll-mt-24">
+      <div id="stage-storyboard" className="ui-card space-y-4 scroll-mt-24">
         {mode === "ai" && (
           <div className="space-y-4">
             <div>
@@ -2139,19 +2105,51 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="font-medium text-zinc-400">分镜切片数量: {aiSceneCount} 个分镜</span>
-                  <span className="text-[10px] text-zinc-500 font-mono">建议 5-10 个分镜</span>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">分镜数量</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={STORYBOARD_SCENE_MIN}
+                    max={STORYBOARD_SCENE_MAX}
+                    step={1}
+                    value={aiSceneCount}
+                    onChange={(e) => {
+                      const next = clampSceneCount(parseInt(e.target.value || String(STORYBOARD_SCENE_MIN), 10));
+                      setAiSceneCount(next);
+                      setAiSceneCountTouched(true);
+                    }}
+                    className="ui-input"
+                  />
+                  <span className="shrink-0 text-caption">个</span>
                 </div>
-                <input
-                  type="range"
-                  min="3"
-                  max="100"
-                  step="1"
-                  value={aiSceneCount}
-                  onChange={(e) => setAiSceneCount(parseInt(e.target.value))}
-                  className="w-full accent-amber-500 cursor-pointer h-1.5 bg-zinc-800 rounded"
-                />
+                <p className="mt-1 text-caption leading-relaxed">
+                  {suggestedSceneCount != null ? (
+                    aiSceneCountTouched && suggestedSceneCount !== aiSceneCount ? (
+                      <>
+                        语义建议 {suggestedSceneCount} 个分镜
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAiSceneCount(suggestedSceneCount);
+                            setAiSceneCountTouched(false);
+                          }}
+                          className="ml-1.5 text-amber-400 hover:text-amber-300 underline-offset-2 hover:underline"
+                        >
+                          采用建议
+                        </button>
+                      </>
+                    ) : (
+                      <>根据文案语义建议 {suggestedSceneCount} 个分镜{!aiSceneCountTouched ? "（已自动填入）" : ""}</>
+                    )
+                  ) : (
+                    <>生成文案后将按语义自动建议分镜数 · 可改 {STORYBOARD_SCENE_MIN}–{STORYBOARD_SCENE_MAX}</>
+                  )}
+                </p>
+                {sceneCountMismatch && (
+                  <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
+                    目标 {aiSceneCount} 镜 · 当前可安全切分 {liveStoryboardPreview.length} 镜（语义优先，未强制字切）
+                  </p>
+                )}
               </div>
 
               <div>
@@ -2420,14 +2418,15 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       </div>
       {/* End step 1 content */}
 
-      {/* Step 2: Production */}
-      <div className={showProductionStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
-      {/* 3. TTS Voice Synthesis & BGM Mixing */}
-      <div id="stage-production" className="grid grid-cols-1 md:grid-cols-2 gap-4 scroll-mt-24">
+      {/* Step 2: Style (画幅 / 字幕 / 工作流) — filled after voice block restructure */}
+      {/* Step 3: Voice */}
+      <div className={showVoiceStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
+      {/* TTS Voice Synthesis & BGM Mixing */}
+      <div id="stage-voice" className="grid grid-cols-1 gap-4 scroll-mt-24 md:grid-cols-2">
         {/* TTS Panel */}
-        <div className="bg-[#101114] border border-zinc-900 p-4 rounded-lg space-y-4">
-          <h3 className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-            <Mic2 className="w-4 h-4 text-amber-500" />
+        <div className="ui-card space-y-4 !p-4">
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+            <Mic2 className="h-4 w-4 text-amber-500" />
             配音合成 TTS 引擎
           </h3>
           <p className="text-[10px] text-amber-400/80">试听与“合成当前文案”仅供预览，不会复用到最终成片。</p>
@@ -2728,9 +2727,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         </div>
 
         {/* BGM Panel */}
-        <div className="bg-[#101114] border border-zinc-900 p-4 rounded-lg space-y-4">
-          <h3 className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-            <Music className="w-4 h-4 text-amber-500" />
+        <div className="ui-card space-y-4 !p-4">
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+            <Music className="h-4 w-4 text-amber-500" />
             背景伴奏 BGM 混音配乐
           </h3>
 
@@ -2805,12 +2804,17 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           </div>
         </div>
       </div>
+      </div>
+      {/* End step voice */}
 
-      {/* 4. Image style and motion composition */}
-      <div className="bg-[#101114] border border-zinc-900 rounded-lg p-4 space-y-4">
-        <div className="flex items-center justify-between gap-3 pb-2 border-b border-zinc-900">
-          <h3 className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-            <FileVideo className="w-4 h-4 text-amber-500" />
+      {/* Step style: aspect / subtitles / workflows */}
+      <div className={showStyleStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
+      <div id="stage-style" className="space-y-4 scroll-mt-24">
+      {/* Image style and motion composition */}
+      <div className="ui-card space-y-4 !p-4">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border-subtle)] pb-2">
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+            <FileVideo className="h-4 w-4 text-amber-500" />
             画幅 · 字幕 · 画风
           </h3>
           <button
@@ -3295,12 +3299,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
       </div>
 
-      {/* 5. ComfyUI Media Workflows selections */}
-      <div className="bg-[#101114] border border-zinc-900 rounded-lg p-4 space-y-4">
+      {/* ComfyUI Media Workflows selections */}
+      <div className="ui-card space-y-4 !p-4">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-            <Workflow className="w-4 h-4 text-amber-500" />
-            后台渲染 Workflows 源工作流配置
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+            <Workflow className="h-4 w-4 text-amber-500" />
+            画面工作流
           </h3>
           <button
             type="button"
@@ -3346,11 +3350,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         )}
       </div>
       </div>
-      {/* End step 2 production */}
+      </div>
+      {/* End step style */}
 
-      {/* Step 3: Review */}
+      {/* Step 4: Review */}
       <div className={showReviewStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
-      <section id="stage-review" className="bg-[#101114] border border-amber-500/20 rounded-lg p-4 space-y-3 scroll-mt-24" aria-labelledby="generation-review-title">
+      <section id="stage-review" className="ui-card space-y-3 scroll-mt-24 ring-1 ring-amber-500/20" aria-labelledby="generation-review-title">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 id="generation-review-title" className="text-sm font-semibold text-zinc-200">生成前核对</h3>
@@ -3423,86 +3428,24 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         {fieldErrors.tts && <p className="text-xs text-rose-400">{fieldErrors.tts}</p>}
       </section>
       </div>
-      {/* End step 3 review */}
+      {/* End step review */}
 
-      {/* Sticky primary actions / wizard nav */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-zinc-800 bg-[#0c0d10]/95 backdrop-blur lg:left-64">
-        <div className="mx-auto flex max-w-[1240px] flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="min-w-0 text-xs text-zinc-500">
-            {isSubmitting
-              ? "正在提交…"
-              : expertMode
-              ? mode === "batch"
-                ? `将提交 ${reviewVideoCount} 个独立视频任务`
-                : "核对后提交；推荐进入工作台精修"
-              : wizardStep === "content"
-              ? contentReady
-                ? "内容已就绪，可进入成片设定"
-                : "请生成或填写文案后再继续"
-              : wizardStep === "production"
-              ? productionReady
-                ? "设定已就绪，可进入核对生成"
-                : "请选择音色与工作流"
-              : !reviewConfirmed
-              ? "请先勾选「生成前核对」中的确认项"
-              : mode === "batch"
-              ? `将提交 ${reviewVideoCount} 个独立视频任务，进度在右侧任务面板`
-              : "推荐：生成初稿并进入工作台精修；也可直接渲染成片"}
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {!expertMode && wizardStep !== "content" && (
-              <button
-                type="button"
-                onClick={handleWizardBack}
-                className="rounded border border-zinc-700 px-4 py-2.5 text-sm text-zinc-300 hover:border-zinc-500"
-              >
-                上一步
-              </button>
-            )}
-            {!expertMode && wizardStep !== "review" && (
-              <button
-                type="button"
-                onClick={handleWizardNext}
-                className="rounded bg-amber-500 px-5 py-2.5 text-sm font-semibold text-black hover:bg-amber-400"
-              >
-                下一步
-              </button>
-            )}
-            {(expertMode || wizardStep === "review") && (
-              <>
-                {mode !== "batch" && onCreateProject && (
-                  <div className="flex flex-col items-end gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => void handleTriggerRender(true)}
-                      disabled={isSubmitting}
-                      className="px-4 py-2.5 border border-zinc-700 text-zinc-200 font-semibold text-sm rounded hover:border-zinc-500 hover:bg-zinc-900 disabled:border-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                    >
-                      <FileVideo className="w-4 h-4" />
-                      仅生成成片
-                    </button>
-                    <span className="text-caption hidden sm:block">直接渲染 MP4，不进入编辑</span>
-                  </div>
-                )}
-                <div className="flex flex-col items-end gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => void handleTriggerRender(false)}
-                    disabled={isSubmitting}
-                    className="px-5 py-2.5 bg-amber-500 text-black font-semibold text-sm rounded hover:bg-amber-400 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed shadow-xl shadow-amber-500/10 flex items-center gap-2 transition-transform active:scale-[0.99]"
-                  >
-                    {isSubmitting ? <Loader className="w-4 h-4 animate-spin" /> : mode === "batch" ? <Sparkles className="w-4 h-4 text-black" /> : <FolderOpen className="w-4 h-4 text-black" />}
-                    {isSubmitting ? "正在提交任务…" : mode === "batch" ? `提交 ${reviewVideoCount} 个视频任务` : "生成初稿并打开工作台"}
-                  </button>
-                  {mode !== "batch" && (
-                    <span className="text-caption hidden sm:block">创建项目并开始生成配音与画面</span>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+      <CreateStickyFooter
+        expertMode={expertMode}
+        wizardStep={wizardStep}
+        mode={mode}
+        isSubmitting={isSubmitting}
+        contentReady={contentReady}
+        styleReady={styleReady}
+        voiceReady={voiceReady}
+        reviewConfirmed={reviewConfirmed}
+        reviewVideoCount={reviewVideoCount}
+        canCreateProject={Boolean(onCreateProject)}
+        onBack={handleWizardBack}
+        onNext={handleWizardNext}
+        onSubmitWorkbench={() => void handleTriggerRender(false)}
+        onSubmitDirect={() => void handleTriggerRender(true)}
+      />
     </div>
   );
 };

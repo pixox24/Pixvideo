@@ -28,7 +28,11 @@ async def test_media_service_uses_existing_local_image_by_default(monkeypatch):
     result = await service(prompt="must stay offline", width=2560, height=1440, scene_id="scene-1")
 
     assert result.media_type == "image"
-    assert Path(result.url).parent == (Path(__file__).parents[2] / "素材库" / "16x9").resolve()
+    parent = Path(result.url).parent
+    library = (Path(__file__).parents[2] / "素材库").resolve()
+    # Windows installs typically use 16x9; macOS/Linux often keep 16:9.
+    assert parent in {library / name for name in ("16x9", "16:9", "16-9")}
+    assert Path(result.url).is_file()
 
 
 @pytest.mark.asyncio
@@ -39,7 +43,31 @@ async def test_media_service_selects_portrait_storyboard_material(monkeypatch):
     service = MediaService({}, core=DummyCore())
     result = await service(prompt="portrait", width=1440, height=2560, scene_id="scene-2")
 
-    assert Path(result.url).parent == (Path(__file__).parents[2] / "素材库" / "9x16").resolve()
+    parent = Path(result.url).parent
+    library = (Path(__file__).parents[2] / "素材库").resolve()
+    assert parent in {library / name for name in ("9x16", "9:16", "9-16")}
+    assert Path(result.url).is_file()
+
+
+def test_resolve_storyboard_ratio_dir_accepts_windows_and_macos_names(tmp_path):
+    """Windows forbids ':' so folders are 16x9; macOS often keeps 16:9."""
+    win_lib = tmp_path / "win"
+    (win_lib / "16x9").mkdir(parents=True)
+    (win_lib / "9x16").mkdir(parents=True)
+    assert MediaService._resolve_storyboard_ratio_dir(win_lib, landscape=True).name == "16x9"
+    assert MediaService._resolve_storyboard_ratio_dir(win_lib, landscape=False).name == "9x16"
+
+    mac_lib = tmp_path / "mac"
+    (mac_lib / "16:9").mkdir(parents=True)
+    (mac_lib / "9:16").mkdir(parents=True)
+    assert MediaService._resolve_storyboard_ratio_dir(mac_lib, landscape=True).name == "16:9"
+    assert MediaService._resolve_storyboard_ratio_dir(mac_lib, landscape=False).name == "9:16"
+
+    mixed = tmp_path / "mixed"
+    (mixed / "16-9").mkdir(parents=True)
+    (mixed / "portrait").mkdir(parents=True)
+    assert MediaService._resolve_storyboard_ratio_dir(mixed, landscape=True).name == "16-9"
+    assert MediaService._resolve_storyboard_ratio_dir(mixed, landscape=False).name == "portrait"
 
 
 @pytest.mark.asyncio

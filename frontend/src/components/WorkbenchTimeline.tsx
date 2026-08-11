@@ -170,25 +170,27 @@ export const WorkbenchTimeline: React.FC<Props> = ({
   }, [pps, totalDuration]);
 
   return (
-    <section className="border-t border-zinc-800 bg-[#0d0e11] p-3">
+    <section className="p-1">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <div className="text-[10px] font-semibold uppercase text-zinc-500">时间线</div>
-        <div className="ml-1 font-mono text-[10px] text-zinc-500">{formatTimelineTime(currentTime)} / {formatTimelineTime(totalDuration)}</div>
-        <div className="ml-auto flex items-center gap-1">
-          <button type="button" title="撤销" aria-label="撤销" disabled={!canUndo} onClick={onUndo} className="p-1 text-zinc-400 hover:text-zinc-100 disabled:opacity-30"><Undo2 className="h-3.5 w-3.5" /></button>
-          <button type="button" title="重做" aria-label="重做" disabled={!canRedo} onClick={onRedo} className="p-1 text-zinc-400 hover:text-zinc-100 disabled:opacity-30"><Redo2 className="h-3.5 w-3.5" /></button>
-          <button type="button" title="缩小" aria-label="缩小" onClick={() => onZoomChange(clampPps(pps / 1.25))} className="p-1 text-zinc-400 hover:text-zinc-100"><ZoomOut className="h-3.5 w-3.5" /></button>
+        <div className="text-caption font-semibold uppercase tracking-wider">时间线</div>
+        <div className="ml-1 font-mono text-caption">
+          {formatTimelineTime(currentTime)} / {formatTimelineTime(totalDuration)}
+        </div>
+        <div className="ml-auto flex items-center gap-0.5">
+          <button type="button" title="撤销" aria-label="撤销" disabled={!canUndo} onClick={onUndo} className="ui-btn ui-btn-ghost ui-btn-icon !h-8 !w-8 disabled:opacity-30"><Undo2 className="h-3.5 w-3.5" /></button>
+          <button type="button" title="重做" aria-label="重做" disabled={!canRedo} onClick={onRedo} className="ui-btn ui-btn-ghost ui-btn-icon !h-8 !w-8 disabled:opacity-30"><Redo2 className="h-3.5 w-3.5" /></button>
+          <button type="button" title="缩小" aria-label="缩小" onClick={() => onZoomChange(clampPps(pps / 1.25))} className="ui-btn ui-btn-ghost ui-btn-icon !h-8 !w-8"><ZoomOut className="h-3.5 w-3.5" /></button>
           <input aria-label="缩放比例" type="range" min={MIN_PIXELS_PER_SECOND} max={MAX_PIXELS_PER_SECOND} step={1} value={pps} onChange={(event) => onZoomChange(Number(event.target.value))} className="w-24 accent-amber-500" />
-          <button type="button" title="放大" aria-label="放大" onClick={() => onZoomChange(clampPps(pps * 1.25))} className="p-1 text-zinc-400 hover:text-zinc-100"><ZoomIn className="h-3.5 w-3.5" /></button>
-          <button type="button" title="适应全部" aria-label="适应全部" onClick={fitAll} className="p-1 text-zinc-400 hover:text-zinc-100"><Maximize className="h-3.5 w-3.5" /></button>
+          <button type="button" title="放大" aria-label="放大" onClick={() => onZoomChange(clampPps(pps * 1.25))} className="ui-btn ui-btn-ghost ui-btn-icon !h-8 !w-8"><ZoomIn className="h-3.5 w-3.5" /></button>
+          <button type="button" title="适应全部" aria-label="适应全部" onClick={fitAll} className="ui-btn ui-btn-ghost ui-btn-icon !h-8 !w-8"><Maximize className="h-3.5 w-3.5" /></button>
         </div>
       </div>
-      <div ref={scrollRef} className="overflow-x-auto">
+      <div ref={scrollRef} className="overflow-x-auto rounded-[var(--radius-md)]">
         <div ref={contentRef} className="relative" style={{ width: contentWidth, height: RULER_HEIGHT + TRACK_HEIGHT }}>
-          <div onPointerDown={(event) => seekToClientX(event.clientX)} className="absolute inset-x-0 top-0 cursor-pointer border-b border-zinc-800 bg-[#101114]" style={{ height: RULER_HEIGHT }}>
+          <div onPointerDown={(event) => seekToClientX(event.clientX)} className="absolute inset-x-0 top-0 cursor-pointer border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-2)]" style={{ height: RULER_HEIGHT }}>
             {ticks}
           </div>
-          <div onPointerDown={(event) => seekToClientX(event.clientX)} className="absolute inset-x-0 cursor-pointer bg-[#111316]" style={{ top: RULER_HEIGHT, height: TRACK_HEIGHT }}>
+          <div onPointerDown={(event) => seekToClientX(event.clientX)} className="absolute inset-x-0 cursor-pointer bg-[var(--color-surface-0)]" style={{ top: RULER_HEIGHT, height: TRACK_HEIGHT }}>
             {layout.map((item, index) => {
               const left = CONTENT_PADDING + item.startSeconds * pps;
               const width = item.durationSeconds * pps;
@@ -202,7 +204,7 @@ export const WorkbenchTimeline: React.FC<Props> = ({
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={() => dropAt(index)}
                   onPointerDown={(event) => handleClipPointerDown(event, item)}
-                  className={`absolute top-0 h-full overflow-hidden border px-1 py-0.5 ${isActive ? "border-amber-500 bg-amber-500/10" : "border-zinc-700 bg-zinc-900"}`}
+                  className={`absolute top-0 h-full overflow-hidden rounded-lg border px-1 py-0.5 ${isActive ? "border-amber-500 bg-amber-500/10 ring-1 ring-amber-500/30" : "border-[var(--color-border-strong)] bg-[var(--color-surface-3)]"}`}
                   style={{ left, width }}
                 >
                   <div className="truncate text-[9px] leading-tight text-zinc-300">#{item.index + 1} · {getSceneTimelineDuration(scenes[item.index]!, item.holdSeconds).toFixed(1)}s</div>

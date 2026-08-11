@@ -41,8 +41,12 @@ export const SceneList: React.FC<Props> = ({ scenes, selectedSceneId, selectedSc
   const start = Math.max(0, Math.floor(scrollTop / rowHeight) - 3);
   const visibleScenes = useMemo(() => scenes.slice(start, start + 18), [scenes, start]);
   return (
-    <section className={`min-h-0 flex flex-col border-r border-zinc-800 bg-[#0d0e11] ${className}`}>
-      <div className="border-b border-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-200">分镜列表</div>
+    <section
+      className={`flex min-h-0 flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] ${className}`}
+    >
+      <div className="border-b border-[var(--color-border-subtle)] px-3 py-2 text-xs font-semibold text-zinc-200">
+        分镜列表
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
         <div style={{ height: scenes.length * rowHeight, position: "relative" }}>
           {visibleScenes.map((scene, index) => {
@@ -51,13 +55,16 @@ export const SceneList: React.FC<Props> = ({ scenes, selectedSceneId, selectedSc
               scene.versions.find((version) => version.versionId === scene.currentVersionId)?.thumbnailUrl ||
               scene.versions.find((version) => version.versionId === scene.currentVersionId)?.imageUrl;
             const badge = sceneBadge(scene);
+            const active = selectedSceneId === scene.sceneId;
             return (
               <button
                 key={scene.sceneId}
                 type="button"
                 onClick={() => onSelect(scene.sceneId)}
-                className={`absolute left-0 right-0 flex h-[76px] items-center gap-2 border-b border-zinc-900 px-2 text-left ${
-                  selectedSceneId === scene.sceneId ? "bg-amber-500/10" : "hover:bg-zinc-900/70"
+                className={`absolute left-0 right-0 flex h-[76px] items-center gap-2 px-2 text-left transition-colors ${
+                  active
+                    ? "bg-amber-500/10 ring-1 ring-inset ring-amber-500/20"
+                    : "hover:bg-white/5"
                 }`}
                 style={{ top: position * rowHeight }}
               >
@@ -67,12 +74,17 @@ export const SceneList: React.FC<Props> = ({ scenes, selectedSceneId, selectedSc
                   checked={selectedSceneIds.has(scene.sceneId)}
                   onClick={(event) => event.stopPropagation()}
                   onChange={() => onToggle(scene.sceneId)}
+                  className="accent-amber-500"
                 />
-                <div className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden bg-zinc-900 text-zinc-600">
-                  {thumb ? <img src={thumb} alt="当前画面" className="h-full w-full object-cover" /> : <ImageIcon className="h-4 w-4" />}
+                <div className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] bg-[var(--color-surface-3)] text-zinc-600">
+                  {thumb ? (
+                    <img src={thumb} alt="当前画面" className="h-full w-full object-cover" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4" />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                  <div className="flex items-center gap-1.5 text-caption">
                     <span>#{position + 1}</span>
                     <span className={badge.className}>{badge.label}</span>
                   </div>

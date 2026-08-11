@@ -218,3 +218,64 @@ def test_config_manager_accepts_mimo_api_key(tmp_path):
         assert manager.get_comfyui_config()["tts"]["mimo"]["api_key"] == "mimo-key"
     finally:
         ConfigManager._instance = original_instance
+
+
+@pytest.mark.asyncio
+async def test_mimo_tts_hot_reloads_api_key_from_config_manager(tmp_path, monkeypatch):
+    """Keys saved in Advanced Settings after process start must take effect without restart."""
+    captured = {}
+
+    async def fake_post(self, url, *, json=None, headers=None):
+        captured["headers"] = headers
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "audio": {"data": base64.b64encode(b"fake wav").decode("utf-8")}
+                        }
+                    }
+                ]
+            },
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.delenv("MIMO_API_KEY", raising=False)
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    config_path = tmp_path / "config.yaml"
+    original_instance = ConfigManager._instance
+    ConfigManager._instance = None
+    try:
+        manager = ConfigManager(str(config_path))
+        # Simulate production: service constructed from full app config (not a direct TTS subsection).
+        full_config = {
+            "comfyui": {
+                "tts": {
+                    "inference_mode": "mimo",
+                    "mimo": {"api_key": "", "model": "mimo-v2.5-tts", "voice_id": "mimo_default"},
+                }
+            }
+        }
+        service = TTSService(full_config, core=DummyCore())
+        assert service._direct_config is False
+        assert not (service.config.get("mimo") or {}).get("api_key")
+
+        # User later saves the key via Advanced Settings / config_manager.
+        manager.set_comfyui_config(mimo_api_key="sk-hot-reload")
+
+        # Point the module-level singleton used by TTSService at this isolated manager.
+        import pixelle_video.config as config_pkg
+
+        monkeypatch.setattr(config_pkg, "config_manager", manager)
+
+        result = await service(
+            text="hello",
+            inference_mode="mimo",
+            output_path=str(tmp_path / "audio.wav"),
+        )
+        assert Path(result).exists()
+        assert captured["headers"]["Authorization"] == "Bearer sk-hot-reload"
+    finally:
+        ConfigManager._instance = original_instance

@@ -657,11 +657,18 @@ export default function App() {
     recentProjects.find((item) => item.projectId === activeProjectId)?.title ||
     (activeProjectId ? "当前项目" : null);
   const navBtn = (tab: ActiveTab, active: boolean) =>
-    `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium rounded-md transition-all ${
+    `w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium rounded-[var(--radius-md)] transition-colors ${
       active
-        ? "bg-amber-500/10 text-amber-400 border border-amber-500/15"
-        : "text-zinc-400 hover:text-zinc-200 hover:bg-[#15161c] border border-transparent"
+        ? "bg-amber-500/10 text-zinc-50 ring-1 ring-amber-500/20"
+        : "text-zinc-400 hover:text-zinc-100 hover:bg-white/5"
     }`;
+
+  const tabTitle: Record<ActiveTab, string> = {
+    "quick-create": "开始创作",
+    "project-workbench": currentProjectTitle ? `精修 · ${currentProjectTitle}` : "精修",
+    history: "作品库",
+    settings: "设置",
+  };
 
   const coachNeeds = [
     {
@@ -707,48 +714,56 @@ export default function App() {
       {sidebarOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
           aria-label="关闭导航遮罩"
         />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[var(--color-surface-2)] border-r border-zinc-800/80 flex flex-col justify-between flex-shrink-0 h-full transition-transform lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex flex-col min-h-0 flex-1">
-          <div className="p-4 border-b border-zinc-800/80 flex items-center gap-2.5 bg-[var(--color-surface-1)]">
-            <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
-              <Tv className="w-4 h-4 text-black stroke-[2.5]" />
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex h-full w-60 flex-shrink-0 flex-col justify-between border-r border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] transition-transform lg:static lg:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center gap-2.5 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] p-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-amber-500 shadow-[var(--shadow-cta)]">
+              <Tv className="h-4 w-4 text-black stroke-[2.5]" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-sm font-black font-display text-zinc-100 tracking-wide">
+              <h1 className="font-display text-sm font-bold tracking-wide text-zinc-100">
                 PixVideo
               </h1>
-              <span className="text-caption text-amber-500 font-semibold block mt-0.5">
+              <span className="text-caption mt-0.5 block font-medium text-amber-500/90">
                 AI 短视频工作台
               </span>
             </div>
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="p-1 text-zinc-400 lg:hidden"
+              className="ui-btn ui-btn-ghost ui-btn-icon lg:hidden"
               aria-label="关闭导航"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
           </div>
 
-          <nav className="p-3 space-y-1 overflow-y-auto flex-1">
-            <span className="text-caption font-semibold tracking-wider uppercase block px-2.5 mb-1.5">
+          <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+            <span className="text-caption mb-1.5 block px-3 font-semibold uppercase tracking-wider">
               创作
             </span>
-            <button type="button" onClick={() => setActiveTab("quick-create")} className={navBtn("quick-create", activeTab === "quick-create")}>
-              <Sparkles className="w-4 h-4" />
-              <span>快捷创作</span>
+            <button
+              type="button"
+              onClick={() => setActiveTab("quick-create")}
+              className={navBtn("quick-create", activeTab === "quick-create")}
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>开始创作</span>
             </button>
 
-            <div className="pt-4 pb-1">
-              <span className="text-caption font-semibold tracking-wider uppercase block px-2.5 mb-1.5">
-                项目与资产
+            <div className="pb-1 pt-4">
+              <span className="text-caption mb-1.5 block px-3 font-semibold uppercase tracking-wider">
+                项目
               </span>
             </div>
 
@@ -757,50 +772,67 @@ export default function App() {
               onClick={() => setActiveTab("project-workbench")}
               className={navBtn("project-workbench", activeTab === "project-workbench")}
             >
-              <FolderOpen className="w-4 h-4" />
-              <span>项目工作台</span>
+              <FolderOpen className="h-4 w-4" />
+              <span>精修</span>
             </button>
 
-            <button type="button" onClick={() => setActiveTab("history")} className={navBtn("history", activeTab === "history")}>
-              <History className="w-4 h-4" />
-              <span>历史记录</span>
+            <button
+              type="button"
+              onClick={() => setActiveTab("history")}
+              className={navBtn("history", activeTab === "history")}
+            >
+              <History className="h-4 w-4" />
+              <span>作品库</span>
             </button>
 
-            <button type="button" onClick={() => setActiveTab("settings")} className={navBtn("settings", activeTab === "settings")}>
-              <SettingsIcon className="w-4 h-4" />
-              <span>系统设置</span>
+            <button
+              type="button"
+              onClick={() => setActiveTab("settings")}
+              className={navBtn("settings", activeTab === "settings")}
+            >
+              <SettingsIcon className="h-4 w-4" />
+              <span>设置</span>
             </button>
           </nav>
         </div>
 
-        <div className="p-3 border-t border-zinc-900 bg-[#0c0d10] space-y-2">
+        <div className="space-y-2 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] p-3">
           <button
             type="button"
             onClick={() => setStatusExpanded((open) => !open)}
-            className="w-full flex items-center justify-between text-left"
+            className="flex w-full items-center justify-between rounded-[var(--radius-md)] px-1.5 py-1 text-left hover:bg-white/5"
+            aria-expanded={statusExpanded}
           >
-            <span className="text-caption font-semibold tracking-wider uppercase">
-              服务状态 · {readySummaryCount}/{statusItems.length} 就绪
+            <span className="text-caption font-semibold tracking-wider">
+              服务状态 · {readySummaryCount}/{statusItems.length}
             </span>
-            {statusExpanded ? <ChevronUp className="w-3.5 h-3.5 text-zinc-500" /> : <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />}
+            {statusExpanded ? (
+              <ChevronUp className="h-3.5 w-3.5 text-zinc-500" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+            )}
           </button>
 
           {statusExpanded && (
-            <div className="space-y-1">
+            <div className="space-y-0.5 animate-fade-in">
               {statusItems.map((item) => (
                 <button
                   key={item.key}
                   type="button"
                   onClick={() => setActiveTab("settings")}
-                  className="w-full flex items-center justify-between rounded px-1.5 py-1 text-xs hover:bg-zinc-900/80"
-                  title="点击前往系统设置"
+                  className="flex w-full items-center justify-between rounded-[var(--radius-md)] px-2 py-1.5 text-xs hover:bg-white/5"
+                  title="点击前往设置"
                 >
-                  <span className="text-zinc-500 flex items-center gap-1.5">
-                    <Cpu className="w-3.5 h-3.5 text-zinc-600" />
+                  <span className="flex items-center gap-1.5 text-zinc-500">
+                    <Cpu className="h-3.5 w-3.5 text-zinc-600" />
                     {item.label}
                   </span>
-                  <span className={`flex items-center gap-1 text-caption font-semibold px-1 rounded ${item.ok ? "text-emerald-400" : "text-amber-400"}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${item.ok ? "bg-emerald-500" : "bg-amber-500"}`} />
+                  <span
+                    className={`ui-chip ${item.ok ? "ui-chip-success" : "ui-chip-warning"} !px-1.5 !py-0`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${item.ok ? "bg-emerald-500" : "bg-amber-500"}`}
+                    />
                     {item.detail}
                   </span>
                 </button>
@@ -809,40 +841,45 @@ export default function App() {
           )}
 
           {activePreset && (
-            <div className="pt-1 border-t border-zinc-900/60">
-              <p className="text-caption text-zinc-500 mb-0.5">当前预设</p>
-              <p className="text-xs text-zinc-300 truncate">{activePreset.name}</p>
+            <div className="border-t border-[var(--color-border-subtle)] pt-2">
+              <p className="text-caption mb-0.5">当前预设</p>
+              <p className="truncate text-xs text-zinc-300">{activePreset.name}</p>
             </div>
           )}
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0 h-full flex justify-center">
-        <div className={`w-full h-full flex min-w-0 ${activeTab === "project-workbench" && activeProjectId ? "max-w-none" : "max-w-[1680px]"}`}>
-      <main className="flex-1 flex flex-col min-w-0 h-full">
-        <header className={`h-12 bg-[#101114] border-b border-zinc-900 px-4 flex items-center justify-between flex-shrink-0 ${activeTab === "project-workbench" && activeProjectId ? "lg:pl-4" : ""}`}>
-          <div className="flex items-center gap-3 min-w-0">
+      <div className="flex h-full min-w-0 flex-1 justify-center bg-[var(--color-surface-0)]">
+        <div
+          className={`flex h-full w-full min-w-0 ${
+            activeTab === "project-workbench" && activeProjectId ? "max-w-none" : "max-w-[1680px]"
+          }`}
+        >
+      <main className="flex h-full min-w-0 flex-1 flex-col">
+        <header
+          className={`flex h-12 flex-shrink-0 items-center justify-between border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-4 ${
+            activeTab === "project-workbench" && activeProjectId ? "lg:pl-4" : ""
+          }`}
+        >
+          <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="p-1.5 text-zinc-400 hover:text-zinc-100 lg:hidden"
+              className="ui-btn ui-btn-ghost ui-btn-icon lg:hidden"
               aria-label="打开导航"
             >
-              <Menu className="w-4 h-4" />
+              <Menu className="h-4 w-4" />
             </button>
-            <span className="text-sm font-semibold text-zinc-200 font-display truncate">
-              {activeTab === "quick-create" && "快捷创作"}
-              {activeTab === "project-workbench" && (currentProjectTitle ? `工作台 · ${currentProjectTitle}` : "项目工作台")}
-              {activeTab === "history" && "历史记录"}
-              {activeTab === "settings" && "系统设置"}
+            <span className="font-display truncate text-sm font-semibold text-zinc-200">
+              {tabTitle[activeTab]}
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setActiveTab("settings")}
-              className="hidden sm:flex items-center gap-2 text-xs text-zinc-500 bg-zinc-900/80 px-2.5 py-1 rounded border border-zinc-800 hover:border-zinc-700 hover:text-zinc-300"
+              className="hidden items-center gap-2 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:border-[var(--color-border-strong)] hover:text-zinc-300 sm:flex"
               title="查看服务配置"
             >
               <span className={`flex items-center gap-1 ${hasLlm ? "text-emerald-400" : "text-amber-400"}`}>
@@ -850,8 +887,16 @@ export default function App() {
                 LLM
               </span>
               <span className="text-zinc-700">|</span>
-              <span className={`flex items-center gap-1 ${hasImageGeneration ? "text-emerald-400" : "text-amber-400"}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${hasImageGeneration ? "bg-emerald-500" : "bg-amber-500"}`} />
+              <span
+                className={`flex items-center gap-1 ${
+                  hasImageGeneration ? "text-emerald-400" : "text-amber-400"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    hasImageGeneration ? "bg-emerald-500" : "bg-amber-500"
+                  }`}
+                />
                 图像
               </span>
             </button>
@@ -860,11 +905,15 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setConsoleOpen((open) => !open)}
-                className="p-1.5 bg-[#17181c] border border-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1 text-xs"
+                className="ui-btn ui-btn-secondary ui-btn-sm gap-1.5 !px-2.5"
                 aria-label={consoleOpen ? "关闭任务面板" : "打开任务面板"}
               >
-                {consoleOpen ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRightOpen className="w-3.5 h-3.5" />}
-                <span className="hidden sm:inline text-xs">任务</span>
+                {consoleOpen ? (
+                  <PanelRightClose className="h-3.5 w-3.5" />
+                ) : (
+                  <PanelRightOpen className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline">任务</span>
               </button>
             )}
           </div>
@@ -914,12 +963,12 @@ export default function App() {
           )}
 
           {activeTab === "project-workbench" && !activeProjectId && (
-            <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-dashed border-zinc-800 bg-[var(--color-surface-2)] p-8 text-center animate-soft-scale-in shadow-[var(--shadow-card)]">
+            <div className="ui-card mx-auto max-w-lg space-y-4 border-dashed p-8 text-center animate-soft-scale-in">
               <FolderOpen className="mx-auto h-10 w-10 text-zinc-600" />
               <div>
-                <h2 className="text-base font-semibold text-zinc-100 font-display">还没有打开的项目</h2>
+                <h2 className="font-display text-base font-semibold text-zinc-100">还没有打开的项目</h2>
                 <p className="mt-1.5 text-sm text-zinc-400">
-                  从快捷创作生成初稿，或从历史记录复制为可编辑项目。
+                  从「开始创作」生成初稿，或从作品库打开为可编辑项目。
                 </p>
               </div>
               {recentProjects.length > 0 && (
@@ -930,10 +979,10 @@ export default function App() {
                       key={project.projectId}
                       type="button"
                       onClick={() => openProject(project.projectId, project.title)}
-                      className="w-full rounded-md border border-zinc-800 bg-[#17181c] px-3 py-2.5 text-left hover:border-amber-500/40"
+                      className="w-full rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] px-3 py-2.5 text-left transition-colors hover:ring-1 hover:ring-amber-500/30"
                     >
                       <div className="truncate text-sm text-zinc-200">{project.title}</div>
-                      <div className="mt-0.5 text-caption text-zinc-500">
+                      <div className="mt-0.5 text-caption">
                         {new Date(project.updatedAt).toLocaleString()}
                       </div>
                     </button>
@@ -944,16 +993,16 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("quick-create")}
-                  className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-400"
+                  className="ui-btn ui-btn-primary"
                 >
-                  去快捷创作
+                  去开始创作
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab("history")}
-                  className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-500"
+                  className="ui-btn ui-btn-secondary"
                 >
-                  查看历史记录
+                  查看作品库
                 </button>
               </div>
             </div>
@@ -983,7 +1032,12 @@ export default function App() {
 
       {/* Hide task console while immersed in project workbench */}
       {!(activeTab === "project-workbench" && activeProjectId) && consoleOpen && (
-        <button type="button" className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setConsoleOpen(false)} aria-label="关闭任务面板遮罩" />
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
+          onClick={() => setConsoleOpen(false)}
+          aria-label="关闭任务面板遮罩"
+        />
       )}
       {!(activeTab === "project-workbench" && activeProjectId) && (
         <ConsolePanel

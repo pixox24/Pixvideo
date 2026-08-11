@@ -27,12 +27,12 @@ export const Toast: React.FC<ToastProps> = ({ toasts, onClose }) => {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`pointer-events-auto flex items-start gap-3 rounded-xl border bg-[var(--color-surface-3)] p-4 shadow-xl shadow-black/40 animate-fade-in-up ${
+          className={`pointer-events-auto flex items-start gap-3 rounded-[var(--radius-lg)] border bg-[var(--color-surface-3)] p-4 shadow-[var(--shadow-soft)] animate-fade-in-up ${
             toast.type === "error"
               ? "border-rose-500/30"
               : toast.type === "success"
               ? "border-emerald-500/20"
-              : "border-zinc-700/80"
+              : "border-[var(--color-border-subtle)]"
           }`}
         >
           <div className="mt-0.5 shrink-0">

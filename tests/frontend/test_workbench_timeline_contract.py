@@ -37,6 +37,11 @@ def test_workbench_drives_project_playback_clock():
     assert "currentSceneItemRef.current ?? currentSceneItem" in workbench
     assert "requestPlaybackFrame" in workbench
     assert "cancelPlaybackFrame" in workbench
+    # Audio must follow the rAF ref clock — not a currentTime useEffect — to avoid
+    # play()/pause() races (Chrome: "The play() request was interrupted...").
+    assert "syncNarrationAudio" in workbench
+    assert "isPlayInterruptedError" in workbench
+    assert "UI_TICK_MS" in workbench
 
 
 def test_timeline_receives_playback_props():
@@ -106,9 +111,10 @@ def test_workbench_serializes_timeline_saves_and_uses_latest_snapshot():
 
 def test_workbench_reserves_a_real_preview_column_before_inspector():
     workbench = (Path(__file__).parents[2] / "frontend/src/components/ProjectWorkbench.tsx").read_text(encoding="utf-8")
-    assert "lg:grid-cols-[minmax(190px,240px)_minmax(0,1fr)]" in workbench
-    assert "2xl:grid-cols-[minmax(190px,240px)_minmax(0,1fr)_minmax(280px,360px)]" in workbench
-    assert "lg:col-start-2 lg:col-span-1" in workbench
+    # Three-column stage layout: scene rail | preview | inspector
+    assert "lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)_minmax(260px,320px)]" in workbench
+    assert "ui-stage" in workbench
+    assert "SceneInspector" in workbench
 
 
 def test_workbench_binds_project_bgm_to_a_separate_looping_audio():

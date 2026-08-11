@@ -42,6 +42,30 @@ def test_sentence_mode_does_not_hard_cut_long_phrase():
     assert segments == [text]
 
 
+def test_phrase_mode_prefers_punctuation_over_mid_sentence_capacity_cut():
+    """Regression: 「后半生该找回真正的自己」 must not be hard-cut mid-phrase."""
+    renderer = SubtitleRenderer()
+    text = "荣格说中年是第二次成年，前半生为别人活，后半生该找回真正的自己。"
+
+    # Capacity 12 is enough for each punctuation phrase (max 11 chars), but the
+    # old fixed packer produced: ['…', '前半生为别人活，后半生该', '找回真正的自己'].
+    segments = renderer.segment_text(text, mode="phrase", max_chars=12, max_lines=1)
+    assert segments == [
+        "荣格说中年是第二次成年",
+        "前半生为别人活",
+        "后半生该找回真正的自己",
+    ]
+
+    # Global default-style-like capacity (20x2) should keep the same natural phrases.
+    segments_wide = renderer.segment_text(text, mode="phrase", max_chars=20, max_lines=2)
+    flat = [s.replace("\n", "") for s in segments_wide]
+    assert flat == [
+        "荣格说中年是第二次成年",
+        "前半生为别人活",
+        "后半生该找回真正的自己",
+    ]
+
+
 def test_proportional_timing_gives_longer_sentences_more_time():
     renderer = SubtitleRenderer()
     timed = renderer.plan_segments(

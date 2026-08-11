@@ -62,16 +62,40 @@ class TTSService(ComfyBaseService):
             core: PixelleVideoCore instance (for accessing shared ComfyKit)
         """
         super().__init__(config, service_name="tts", core=core)
+        # When callers pass the TTS subsection directly (unit tests), do not
+        # hot-reload from the global config_manager — that would overwrite
+        # intentional test fixtures with the developer's config.yaml.
+        self._direct_config = False
         # Unit tests and direct service usage may pass the TTS subsection
         # instead of the full app config. Keep full-config behavior unchanged.
         if not self.config and any(
             key in config for key in ("inference_mode", "local", "comfyui", "minimax", "mimo", "default_workflow")
         ):
             self.config = config
+            self._direct_config = True
         if not self.config.get("default_workflow"):
             nested_default_workflow = self.config.get("comfyui", {}).get("default_workflow")
             if nested_default_workflow:
                 self.config["default_workflow"] = nested_default_workflow
+
+    def _refresh_config_from_manager(self) -> None:
+        """
+        Reload TTS subsection from config_manager.
+
+        Advanced Settings can update API keys after the process starts. The
+        service used to keep a one-shot snapshot from initialize(), so MiMo /
+        MiniMax keys saved later never became visible until restart.
+        """
+        if self._direct_config:
+            return
+        try:
+            from pixelle_video.config import config_manager
+
+            live = config_manager.get_comfyui_config().get("tts")
+            if isinstance(live, dict) and live:
+                self.config = live
+        except Exception as exc:
+            logger.debug(f"TTS config hot-reload skipped: {exc}")
     
     
     async def __call__(
@@ -126,6 +150,9 @@ class TTSService(ComfyBaseService):
                 workflow="runninghub/tts_edge.json"
             )
         """
+        # Pick up API keys / mode changes saved after process start.
+        self._refresh_config_from_manager()
+
         # Determine inference mode (param > config)
         # Frontend uses "edge"; normalize to backend "local".
         raw_mode = inference_mode or self.config.get("inference_mode", "local")

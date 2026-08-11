@@ -32,14 +32,14 @@ export const ExportDialog: React.FC<Props> = ({ project, open, onClose, onExport
   const bgmVolume = Number(project.config.bgmVolume || project.config.bgm_volume || 30);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-xl border border-zinc-700 bg-[var(--color-surface-2)] p-5 shadow-2xl animate-soft-scale-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-[var(--radius-xl)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] p-5 shadow-[var(--shadow-soft)] animate-soft-scale-in">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">导出检查</h2>
-            <p className="mt-1 text-xs text-zinc-500">导出使用当前确认版本，生成不可变快照</p>
+            <p className="mt-1 text-caption">导出使用当前确认版本，生成不可变快照</p>
           </div>
-          <button type="button" title="关闭" aria-label="关闭" onClick={onClose}>
+          <button type="button" title="关闭" aria-label="关闭" onClick={onClose} className="ui-btn ui-btn-ghost ui-btn-icon">
             <X className="h-4 w-4 text-zinc-400" />
           </button>
         </div>
@@ -92,12 +92,12 @@ export const ExportDialog: React.FC<Props> = ({ project, open, onClose, onExport
           </div>
         )}
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="border border-zinc-700 px-3 py-2 text-xs text-zinc-300">取消</button>
+          <button type="button" onClick={onClose} className="ui-btn ui-btn-secondary ui-btn-sm">取消</button>
           <button
             type="button"
             disabled={!canSubmit || submitting}
             onClick={async () => { setSubmitting(true); try { await onExport(allowIncomplete); onClose(); } finally { setSubmitting(false); } }}
-            className="flex items-center gap-1 bg-amber-500 px-3 py-2 text-xs font-semibold text-black disabled:opacity-40"
+            className="ui-btn ui-btn-primary ui-btn-sm"
           >
             <Download className="h-3.5 w-3.5" />
             {submitting ? "正在提交" : "开始导出"}

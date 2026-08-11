@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Select } from "./Select";
-import { Server, Database, Key, CheckCircle, RefreshCw, Cpu, HelpCircle } from "lucide-react";
+import { Server, Database, Key, RefreshCw, Cpu } from "lucide-react";
 import { SystemSettings } from "../types";
 
 interface SystemSettingsProps {
@@ -9,6 +9,10 @@ interface SystemSettingsProps {
   onSaveSettings: (newSettings: SystemSettings) => void | Promise<void>;
   addToast: (text: string, type: "success" | "error" | "info") => void;
 }
+
+const fieldLabel = "text-label mb-1.5 block";
+const selectClass = "ui-input";
+const savedHint = "mt-1 block text-caption text-emerald-400";
 
 export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
   settings,
@@ -78,15 +82,36 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
     }
   };
 
+  const TestBtn: React.FC<{ service: string; label: string; onClick: () => void; full?: boolean }> = ({
+    service,
+    label,
+    onClick,
+    full,
+  }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={testingService !== null}
+      className={`ui-btn ui-btn-secondary ui-btn-sm ${full ? "w-full" : ""}`}
+    >
+      {testingService === service ? (
+        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Server className="h-3.5 w-3.5 text-amber-500" />
+      )}
+      {label}
+    </button>
+  );
+
   return (
-    <div className="space-y-6 max-w-4xl animate-fade-in">
-      <div className="flex flex-col gap-1 border-b border-zinc-800 pb-4">
-        <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2 font-display">
-          <Database className="w-5 h-5 text-amber-500" />
+    <div className="mx-auto max-w-4xl animate-fade-in space-y-5 pb-8">
+      <div className="flex flex-col gap-1 border-b border-[var(--color-border-subtle)] pb-4">
+        <h2 className="font-display flex items-center gap-2 text-lg font-semibold text-zinc-100">
+          <Database className="h-5 w-5 text-amber-500" />
           系统连接配置
         </h2>
-        <p className="text-xs text-zinc-400">
-          配置语言模型、图像生成、ComfyUI、RunningHub 等服务连接。点击保存后会写入服务器配置文件，刷新页面仍然保留。
+        <p className="text-sm text-zinc-400">
+          配置语言模型、图像生成、ComfyUI、RunningHub 等服务。保存后写入服务器配置，刷新后仍保留。
         </p>
         <button
           type="button"
@@ -100,31 +125,29 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
             }
             addToast("已重置入门提示，刷新页面后将再次显示引导。", "info");
           }}
-          className="mt-2 text-xs text-amber-400/90 hover:text-amber-300 underline-offset-2 hover:underline"
+          className="mt-2 self-start text-xs text-amber-400/90 underline-offset-2 hover:text-amber-300 hover:underline"
         >
           重置入门引导与界面提示
         </button>
       </div>
 
-      {/* 1. LLM Configurations */}
-      <div className="bg-[#101114] border border-zinc-800 p-4 rounded-lg space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-sm font-medium text-zinc-200 flex items-center gap-2 font-display">
-            <Cpu className="w-4 h-4 text-amber-500" />
-            LLM 语言大模型设置 (脚本生成)
+      {/* 1. LLM */}
+      <section className="ui-card space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-display flex items-center gap-2 text-sm font-semibold text-zinc-100">
+            <Cpu className="h-4 w-4 text-amber-500" />
+            语言模型（脚本生成）
           </h3>
-          <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-            推荐使用 Gemini 3.5
-          </span>
+          <span className="ui-chip ui-chip-success">推荐 Gemini 3.5</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1">供应商 Preset</label>
+            <label className={fieldLabel}>供应商</label>
             <Select
               value={settings.llm.provider}
               onChange={(e) => handleProviderChange(e.target.value as SystemSettings["llm"]["provider"])}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+              className={selectClass}
             >
               <option value="gemini">Google Gemini AI</option>
               <option value="deepseek">DeepSeek API</option>
@@ -133,11 +156,11 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1">模型型号 Select</label>
+            <label className={fieldLabel}>模型</label>
             <Select
               value={settings.llm.model}
               onChange={(e) => handleFieldChange("llm", "model", e.target.value)}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+              className={selectClass}
             >
               {settings.llm.provider === "gemini" && (
                 <>
@@ -161,293 +184,267 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-zinc-400 mb-1">API Key</label>
+            <label className={fieldLabel}>API Key</label>
             <div className="relative">
               <input
                 type="password"
-                placeholder={settings.llm.provider === "gemini" ? "已自动检测系统注入的 GEMINI_API_KEY" : "请输入 API Key"}
+                placeholder={
+                  settings.llm.provider === "gemini"
+                    ? "已自动检测系统注入的 GEMINI_API_KEY"
+                    : "请输入 API Key"
+                }
                 value={settings.llm.apiKey}
                 onChange={(e) => handleFieldChange("llm", "apiKey", e.target.value)}
-                className="w-full bg-[#17181c] border border-zinc-800 rounded pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                className="ui-input pl-9"
               />
-              {settings.llm.apiKeyMasked && !settings.llm.apiKey && (
-                <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.llm.apiKeyMasked}，输入新值可替换</span>
-              )}
-              <Key className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
+              <Key className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
             </div>
+            {settings.llm.apiKeyMasked && !settings.llm.apiKey && (
+              <span className={savedHint}>已保存：{settings.llm.apiKeyMasked}，输入新值可替换</span>
+            )}
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-zinc-400 mb-1">Base URL (API 代理地址)</label>
+            <label className={fieldLabel}>Base URL（API 代理地址）</label>
             <input
               type="text"
-              placeholder="https://api.github.com/..."
+              placeholder="https://api.example.com/v1"
               value={settings.llm.baseUrl}
               onChange={(e) => handleFieldChange("llm", "baseUrl", e.target.value)}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+              className="ui-input"
             />
           </div>
         </div>
 
-        <div className="flex justify-end pt-2">
-          <button
-            onClick={() => testConnection("llm", settings.llm)}
-            disabled={testingService !== null}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-zinc-800 bg-[#17181c] hover:bg-zinc-800 text-zinc-300 transition-colors disabled:opacity-50"
-          >
-            {testingService === "llm" ? (
-              <RefreshCw className="w-3 h-3 animate-spin" />
-            ) : (
-              <Server className="w-3 h-3 text-amber-500" />
-            )}
-            测试 LLM 连接
-          </button>
+        <div className="flex justify-end pt-1">
+          <TestBtn service="llm" label="测试 LLM 连接" onClick={() => testConnection("llm", settings.llm)} />
         </div>
-      </div>
+      </section>
 
-      {/* 2. Image Generation API */}
-      <div className="bg-[#101114] border border-zinc-800 p-4 rounded-lg space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-sm font-medium text-zinc-200 flex items-center gap-2 font-display">
-            <Cpu className="w-4 h-4 text-amber-500" />
-            图片生成模型设置
+      {/* 2. Image generation */}
+      <section className="ui-card space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-display flex items-center gap-2 text-sm font-semibold text-zinc-100">
+            <Cpu className="h-4 w-4 text-amber-500" />
+            图片生成模型
           </h3>
-          <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-            OpenAI Images 兼容
-          </span>
+          <span className="ui-chip ui-chip-success">OpenAI Images 兼容</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-zinc-400 mb-1">Base URL</label>
+            <label className={fieldLabel}>Base URL</label>
             <input
               type="text"
               placeholder="https://img-cn.65535.space/v1"
               value={settings.imageGeneration.baseUrl}
               onChange={(e) => handleFieldChange("imageGeneration", "baseUrl", e.target.value)}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+              className="ui-input"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1">API Key</label>
+            <label className={fieldLabel}>API Key</label>
             <input
               type="password"
               placeholder="请输入图片生成 API Key"
               value={settings.imageGeneration.apiKey}
               onChange={(e) => handleFieldChange("imageGeneration", "apiKey", e.target.value)}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+              className="ui-input"
             />
             {settings.imageGeneration.apiKeyMasked && !settings.imageGeneration.apiKey && (
-              <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.imageGeneration.apiKeyMasked}，输入新值可替换</span>
+              <span className={savedHint}>
+                已保存：{settings.imageGeneration.apiKeyMasked}，输入新值可替换
+              </span>
             )}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1">Model</label>
+            <label className={fieldLabel}>Model</label>
             <input
               type="text"
               placeholder="gpt-image-2"
               value={settings.imageGeneration.model}
               onChange={(e) => handleFieldChange("imageGeneration", "model", e.target.value)}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+              className="ui-input"
             />
           </div>
         </div>
 
-        <div className="flex justify-end pt-2">
-          <button
+        <div className="flex justify-end pt-1">
+          <TestBtn
+            service="image_generation"
+            label="测试图片生成配置"
             onClick={() => testConnection("image_generation", settings.imageGeneration)}
-            disabled={testingService !== null}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-zinc-800 bg-[#17181c] hover:bg-zinc-800 text-zinc-300 transition-colors disabled:opacity-50"
-          >
-            {testingService === "image_generation" ? (
-              <RefreshCw className="w-3 h-3 animate-spin" />
-            ) : (
-              <Server className="w-3 h-3 text-amber-500" />
-            )}
-            测试图片生成配置
-          </button>
+          />
         </div>
-      </div>
+      </section>
 
-      {/* 3. ComfyUI Local Settings */}
-      <div className="bg-[#101114] border border-zinc-800 p-4 rounded-lg space-y-4">
-        <h3 className="text-sm font-medium text-zinc-200 flex items-center gap-2 font-display">
-          <Cpu className="w-4 h-4 text-amber-500" />
-          ComfyUI 本地服务端配置
+      {/* 3. ComfyUI */}
+      <section className="ui-card space-y-4">
+        <h3 className="font-display flex items-center gap-2 text-sm font-semibold text-zinc-100">
+          <Cpu className="h-4 w-4 text-amber-500" />
+          ComfyUI 本地服务
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1">ComfyUI Web API 地址</label>
+            <label className={fieldLabel}>ComfyUI Web API 地址</label>
             <input
               type="text"
               value={settings.comfy.url}
               onChange={(e) => handleFieldChange("comfy", "url", e.target.value)}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+              className="ui-input"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1">ComfyUI API Key (可选)</label>
+            <label className={fieldLabel}>ComfyUI API Key（可选）</label>
             <input
               type="password"
               placeholder="请输入 ComfyUI 安全秘钥"
               value={settings.comfy.apiKey}
               onChange={(e) => handleFieldChange("comfy", "apiKey", e.target.value)}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+              className="ui-input"
             />
             {settings.comfy.apiKeyMasked && !settings.comfy.apiKey && (
-              <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.comfy.apiKeyMasked}，输入新值可替换</span>
+              <span className={savedHint}>已保存：{settings.comfy.apiKeyMasked}，输入新值可替换</span>
             )}
           </div>
         </div>
 
-        <div className="flex justify-end pt-2">
-          <button
+        <div className="flex justify-end pt-1">
+          <TestBtn
+            service="comfy"
+            label="测试 ComfyUI 本地连接"
             onClick={() => testConnection("comfy", settings.comfy)}
-            disabled={testingService !== null}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-zinc-800 bg-[#17181c] hover:bg-zinc-800 text-zinc-300 transition-colors disabled:opacity-50"
-          >
-            {testingService === "comfy" ? (
-              <RefreshCw className="w-3 h-3 animate-spin" />
-            ) : (
-              <Server className="w-3 h-3 text-amber-500" />
-            )}
-            测试 ComfyUI 本地连接
-          </button>
+          />
         </div>
-      </div>
+      </section>
 
-      {/* 4. Cloud Render node integrations */}
-      <div className="bg-[#101114] border border-zinc-800 p-4 rounded-lg space-y-4">
-        <h3 className="text-sm font-medium text-zinc-200 flex items-center gap-2 font-display">
-          <Cpu className="w-4 h-4 text-amber-500" />
-          云端算力托管及模型接口 (RunningHub / BizyAir / MiniMax)
+      {/* 4. Cloud integrations */}
+      <section className="ui-card space-y-4">
+        <h3 className="font-display flex items-center gap-2 text-sm font-semibold text-zinc-100">
+          <Cpu className="h-4 w-4 text-amber-500" />
+          云端算力与 TTS 密钥
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-zinc-900 pt-4">
-          {/* RunningHub */}
+        <div className="grid grid-cols-1 gap-6 border-t border-[var(--color-border-subtle)] pt-4 md:grid-cols-2">
           <div className="space-y-3">
-            <h4 className="text-xs font-medium text-amber-400">RunningHub 云端 ComfyUI</h4>
+            <h4 className="text-xs font-semibold text-amber-400">RunningHub 云端 ComfyUI</h4>
             <div>
-              <label className="block text-[10px] text-zinc-500 mb-1">RunningHub API Key</label>
+              <label className={fieldLabel}>RunningHub API Key</label>
               <input
                 type="password"
                 placeholder="请输入 RunningHub Key"
-              value={settings.runninghub.apiKey}
-              onChange={(e) => handleFieldChange("runninghub", "apiKey", e.target.value)}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-            />
-            {settings.runninghub.apiKeyMasked && !settings.runninghub.apiKey && (
-              <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.runninghub.apiKeyMasked}，输入新值可替换</span>
-            )}
+                value={settings.runninghub.apiKey}
+                onChange={(e) => handleFieldChange("runninghub", "apiKey", e.target.value)}
+                className="ui-input"
+              />
+              {settings.runninghub.apiKeyMasked && !settings.runninghub.apiKey && (
+                <span className={savedHint}>
+                  已保存：{settings.runninghub.apiKeyMasked}，输入新值可替换
+                </span>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] text-zinc-500 mb-1">并发路数限制</label>
+                <label className={fieldLabel}>并发路数</label>
                 <input
                   type="number"
                   min="1"
                   max="10"
                   value={settings.runninghub.concurrency}
-                  onChange={(e) => handleFieldChange("runninghub", "concurrency", parseInt(e.target.value))}
-                  className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  onChange={(e) =>
+                    handleFieldChange("runninghub", "concurrency", parseInt(e.target.value))
+                  }
+                  className="ui-input"
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-zinc-500 mb-1">物理实例规格</label>
+                <label className={fieldLabel}>实例规格</label>
                 <Select
                   value={settings.runninghub.instanceType}
                   onChange={(e) => handleFieldChange("runninghub", "instanceType", e.target.value)}
-                  className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  className={selectClass}
                 >
                   <option value="24G">RTX 4090 (24G)</option>
                   <option value="48G">RTX A6000 (48G)</option>
                 </Select>
               </div>
             </div>
-            <button
+            <TestBtn
+              full
+              service="runninghub"
+              label="测试 RunningHub 连接"
               onClick={() => testConnection("runninghub", settings.runninghub)}
-              disabled={testingService !== null}
-              className="w-full flex justify-center items-center gap-1 py-1 text-[11px] rounded border border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-200"
-            >
-              测试 RunningHub 连接
-            </button>
+            />
           </div>
 
-          {/* MiniMax / BizyAir / MiMo */}
-          <div className="space-y-3 md:border-l md:border-zinc-900 md:pl-4">
-            <h4 className="text-xs font-medium text-amber-400">BizyAir 节点 / MiniMax / MiMo TTS</h4>
+          <div className="space-y-3 md:border-l md:border-[var(--color-border-subtle)] md:pl-4">
+            <h4 className="text-xs font-semibold text-amber-400">BizyAir · MiniMax · MiMo</h4>
             <div>
-              <label className="block text-[10px] text-zinc-500 mb-1">BizyAir API Key</label>
+              <label className={fieldLabel}>BizyAir API Key</label>
               <input
                 type="password"
                 placeholder="请输入 BizyAir API Key"
                 value={settings.bizyairKey}
                 onChange={(e) => handleFieldChange("bizyairKey", "", e.target.value)}
-                className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                className="ui-input"
               />
               {settings.bizyairKeyMasked && !settings.bizyairKey && (
-                <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.bizyairKeyMasked}，输入新值可替换</span>
+                <span className={savedHint}>已保存：{settings.bizyairKeyMasked}，输入新值可替换</span>
               )}
             </div>
             <div>
-              <label className="block text-[10px] text-zinc-500 mb-1">MiniMax API Key</label>
+              <label className={fieldLabel}>MiniMax API Key</label>
               <input
                 type="password"
                 placeholder="请输入 MiniMax API Key"
                 value={settings.minimaxKey}
                 onChange={(e) => handleFieldChange("minimaxKey", "", e.target.value)}
-                className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                className="ui-input"
               />
               {settings.minimaxKeyMasked && !settings.minimaxKey && (
-                <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.minimaxKeyMasked}，输入新值可替换</span>
+                <span className={savedHint}>已保存：{settings.minimaxKeyMasked}，输入新值可替换</span>
               )}
             </div>
             <div>
-              <label className="block text-[10px] text-zinc-500 mb-1">MiMo API Key (Xiaomi)</label>
+              <label className={fieldLabel}>MiMo API Key（Xiaomi）</label>
               <input
                 type="password"
                 placeholder="请输入 MiMo API Key"
                 value={settings.mimoKey}
                 onChange={(e) => handleFieldChange("mimoKey", "", e.target.value)}
-                className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                className="ui-input"
               />
               {settings.mimoKeyMasked && !settings.mimoKey && (
-                <span className="mt-1 block text-[10px] text-emerald-400">已保存：{settings.mimoKeyMasked}，输入新值可替换</span>
+                <span className={savedHint}>已保存：{settings.mimoKeyMasked}，输入新值可替换</span>
               )}
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <button
+              <TestBtn
+                service="bizyair"
+                label="BizyAir"
                 onClick={() => testConnection("bizyair", { apiKey: settings.bizyairKey })}
-                className="flex justify-center items-center gap-1 py-1 text-[10px] rounded border border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-200"
-              >
-                测试 BizyAir
-              </button>
-              <button
+              />
+              <TestBtn
+                service="minimax"
+                label="MiniMax"
                 onClick={() => testConnection("minimax", { apiKey: settings.minimaxKey })}
-                className="flex justify-center items-center gap-1 py-1 text-[10px] rounded border border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-200"
-              >
-                测试 MiniMax
-              </button>
-              <button
+              />
+              <TestBtn
+                service="mimo"
+                label="MiMo"
                 onClick={() => testConnection("mimo", { apiKey: settings.mimoKey })}
-                className="flex justify-center items-center gap-1 py-1 text-[10px] rounded border border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-200"
-              >
-                测试 MiMo
-              </button>
+              />
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="flex gap-3 justify-end">
-        <button
-          onClick={() => onSaveSettings(settings)}
-          className="px-5 py-2 text-xs font-semibold rounded bg-amber-500 text-[#07080a] hover:bg-amber-400 transition-colors shadow-lg shadow-amber-500/10"
-        >
+      <div className="flex justify-end gap-3">
+        <button type="button" onClick={() => onSaveSettings(settings)} className="ui-btn ui-btn-primary ui-btn-lg">
           保存所有设置
         </button>
       </div>

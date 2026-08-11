@@ -43,6 +43,26 @@ test("sentence mode splits on commas and periods without hard cutting", () => {
   );
 });
 
+test("phrase mode prefers punctuation so mid-sentence hard cuts are avoided", () => {
+  const phraseStyle: SubtitleStyle = {
+    ...style,
+    segmentMode: "phrase",
+    // Capacity fits each punctuation phrase, but old fixed packing cut mid-sentence.
+    maxCharsPerLine: 12,
+    maxLines: 1,
+  };
+  const segments = segmentPreviewText(
+    "荣格说中年是第二次成年，前半生为别人活，后半生该找回真正的自己。",
+    "phrase",
+    phraseStyle,
+  );
+  assert.deepEqual(segments, [
+    "荣格说中年是第二次成年",
+    "前半生为别人活",
+    "后半生该找回真正的自己",
+  ]);
+});
+
 test("portrait preview preserves a usable subtitle size", () => {
   const scaled = scaleStyleForPreview(style, "portrait");
   assert.ok(scaled.fontSize >= 12);

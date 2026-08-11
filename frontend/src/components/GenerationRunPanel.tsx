@@ -59,36 +59,70 @@ export const GenerationRunPanel: React.FC<Props> = ({
         : `分镜素材 ${progress}% · ${STATUS_LABELS[status] || status}`;
 
   return (
-    <section className="border-b border-zinc-800 bg-[#15161a] px-3 py-3">
+    <section className="shrink-0 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-3 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs font-semibold text-zinc-100">项目生成</div>
-          <div className="text-[11px] text-zinc-500 leading-relaxed">
+          <div className="text-caption leading-relaxed text-zinc-500">
             {detailLine}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {!run || (terminal && status !== "completed_with_failures") ? <button type="button" onClick={onStart} disabled={busy !== null} className="flex items-center gap-1 bg-amber-500 px-3 py-2 text-xs font-semibold text-black disabled:opacity-40"><Play className="h-3.5 w-3.5" />开始生成</button> : null}
-          {run && can("pause", status === "queued" || status === "running") && <button type="button" onClick={onPause} disabled={busy !== null} className="flex items-center gap-1 border border-zinc-700 px-3 py-2 text-xs text-zinc-200 disabled:opacity-40"><Pause className="h-3.5 w-3.5" />暂停</button>}
-          {run && can("resume", status === "paused") && <button type="button" onClick={onResume} disabled={busy !== null} className="flex items-center gap-1 bg-amber-500 px-3 py-2 text-xs font-semibold text-black disabled:opacity-40"><Play className="h-3.5 w-3.5" />继续生成</button>}
-          {run && can("cancel", !terminal) && <button type="button" onClick={onCancel} disabled={busy !== null} className="flex items-center gap-1 border border-red-900 px-3 py-2 text-xs text-red-300 disabled:opacity-40"><Square className="h-3.5 w-3.5" />取消</button>}
-          {run && can("retry-failed", status === "completed_with_failures") && <button type="button" onClick={onRetry} disabled={busy !== null} className="flex items-center gap-1 border border-amber-700 px-3 py-2 text-xs text-amber-200 disabled:opacity-40"><RotateCcw className="h-3.5 w-3.5" />仅重试失败项</button>}
+        <div className="flex flex-wrap items-center gap-2">
+          {!run || (terminal && status !== "completed_with_failures") ? (
+            <button type="button" onClick={onStart} disabled={busy !== null} className="ui-btn ui-btn-primary ui-btn-sm">
+              <Play className="h-3.5 w-3.5" />开始生成
+            </button>
+          ) : null}
+          {run && can("pause", status === "queued" || status === "running") && (
+            <button type="button" onClick={onPause} disabled={busy !== null} className="ui-btn ui-btn-secondary ui-btn-sm">
+              <Pause className="h-3.5 w-3.5" />暂停
+            </button>
+          )}
+          {run && can("resume", status === "paused") && (
+            <button type="button" onClick={onResume} disabled={busy !== null} className="ui-btn ui-btn-primary ui-btn-sm">
+              <Play className="h-3.5 w-3.5" />继续生成
+            </button>
+          )}
+          {run && can("cancel", !terminal) && (
+            <button type="button" onClick={onCancel} disabled={busy !== null} className="ui-btn ui-btn-danger ui-btn-sm">
+              <Square className="h-3.5 w-3.5" />取消
+            </button>
+          )}
+          {run && can("retry-failed", status === "completed_with_failures") && (
+            <button type="button" onClick={onRetry} disabled={busy !== null} className="ui-btn ui-btn-outline ui-btn-sm text-amber-200">
+              <RotateCcw className="h-3.5 w-3.5" />仅重试失败项
+            </button>
+          )}
         </div>
       </div>
-      {run && !terminal && <div className="mt-3 h-1 overflow-hidden bg-zinc-800"><div className="h-full bg-amber-500 transition-all" style={{ width: `${progress}%` }} /></div>}
+      {run && !terminal && (
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--color-surface-3)]">
+          <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${progress}%` }} />
+        </div>
+      )}
       {terminal && exportActive && (
-        <div className="mt-3 rounded border border-amber-500/25 bg-amber-500/5 px-2.5 py-2 text-[11px] text-amber-100/90">
+        <div className="mt-2 rounded-[var(--radius-md)] border border-amber-500/25 bg-amber-500/5 px-2.5 py-2 text-[11px] text-amber-100/90">
           分镜配音/画面已经生成完毕。当前在后台把各镜头合成初稿 MP4，界面可能仍显示忙碌，但不是某一镜卡住。
         </div>
       )}
       {failedItems.length > 0 && (
-        <div role="alert" className="mt-3 border border-red-900/70 bg-red-950/20 p-2 text-xs text-red-100">
-          <div className="flex items-center gap-1 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />{failedItems.length} 个分镜生成失败</div>
+        <div role="alert" className="mt-2 rounded-[var(--radius-md)] border border-rose-500/30 bg-rose-950/20 p-2 text-xs text-rose-100">
+          <div className="flex items-center gap-1 font-semibold">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {failedItems.length} 个分镜生成失败
+          </div>
           <div className="mt-2 grid gap-1">
             {failedItems.map((item) => (
-              <button key={item.itemId} type="button" onClick={() => onLocateFailure(item.sceneId)} className="flex items-center justify-between gap-2 border border-red-900/50 px-2 py-1.5 text-left hover:bg-red-900/20">
+              <button
+                key={item.itemId}
+                type="button"
+                onClick={() => onLocateFailure(item.sceneId)}
+                className="flex items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-rose-500/20 px-2 py-1.5 text-left hover:bg-rose-900/20"
+              >
                 <span>分镜 #{item.position + 1} · {failedStage(item)}失败</span>
-                <span className="max-w-[55%] truncate text-red-200" title={item.error || undefined}>{item.error || "请重试"}</span>
+                <span className="max-w-[55%] truncate text-rose-200" title={item.error || undefined}>
+                  {item.error || "请重试"}
+                </span>
               </button>
             ))}
           </div>

@@ -10,8 +10,10 @@ def test_quick_create_exposes_project_entry_callback():
     assert 'handleTriggerRender(true)' in source
     assert "onCreateProject({" in source
     assert "visualPrompt: scene.visualPrompt.trim() || scene.ttsText" in source
-    assert "仅生成成片" in source
-    assert "生成初稿并打开工作台" in source
+    # Labels may live in CreateStickyFooter (PR-C)
+    footer = (ROOT / "frontend/src/components/quickCreate/CreateStickyFooter.tsx").read_text(encoding="utf-8")
+    assert "仅生成成片" in source or "仅生成成片" in footer
+    assert "生成初稿并打开工作台" in source or "生成初稿并打开工作台" in footer
 
 
 def test_app_registers_project_workbench_tab():

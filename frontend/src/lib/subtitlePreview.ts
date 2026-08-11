@@ -73,13 +73,26 @@ export const segmentPreviewText = (
       .filter(Boolean);
   }
 
-  // phrase: fixed capacity chunks (punctuation not used as split points)
+  // phrase: prefer punctuation-bounded phrases (same as backend), then capacity.
+  // Pure fixed packing produced mid-sentence cuts like 「后半生该|找回真正的自己」.
   const cleaned = (text || "").replace(/\s+/g, " ").trim();
   if (!cleaned) return [];
+  const atomic = cleaned
+    .split(SPLIT_PUNCT)
+    .map((part) => stripDisplayPunctuation(part))
+    .filter(Boolean);
+  const phrases = atomic.length > 0 ? atomic : [stripDisplayPunctuation(cleaned)].filter(Boolean);
   const chunks: string[] = [];
-  for (let i = 0; i < cleaned.length; i += capacity) {
-    const piece = stripDisplayPunctuation(cleaned.slice(i, i + capacity));
-    if (piece) chunks.push(wrapPreviewText(piece, maxChars, maxLines).join("\n"));
+  for (const phrase of phrases) {
+    if (phrase.length <= capacity) {
+      chunks.push(wrapPreviewText(phrase, maxChars, maxLines).join("\n"));
+      continue;
+    }
+    // Last resort hard capacity for overlong phrases without usable punctuation.
+    for (let i = 0; i < phrase.length; i += capacity) {
+      const piece = stripDisplayPunctuation(phrase.slice(i, i + capacity));
+      if (piece) chunks.push(wrapPreviewText(piece, maxChars, maxLines).join("\n"));
+    }
   }
   return chunks;
 };

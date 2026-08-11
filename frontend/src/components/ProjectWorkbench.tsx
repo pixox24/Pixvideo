@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, ExternalLink, List, Music, PanelRight, Pause, Play, RefreshCw, Save, SkipBack, SkipForward } from "lucide-react";
+import { Download, ExternalLink, List, Music, PanelRight, Pause, Play, RefreshCw, Save, Settings2, SkipBack, SkipForward, X } from "lucide-react";
 import { GenerationRun, Project, WorkbenchResources } from "../types";
 import { cancelGenerationRun, createExport, fetchActiveGenerationRun, fetchGenerationRun, fetchProject, patchProject, pauseGenerationRun, patchScene, regenerateImage, regenerateTts, retryExport, retryFailedGeneration, resumeGenerationRun, selectAssetVersion, startGenerationRun, submitBatchImageGeneration, updateTimeline, uploadSceneAsset } from "../lib/workbenchApi";
 import { initialGenerationState, reduceRunActionFailed, reduceRunActionFinished, reduceRunFetched, reduceRunStarted, ProjectGenerationState, shouldRefreshProject } from "../lib/projectGenerationState";
@@ -15,7 +15,10 @@ import { dismissWorkbenchKeysTip, isWorkbenchKeysTipDismissed } from "../lib/onb
 
 const PLAYBACK_MAX_FRAME_DELTA = 0.25;
 const SEEK_STEP_SECONDS = 0.1;
-const AUDIO_DRIFT_THRESHOLD = 0.3;
+/** Only correct audio when timeline/audio diverge meaningfully — avoids choppy seeks. */
+const AUDIO_DRIFT_THRESHOLD = 0.35;
+/** Throttle React clock updates during play so the whole workbench is not re-rendered at 60fps. */
+const UI_TICK_MS = 50;
 
 const requestPlaybackFrame = (callback: (time: number) => void): number => (
   typeof window.requestAnimationFrame === "function"
@@ -27,6 +30,27 @@ const cancelPlaybackFrame = (id: number) => {
   else window.clearTimeout(id);
 };
 
+/** Chrome aborts play() when pause()/src change races the pending promise — not a real failure. */
+const isPlayInterruptedError = (error: unknown): boolean => {
+  if (!error || typeof error !== "object") return false;
+  const name = "name" in error ? String((error as { name?: unknown }).name) : "";
+  const message = "message" in error ? String((error as { message?: unknown }).message) : "";
+  return name === "AbortError" || message.includes("interrupted by a call to pause");
+};
+
+const safePlay = (
+  audio: HTMLAudioElement,
+  onError?: (error: unknown) => void,
+): void => {
+  const result = audio.play();
+  if (result && typeof result.then === "function") {
+    result.catch((error) => {
+      if (isPlayInterruptedError(error)) return;
+      onError?.(error);
+    });
+  }
+};
+
 export const ProjectWorkbench: React.FC<{ projectId: string; resources?: WorkbenchResources; addToast: (text: unknown, type: "success" | "error" | "info") => void }> = ({ projectId, resources, addToast }) => {
   const [project, setProject] = useState<Project | null>(null);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
@@ -34,6 +58,8 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   const [batchPrefix, setBatchPrefix] = useState("");
   const [batchBusy, setBatchBusy] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
+  const [queueExpanded, setQueueExpanded] = useState(false);
   const [showKeysTip, setShowKeysTip] = useState(() => !isWorkbenchKeysTipDismissed());
   const [mobilePanel, setMobilePanel] = useState<"scenes" | "inspector" | null>(null);
   const [generation, setGeneration] = useState<ProjectGenerationState>(initialGenerationState);
@@ -52,14 +78,20 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   const layoutRef = useRef<TimelineLayoutItem[]>([]);
   const currentSceneItemRef = useRef<TimelineLayoutItem | null>(null);
   const totalDurationRef = useRef(0);
+  const projectRef = useRef<Project | null>(null);
+  const selectedBgmSrcRef = useRef<string | null>(null);
   const togglePlayRef = useRef<() => void>(() => {});
   const lastSeekRef = useRef<{ sceneId: string; localTime: number } | null>(null);
   const audioErrorSceneRef = useRef<string | null>(null);
   const bgmErrorRef = useRef<string | null>(null);
+  const playPromiseBusyRef = useRef(false);
+  const bgmPlayPromiseBusyRef = useRef(false);
   const latestRunRef = useRef<GenerationRun | null>(null);
   const timelineSaveChainRef = useRef<Promise<void>>(Promise.resolve());
   const timelinePresentRef = useRef(timelinePresent);
   const activeProjectIdRef = useRef(projectId);
+  const addToastRef = useRef(addToast);
+  useEffect(() => { addToastRef.current = addToast; }, [addToast]);
 
   const load = async () => { try { const next = await fetchProject(projectId); setProject(next); setSelectedSceneId((current) => current || next.scenes[0]?.sceneId || null); } catch (error) { addToast(error, "error"); } };
   useEffect(() => {
@@ -143,12 +175,14 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   useEffect(() => { totalDurationRef.current = totalDuration; }, [totalDuration]);
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { projectRef.current = project; }, [project]);
 
   const selected = useMemo(() => project?.scenes.find((scene) => scene.sceneId === selectedSceneId) || null, [project, selectedSceneId]);
   const selectedBgm = useMemo(() => {
     if (!resources?.bgm || settings.bgm === "bgm-none") return null;
     return resources.bgm.find((item) => item.id === settings.bgm && item.src) || null;
   }, [resources?.bgm, settings.bgm]);
+  useEffect(() => { selectedBgmSrcRef.current = selectedBgm?.src || null; }, [selectedBgm?.src]);
   const selectedIndex = selected && project ? project.scenes.findIndex((scene) => scene.sceneId === selected.sceneId) : -1;
   const act = async (action: () => Promise<unknown>, message: string) => { try { await action(); addToast(message, "success"); await load(); } catch (error) { addToast(error, "error"); throw error; } };
   useEffect(() => {
@@ -256,11 +290,142 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
     finally { setSettingsBusy(false); }
   };
 
+  /**
+   * Drive narration audio from the ref clock — never from a currentTime useEffect.
+   * Binding play/pause to every React tick races HTMLMediaElement.play() against pause()
+   * (Chrome: "The play() request was interrupted by a call to pause()").
+   */
+  const syncNarrationAudio = useCallback((opts?: { forceSeek?: boolean }) => {
+    const audio = audioRef.current;
+    const proj = projectRef.current;
+    if (!audio || !proj) return;
+
+    const item = findSceneAtTime(layoutRef.current, currentTimeRef.current);
+    currentSceneItemRef.current = item;
+    const scene = item ? proj.scenes.find((candidate) => candidate.sceneId === item.sceneId) : null;
+    if (!item || !scene) {
+      if (!audio.paused) audio.pause();
+      return;
+    }
+
+    const localTime = getSceneLocalTime(item, currentTimeRef.current);
+    const inAudioRegion = localTime < item.audioDurationSeconds && Boolean(scene.audioUrl);
+    const playing = isPlayingRef.current;
+
+    if (audio.dataset.scene !== item.sceneId) {
+      if (!audio.paused) audio.pause();
+      playPromiseBusyRef.current = false;
+      audio.dataset.scene = item.sceneId;
+      if (inAudioRegion && scene.audioUrl) {
+        lastSeekRef.current = { sceneId: item.sceneId, localTime };
+        audio.dataset.loaded = "0";
+        audio.src = scene.audioUrl;
+        // currentTime is applied in onLoadedMetadata once the new source is ready.
+      } else {
+        lastSeekRef.current = null;
+        audio.dataset.loaded = "0";
+        audio.removeAttribute("src");
+        audio.load();
+      }
+      return;
+    }
+
+    if (audio.dataset.loaded !== "1") {
+      // Wait for onLoadedMetadata; do not re-assign src every frame (restarts download).
+      if (inAudioRegion && scene.audioUrl && !audio.getAttribute("src")) {
+        lastSeekRef.current = { sceneId: item.sceneId, localTime };
+        audio.src = scene.audioUrl;
+      }
+      if (!playing || !inAudioRegion) {
+        if (!audio.paused) audio.pause();
+        playPromiseBusyRef.current = false;
+      }
+      return;
+    }
+
+    // Apply seek even while paused so resume continues from the scrub position.
+    if (inAudioRegion && (opts?.forceSeek || Math.abs((audio.currentTime || 0) - localTime) > AUDIO_DRIFT_THRESHOLD)) {
+      lastSeekRef.current = { sceneId: item.sceneId, localTime };
+      try {
+        audio.currentTime = localTime;
+      } catch {
+        /* seek before ready — metadata handler will apply lastSeekRef */
+      }
+    }
+
+    if (!playing || !inAudioRegion) {
+      if (!audio.paused) audio.pause();
+      playPromiseBusyRef.current = false;
+      return;
+    }
+
+    if (audio.paused && !playPromiseBusyRef.current) {
+      playPromiseBusyRef.current = true;
+      const result = audio.play();
+      if (result && typeof result.then === "function") {
+        result
+          .then(() => { playPromiseBusyRef.current = false; })
+          .catch((error) => {
+            playPromiseBusyRef.current = false;
+            if (isPlayInterruptedError(error)) return;
+            addToastRef.current(error, "error");
+          });
+      } else {
+        playPromiseBusyRef.current = false;
+      }
+    }
+  }, []);
+
+  const syncBgmAudio = useCallback((opts?: { forceSeek?: boolean }) => {
+    const audio = bgmAudioRef.current;
+    const src = selectedBgmSrcRef.current;
+    if (!audio || !src || totalDurationRef.current <= 0) {
+      if (audio && !audio.paused) audio.pause();
+      return;
+    }
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      const target = currentTimeRef.current % audio.duration;
+      if (opts?.forceSeek || Math.abs(audio.currentTime - target) > AUDIO_DRIFT_THRESHOLD) {
+        try {
+          audio.currentTime = target;
+        } catch {
+          /* ignore unready seeks */
+        }
+      }
+    }
+    if (!isPlayingRef.current) {
+      if (!audio.paused) audio.pause();
+      bgmPlayPromiseBusyRef.current = false;
+      return;
+    }
+    if (audio.paused && !bgmPlayPromiseBusyRef.current) {
+      bgmPlayPromiseBusyRef.current = true;
+      const result = audio.play();
+      if (result && typeof result.then === "function") {
+        result
+          .then(() => { bgmPlayPromiseBusyRef.current = false; })
+          .catch((error) => {
+            bgmPlayPromiseBusyRef.current = false;
+            if (isPlayInterruptedError(error)) return;
+            if (bgmErrorRef.current !== src) {
+              bgmErrorRef.current = src;
+              addToastRef.current(error, "error");
+            }
+          });
+      } else {
+        bgmPlayPromiseBusyRef.current = false;
+      }
+    }
+  }, []);
+
   const seek = useCallback((time: number) => {
     const next = clampTimelineTime(time, totalDurationRef.current || totalDuration);
     currentTimeRef.current = next;
     setCurrentTime(next);
-  }, [totalDuration]);
+    // Keep audio/timeline aligned after scrubbing without waiting for the next rAF.
+    syncNarrationAudio({ forceSeek: true });
+    syncBgmAudio({ forceSeek: true });
+  }, [totalDuration, syncNarrationAudio, syncBgmAudio]);
   const goToAdjacentScene = useCallback((offset: number) => {
     const activeLayout = layoutRef.current.length > 0 ? layoutRef.current : layout;
     const item = currentSceneItemRef.current ?? currentSceneItem;
@@ -282,16 +447,33 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   useEffect(() => { togglePlayRef.current = togglePlay; }, [togglePlay]);
 
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying) {
+      // Leaving play mode: stop media without racing a pending play() via effect churn.
+      audioRef.current?.pause();
+      bgmAudioRef.current?.pause();
+      playPromiseBusyRef.current = false;
+      bgmPlayPromiseBusyRef.current = false;
+      return;
+    }
     let rafId = 0;
     let lastFrameAt = 0;
+    let lastUiAt = 0;
+    // Kick media once when entering play (metadata handlers may finish the start).
+    syncNarrationAudio({ forceSeek: true });
+    syncBgmAudio({ forceSeek: true });
     const tick = (now: number) => {
       const delta = lastFrameAt === 0 ? 0 : Math.min((now - lastFrameAt) / 1000, PLAYBACK_MAX_FRAME_DELTA);
       lastFrameAt = now;
       const duration = totalDurationRef.current || totalDuration;
       const next = clampTimelineTime(currentTimeRef.current + delta, duration);
       currentTimeRef.current = next;
-      setCurrentTime(next);
+      // Audio follows the high-frequency ref clock; React UI is throttled to reduce jank.
+      syncNarrationAudio();
+      syncBgmAudio();
+      if (lastUiAt === 0 || now - lastUiAt >= UI_TICK_MS || next >= duration) {
+        lastUiAt = now;
+        setCurrentTime(next);
+      }
       if (next >= duration) {
         setIsPlaying(false);
         return;
@@ -300,57 +482,17 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
     };
     rafId = requestPlaybackFrame(tick);
     return () => cancelPlaybackFrame(rafId);
-  }, [isPlaying, totalDuration]);
+  }, [isPlaying, totalDuration, syncNarrationAudio, syncBgmAudio]);
 
   useEffect(() => {
     if (currentSceneItem) setSelectedSceneId(currentSceneItem.sceneId);
   }, [currentSceneItem?.sceneId]);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !project) return;
-    const item = currentSceneItem;
-    const scene = item ? project.scenes.find((candidate) => candidate.sceneId === item.sceneId) : null;
-    if (!item || !scene) { audio.pause(); return; }
-    const localTime = getSceneLocalTime(item, currentTime);
-    const inAudioRegion = localTime < item.audioDurationSeconds && Boolean(scene.audioUrl);
-    if (audio.dataset.scene !== item.sceneId) {
-      audio.pause();
-      audio.dataset.scene = item.sceneId;
-      if (inAudioRegion) {
-        audio.dataset.loaded = "1";
-        lastSeekRef.current = { sceneId: item.sceneId, localTime };
-        audio.src = scene.audioUrl!;
-        audio.currentTime = localTime;
-      } else {
-        audio.dataset.loaded = "0";
-        lastSeekRef.current = null;
-        audio.removeAttribute("src");
-        audio.load();
-      }
-    }
-    if (!isPlaying || !inAudioRegion) {
-      audio.pause();
-      return;
-    }
-    if (audio.dataset.loaded !== "1") {
-      lastSeekRef.current = { sceneId: item.sceneId, localTime };
-      audio.src = scene.audioUrl!;
-      audio.dataset.loaded = "1";
-    }
-    if (Math.abs((audio.currentTime || 0) - localTime) > AUDIO_DRIFT_THRESHOLD) {
-      lastSeekRef.current = { sceneId: item.sceneId, localTime };
-      audio.currentTime = localTime;
-    }
-    if (audio.paused) {
-      audio.play().catch((error) => addToast(error, "error"));
-    }
-  }, [currentTime, isPlaying, layout, project, currentSceneItem]);
-
-  useEffect(() => {
     const audio = bgmAudioRef.current;
     if (!audio) return;
     audio.pause();
+    bgmPlayPromiseBusyRef.current = false;
     audio.currentTime = 0;
     audio.removeAttribute("src");
     audio.load();
@@ -372,28 +514,6 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
     if (!audio) return;
     audio.volume = Math.min(1, Math.max(0, settings.bgmVolume / 100));
   }, [settings.bgmVolume]);
-
-  useEffect(() => {
-    const audio = bgmAudioRef.current;
-    if (!audio || !selectedBgm?.src || totalDuration <= 0) {
-      audio?.pause();
-      return;
-    }
-    if (!isPlaying) {
-      audio.pause();
-      return;
-    }
-    if (Number.isFinite(audio.duration) && audio.duration > 0) {
-      const target = currentTime % audio.duration;
-      if (Math.abs(audio.currentTime - target) > AUDIO_DRIFT_THRESHOLD) audio.currentTime = target;
-    }
-    if (audio.paused) audio.play().catch((error) => {
-      if (bgmErrorRef.current !== selectedBgm.src) {
-        bgmErrorRef.current = selectedBgm.src;
-        addToast(error, "error");
-      }
-    });
-  }, [currentTime, isPlaying, selectedBgm?.src, totalDuration, addToast]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -427,8 +547,8 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
 
   if (!project) {
     return (
-      <div className="flex h-full min-h-[320px] items-center justify-center rounded-lg border border-dashed border-zinc-800 bg-[#101114] p-6 text-sm text-zinc-400">
-        <div className="text-center space-y-2">
+      <div className="flex h-full min-h-[320px] items-center justify-center rounded-[var(--radius-lg)] border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] p-6 text-sm text-zinc-400">
+        <div className="space-y-2 text-center">
           <LoaderLike />
           <p>正在加载项目…</p>
         </div>
@@ -485,7 +605,7 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden border border-zinc-800 bg-[#101114]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)]">
       <GenerationRunPanel
         run={generation.run}
         busy={generation.actionBusy}
@@ -499,10 +619,15 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
         onRetry={() => generation.run && void runAction("retry", () => retryFailedGeneration(projectId, generation.run!.runId))}
         onLocateFailure={(sceneId) => { setSelectedSceneId(sceneId); setMobilePanel(null); }}
       />
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2.5">
+
+      {/* TOPBAR — single row */}
+      <div className="flex h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-zinc-100">{project.title}</div>
-          <div className="text-caption text-zinc-500">{project.scenes.length} 个分镜{statusLabel ? ` · ${statusLabel}` : ""}</div>
+          <div className="truncate font-display text-sm font-semibold text-zinc-100">{project.title}</div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            <span className="text-caption">{project.scenes.length} 个分镜</span>
+            {statusLabel && <span className="ui-chip ui-chip-brand !py-0">{statusLabel}</span>}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {staleOrMissingIds.length > 0 && (
@@ -510,14 +635,14 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
               type="button"
               onClick={() => void regenerateStale()}
               disabled={generation.actionBusy !== null}
-              className="flex items-center gap-1 border border-sky-700/60 px-3 py-2 text-xs text-sky-200 hover:bg-sky-950/40 disabled:opacity-40"
+              className="ui-btn ui-btn-secondary ui-btn-sm"
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              补生成过期/缺失 ({staleOrMissingIds.length})
+              补生成 ({staleOrMissingIds.length})
             </button>
           )}
           {project.latestExport?.status === "failed" && (
-            <button type="button" onClick={() => void retryInitialExport()} className="flex items-center gap-1 border border-red-900 px-3 py-2 text-xs text-red-300">
+            <button type="button" onClick={() => void retryInitialExport()} className="ui-btn ui-btn-outline ui-btn-sm text-rose-300">
               <RefreshCw className="h-3.5 w-3.5" />重试导出
             </button>
           )}
@@ -526,23 +651,53 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
               href={project.latestExport!.outputUrl!}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1 border border-emerald-700/50 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200"
+              className="ui-btn ui-btn-secondary ui-btn-sm"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               {exportIsInitial ? "打开初稿" : "打开成片"}
             </a>
           )}
-          <button type="button" aria-label="打开分镜面板" onClick={() => setMobilePanel(mobilePanel === "scenes" ? null : "scenes")} className="p-2 text-zinc-400 lg:hidden"><List className="h-4 w-4" /></button>
-          <button type="button" aria-label="打开检查器" onClick={() => setMobilePanel(mobilePanel === "inspector" ? null : "inspector")} className="p-2 text-zinc-400 lg:hidden"><PanelRight className="h-4 w-4" /></button>
-          <button type="button" onClick={() => setExportOpen(true)} className="flex items-center gap-1 bg-amber-500 px-3 py-2 text-xs font-semibold text-black">
+          <button
+            type="button"
+            aria-label="打开分镜面板"
+            onClick={() => setMobilePanel(mobilePanel === "scenes" ? null : "scenes")}
+            className="ui-btn ui-btn-ghost ui-btn-icon lg:hidden"
+          >
+            <List className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="打开检查器"
+            onClick={() => setMobilePanel(mobilePanel === "inspector" ? null : "inspector")}
+            className="ui-btn ui-btn-ghost ui-btn-icon lg:hidden"
+          >
+            <PanelRight className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setProjectSettingsOpen(true)}
+            className="ui-btn ui-btn-secondary ui-btn-sm"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            项目设置
+          </button>
+          <button type="button" onClick={() => setExportOpen(true)} className="ui-btn ui-btn-primary ui-btn-sm">
             <Download className="h-3.5 w-3.5" />导出成片
           </button>
-          <button type="button" title="刷新项目" aria-label="刷新项目" onClick={() => void load()} className="p-2 text-zinc-400 hover:text-zinc-100"><RefreshCw className="h-4 w-4" /></button>
+          <button
+            type="button"
+            title="刷新项目"
+            aria-label="刷新项目"
+            onClick={() => void load()}
+            className="ui-btn ui-btn-ghost ui-btn-icon"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
       {exportCompleted && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-900/40 bg-emerald-500/5 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/15 bg-emerald-500/5 px-3 py-2">
           <p className="text-xs text-emerald-200">
             {exportIsInitial ? "初稿已导出完成" : "成片导出完成"}
             {latestExportActive ? " · 有新的导出任务进行中" : ""}
@@ -552,40 +707,20 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
               href={project.latestExport!.outputUrl!}
               target="_blank"
               rel="noreferrer"
-              className="rounded border border-emerald-700/50 px-2.5 py-1 text-xs text-emerald-100 hover:bg-emerald-950/40"
+              className="ui-btn ui-btn-secondary ui-btn-sm"
             >
               打开{exportIsInitial ? "初稿" : "成片"}
             </a>
             <a
               href={project.latestExport!.outputUrl!}
               download
-              className="rounded bg-emerald-500/20 px-2.5 py-1 text-xs font-medium text-emerald-100 hover:bg-emerald-500/30"
+              className="ui-btn ui-btn-secondary ui-btn-sm text-emerald-200"
             >
               下载
             </a>
           </div>
         </div>
       )}
-
-      <section className="border-b border-zinc-800 bg-[#0d0e11] px-3 py-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Music className="h-4 w-4 text-zinc-500" />
-          <label className="flex items-center gap-2 text-xs text-zinc-400">BGM
-            <select value={settings.bgm} onChange={(event) => setSettings((current) => ({ ...current, bgm: event.target.value }))} className="border border-zinc-800 bg-black px-2 py-1 text-xs text-zinc-200">
-              <option value="bgm-none">无背景音乐</option>
-              {(resources?.bgm || []).filter((item) => item.id !== "bgm-none").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-          </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-400">音量
-            <input type="range" min="0" max="100" step="1" value={settings.bgmVolume} onChange={(event) => setSettings((current) => ({ ...current, bgmVolume: Number(event.target.value) }))} />
-            <span className="w-8 text-right">{settings.bgmVolume}%</span>
-          </label>
-          <label className="flex items-center gap-1 text-xs text-zinc-400">
-            <input type="checkbox" checked={settings.enableSubtitles} onChange={(event) => setSettings((current) => ({ ...current, enableSubtitles: event.target.checked }))} />字幕
-          </label>
-          <button type="button" disabled={settingsBusy} onClick={() => void saveSettings()} className="ml-auto flex items-center gap-1 border border-zinc-700 px-3 py-1 text-xs text-zinc-200 disabled:opacity-40"><Save className="h-3.5 w-3.5" />{settingsBusy ? "保存中" : "保存设置"}</button>
-        </div>
-      </section>
 
       <SceneProgressGrid
         scenes={project.scenes}
@@ -595,8 +730,8 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
       />
 
       {showKeysTip && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 bg-[var(--color-surface-1)] px-3 py-1.5 animate-fade-in">
-          <p className="text-caption text-zinc-400">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/15 bg-amber-500/5 px-3 py-1.5 animate-fade-in">
+          <p className="text-caption text-amber-100/80">
             快捷键：
             <span className="kbd mx-1">Space</span> 播放/暂停
             <span className="kbd mx-1">←</span>
@@ -608,7 +743,7 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
               dismissWorkbenchKeysTip();
               setShowKeysTip(false);
             }}
-            className="text-caption text-zinc-500 hover:text-zinc-300"
+            className="text-caption text-amber-200/70 hover:text-amber-100"
           >
             知道了
           </button>
@@ -616,42 +751,104 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
       )}
 
       {selectedSceneIds.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 bg-zinc-950 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-3 py-2">
           <span className="text-xs text-zinc-300">选中 {selectedSceneIds.size} 项</span>
-          <input value={batchPrefix} onChange={(event) => setBatchPrefix(event.target.value)} placeholder="提示词前缀" className="min-w-40 flex-1 border border-zinc-800 bg-black px-2 py-1 text-xs text-zinc-200" />
-          <button type="button" disabled={batchBusy} onClick={() => void submitBatch()} className="bg-amber-500 px-3 py-1 text-xs font-semibold text-black disabled:opacity-40">批量重新生成</button>
+          <input
+            value={batchPrefix}
+            onChange={(event) => setBatchPrefix(event.target.value)}
+            placeholder="提示词前缀"
+            className="ui-input min-w-40 flex-1"
+          />
+          <button type="button" disabled={batchBusy} onClick={() => void submitBatch()} className="ui-btn ui-btn-primary ui-btn-sm">
+            批量重新生成
+          </button>
         </div>
       )}
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)_minmax(260px,320px)]">
-        <SceneList className={mobilePanel === "scenes" ? "flex" : "hidden lg:flex"} scenes={project.scenes} selectedSceneId={selectedSceneId} selectedSceneIds={selectedSceneIds} onSelect={(id) => { setSelectedSceneId(id); setMobilePanel(null); }} onToggle={toggleScene} />
-        <main className={`${mobilePanel ? "hidden lg:flex" : "flex"} min-h-0 min-w-0 flex-col bg-black p-3 sm:p-4`}>
-          <div className="mb-2 flex items-center justify-between">
+        <SceneList
+          className={mobilePanel === "scenes" ? "flex" : "hidden lg:flex"}
+          scenes={project.scenes}
+          selectedSceneId={selectedSceneId}
+          selectedSceneIds={selectedSceneIds}
+          onSelect={(id) => { setSelectedSceneId(id); setMobilePanel(null); }}
+          onToggle={toggleScene}
+        />
+        <main
+          className={`${mobilePanel ? "hidden lg:flex" : "flex"} min-h-0 min-w-0 flex-col bg-[var(--color-surface-0)] p-3 sm:p-4`}
+        >
+          <div className="mb-3 flex items-center justify-between">
             <div className="text-xs text-zinc-400">
               {selected ? `分镜 #${selectedIndex + 1} · ${selected.durationSeconds.toFixed(1)} 秒` : "未选择分镜"}
-              <span className="ml-3 font-mono text-zinc-500">{formatTimelineTime(currentTime)} / {formatTimelineTime(totalDuration)}</span>
+              <span className="ml-3 font-mono text-zinc-500">
+                {formatTimelineTime(currentTime)} / {formatTimelineTime(totalDuration)}
+              </span>
             </div>
             <div className="flex items-center gap-1">
-              <button type="button" title="上一个分镜" aria-label="上一个分镜" onClick={() => goToAdjacentScene(-1)} className="p-2 text-zinc-400 disabled:opacity-30" disabled={!currentSceneItem && !currentSceneItemRef.current}><SkipBack className="h-4 w-4" /></button>
-              <button type="button" title={isPlaying ? "暂停播放" : "播放项目"} aria-label={isPlaying ? "暂停播放" : "播放项目"} onClick={() => togglePlay()} disabled={project.scenes.length === 0} className="flex h-8 w-8 items-center justify-center bg-amber-500 text-black disabled:opacity-30">{isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</button>
-              <button type="button" title="下一个分镜" aria-label="下一个分镜" onClick={() => goToAdjacentScene(1)} className="p-2 text-zinc-400 disabled:opacity-30" disabled={!currentSceneItem && !currentSceneItemRef.current}><SkipForward className="h-4 w-4" /></button>
+              <button
+                type="button"
+                title="上一个分镜"
+                aria-label="上一个分镜"
+                onClick={() => goToAdjacentScene(-1)}
+                className="ui-btn ui-btn-ghost ui-btn-icon disabled:opacity-30"
+                disabled={!currentSceneItem && !currentSceneItemRef.current}
+              >
+                <SkipBack className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                title={isPlaying ? "暂停播放" : "播放项目"}
+                aria-label={isPlaying ? "暂停播放" : "播放项目"}
+                onClick={() => togglePlay()}
+                disabled={project.scenes.length === 0}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500 text-black shadow-[var(--shadow-cta)] transition-colors hover:bg-amber-400 disabled:opacity-30"
+              >
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 pl-0.5" />}
+              </button>
+              <button
+                type="button"
+                title="下一个分镜"
+                aria-label="下一个分镜"
+                onClick={() => goToAdjacentScene(1)}
+                className="ui-btn ui-btn-ghost ui-btn-icon disabled:opacity-30"
+                disabled={!currentSceneItem && !currentSceneItemRef.current}
+              >
+                <SkipForward className="h-4 w-4" />
+              </button>
             </div>
           </div>
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded border border-zinc-800 bg-zinc-950 text-xs text-zinc-600">
-            {currentVersion ? <img src={currentVersion.imageUrl} alt="画面预览" className="max-h-full max-w-full object-contain" /> : <>画面预览{selected ? ` · #${selectedIndex + 1}` : ""}</>}
+          <div className="ui-stage min-h-0 flex-1 text-xs text-zinc-600">
+            {currentVersion ? (
+              <img src={currentVersion.imageUrl} alt="画面预览" className="max-h-full max-w-full object-contain" />
+            ) : (
+              <>画面预览{selected ? ` · #${selectedIndex + 1}` : ""}</>
+            )}
           </div>
-          <audio ref={audioRef} className="hidden" preload="auto"
+          <audio
+            ref={audioRef}
+            className="hidden"
+            preload="auto"
             onLoadedMetadata={() => {
               const audio = audioRef.current;
+              if (!audio) return;
+              audio.dataset.loaded = "1";
               const pending = lastSeekRef.current;
-              if (audio && pending && audio.dataset.scene === pending.sceneId) {
-                audio.currentTime = pending.localTime;
-                if (isPlayingRef.current && audio.paused) audio.play().catch(() => { /* non-fatal */ });
+              if (pending && audio.dataset.scene === pending.sceneId) {
+                try {
+                  audio.currentTime = pending.localTime;
+                } catch {
+                  /* ignore */
+                }
+              }
+              if (isPlayingRef.current && audio.paused) {
+                safePlay(audio);
               }
             }}
             onError={() => {
               const audio = audioRef.current;
               if (!audio) return;
+              audio.dataset.loaded = "0";
+              playPromiseBusyRef.current = false;
               const sceneId = audio.dataset.scene;
               if (audioErrorSceneRef.current !== sceneId) {
                 audioErrorSceneRef.current = sceneId;
@@ -666,13 +863,21 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
             loop
             onLoadedMetadata={() => {
               const audio = bgmAudioRef.current;
-              if (!audio || !selectedBgm?.src || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
-              audio.currentTime = currentTimeRef.current % audio.duration;
-              if (isPlayingRef.current && audio.paused) audio.play().catch(() => { /* non-fatal */ });
+              if (!audio || !selectedBgmSrcRef.current || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+              try {
+                audio.currentTime = currentTimeRef.current % audio.duration;
+              } catch {
+                /* ignore */
+              }
+              if (isPlayingRef.current && audio.paused) {
+                safePlay(audio);
+              }
             }}
             onError={() => {
-              if (selectedBgm?.src && bgmErrorRef.current !== selectedBgm.src) {
-                bgmErrorRef.current = selectedBgm.src;
+              bgmPlayPromiseBusyRef.current = false;
+              const src = selectedBgmSrcRef.current;
+              if (src && bgmErrorRef.current !== src) {
+                bgmErrorRef.current = src;
                 addToast("背景音乐加载失败，已继续播放旁白", "error");
               }
             }}
@@ -688,11 +893,125 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
           onSelectVersion={(versionId) => selected ? act(() => selectAssetVersion(projectId, selected.sceneId, versionId), "已切换当前版本") : Promise.resolve()}
         />
       </div>
-      <div className="shrink-0 border-t border-zinc-800">
-        <WorkbenchTimeline scenes={project.scenes} selectedSceneId={selectedSceneId} currentTime={currentTime} totalDuration={totalDuration} isPlaying={isPlaying} pixelsPerSecond={pixelsPerSecond} canUndo={timelinePast.length > 0} canRedo={timelineFuture.length > 0} onZoomChange={(value) => setPixelsPerSecond(Math.min(120, Math.max(8, value)))} onSeek={seek} onPause={() => setIsPlaying(false)} onSelect={setSelectedSceneId} onReorder={handleTimelineReorder} onHold={handleTimelineHold} onUndo={handleUndo} onRedo={handleRedo} />
+
+      <div className="shrink-0 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] p-2">
+        <div className="ui-panel !p-2">
+          <WorkbenchTimeline
+            scenes={project.scenes}
+            selectedSceneId={selectedSceneId}
+            currentTime={currentTime}
+            totalDuration={totalDuration}
+            isPlaying={isPlaying}
+            pixelsPerSecond={pixelsPerSecond}
+            canUndo={timelinePast.length > 0}
+            canRedo={timelineFuture.length > 0}
+            onZoomChange={(value) => setPixelsPerSecond(Math.min(120, Math.max(8, value)))}
+            onSeek={seek}
+            onPause={() => setIsPlaying(false)}
+            onSelect={setSelectedSceneId}
+            onReorder={handleTimelineReorder}
+            onHold={handleTimelineHold}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+          />
+        </div>
       </div>
-      <GenerationQueue jobs={project.jobs} />
-      <ExportDialog project={project} open={exportOpen} onClose={() => setExportOpen(false)} onExport={submitExport} onLocateScene={(sceneId) => { setSelectedSceneId(sceneId); setExportOpen(false); }} />
+
+      <GenerationQueue jobs={project.jobs} expanded={queueExpanded} onToggle={() => setQueueExpanded((v) => !v)} />
+      <ExportDialog
+        project={project}
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        onExport={submitExport}
+        onLocateScene={(sceneId) => { setSelectedSceneId(sceneId); setExportOpen(false); }}
+      />
+
+      {/* Project settings drawer — BGM / subtitles (logic unchanged) */}
+      {projectSettingsOpen && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            aria-label="关闭项目设置"
+            onClick={() => setProjectSettingsOpen(false)}
+          />
+          <aside
+            className="fixed inset-y-0 right-0 z-50 flex w-[min(400px,100vw)] flex-col border-l border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] shadow-[var(--shadow-soft)] animate-fade-in"
+            role="dialog"
+            aria-label="项目设置"
+          >
+            <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+                <Music className="h-4 w-4 text-amber-500" />
+                项目设置
+              </div>
+              <button
+                type="button"
+                className="ui-btn ui-btn-ghost ui-btn-icon"
+                aria-label="关闭"
+                onClick={() => setProjectSettingsOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 overflow-y-auto p-4">
+              <label className="block space-y-1.5">
+                <span className="text-label">背景音乐</span>
+                <select
+                  value={settings.bgm}
+                  onChange={(event) => setSettings((current) => ({ ...current, bgm: event.target.value }))}
+                  className="ui-input"
+                >
+                  <option value="bgm-none">无背景音乐</option>
+                  {(resources?.bgm || [])
+                    .filter((item) => item.id !== "bgm-none")
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-label">音量 · {settings.bgmVolume}%</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={settings.bgmVolume}
+                  onChange={(event) =>
+                    setSettings((current) => ({ ...current, bgmVolume: Number(event.target.value) }))
+                  }
+                  className="w-full accent-amber-500"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={settings.enableSubtitles}
+                  onChange={(event) =>
+                    setSettings((current) => ({ ...current, enableSubtitles: event.target.checked }))
+                  }
+                  className="accent-amber-500"
+                />
+                启用字幕
+              </label>
+            </div>
+            <div className="mt-auto border-t border-[var(--color-border-subtle)] p-4">
+              <button
+                type="button"
+                disabled={settingsBusy}
+                onClick={() => void saveSettings()}
+                className="ui-btn ui-btn-primary w-full"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {settingsBusy ? "保存中" : "保存设置"}
+              </button>
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   );
 };

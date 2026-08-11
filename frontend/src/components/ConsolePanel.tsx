@@ -128,23 +128,31 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
   onClose,
 }) => {
   return (
-    <aside className={`${isOpen ? "flex" : "hidden"} fixed inset-y-0 right-0 z-40 bg-[var(--color-surface-2)] border-l border-zinc-800/80 w-[min(400px,100vw)] lg:static lg:w-96 xl:w-[400px] flex-shrink-0 flex-col h-full overflow-y-auto`} aria-label="任务运行面板">
+    <aside
+      className={`${isOpen ? "flex" : "hidden"} fixed inset-y-0 right-0 z-40 h-full w-[min(400px,100vw)] flex-shrink-0 flex-col overflow-y-auto border-l border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] lg:static lg:w-96 xl:w-[400px]`}
+      aria-label="任务运行面板"
+    >
       {/* 1. Header Title */}
-      <div className="p-3 border-b border-zinc-800/80 bg-[var(--color-surface-1)] flex items-center justify-between">
-        <span className="text-xs font-semibold text-zinc-300 tracking-wide">
+      <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] p-3">
+        <span className="text-xs font-semibold tracking-wide text-zinc-300">
           任务进度
         </span>
-        <span className="flex h-2 w-2 relative">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
         </span>
-        <button type="button" onClick={onClose} className="ml-2 p-1 text-zinc-500 hover:text-zinc-200" aria-label="关闭任务面板">
-          <XCircle className="w-4 h-4" />
+        <button
+          type="button"
+          onClick={onClose}
+          className="ui-btn ui-btn-ghost ui-btn-icon ml-2"
+          aria-label="关闭任务面板"
+        >
+          <XCircle className="h-4 w-4" />
         </button>
       </div>
 
       {/* 2. Active Run Monitor or Config Summary */}
-      <div className="p-4 border-b border-zinc-900 bg-[#121318]/50 space-y-4">
+      <div className="space-y-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-2)]/60 p-4">
         {activeTask ? (
           <div className="space-y-4">
             <div className="flex justify-between items-start">
@@ -266,7 +274,7 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
             <div
               key={t.id}
               onClick={() => onSelectTask(t)}
-              className="bg-[#14151a] border border-zinc-900 rounded p-2.5 hover:border-zinc-800 transition-all cursor-pointer text-xs flex justify-between gap-3 items-center"
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] p-2.5 text-xs transition-colors hover:ring-1 hover:ring-amber-500/20"
             >
               <div className="min-w-0">
                 <span className="font-medium text-zinc-350 block truncate group-hover:text-zinc-200">

@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
+  Film,
+  Layers,
 } from "lucide-react";
 import { Task } from "../types";
 import { VideoPreview } from "./VideoPreview";
@@ -26,6 +28,31 @@ interface HistoryListProps {
   onOpenWorkbench: (task: Task) => void;
   addToast: (text: string, type: "success" | "error" | "info") => void;
 }
+
+const STATUS_FILTERS = [
+  { id: "all", label: "全部" },
+  { id: "completed", label: "已完成" },
+  { id: "generating", label: "生成中" },
+  { id: "failed", label: "失败" },
+  { id: "cancelled", label: "已取消" },
+] as const;
+
+const tabTypeLabel = (tabType: Task["tabType"]) => {
+  if (tabType === "quick-create") return "快捷创作";
+  if (tabType === "custom-media") return "自定义素材";
+  if (tabType === "digital-human") return "数字人口播";
+  if (tabType === "image-to-video") return "图生视频";
+  if (tabType === "action-transfer") return "动作迁移";
+  return tabType;
+};
+
+const statusChip = (status: Task["status"]) => {
+  if (status === "completed") return { label: "已完成", className: "ui-chip ui-chip-success" };
+  if (status === "failed") return { label: "失败", className: "ui-chip ui-chip-danger" };
+  if (status === "generating") return { label: "生成中", className: "ui-chip ui-chip-warning" };
+  if (status === "cancelled") return { label: "已取消", className: "ui-chip" };
+  return { label: "就绪", className: "ui-chip" };
+};
 
 export const HistoryList: React.FC<HistoryListProps> = ({
   tasks,
@@ -82,7 +109,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
     });
 
   return (
-    <div className="space-y-4 max-w-5xl animate-fade-in">
+    <div className="mx-auto max-w-6xl animate-fade-in space-y-5">
       <ConfirmModal
         open={Boolean(deleteTarget)}
         danger
@@ -99,193 +126,170 @@ export const HistoryList: React.FC<HistoryListProps> = ({
         }}
         onConfirm={confirmDelete}
       />
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2 font-display">
-            <History className="w-5 h-5 text-amber-500" />
-            历史记录
+
+      {/* Header */}
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div className="space-y-1">
+          <h2 className="font-display flex items-center gap-2 text-lg font-semibold text-zinc-100">
+            <History className="h-5 w-5 text-amber-500" />
+            作品库
           </h2>
           <p className="text-sm text-zinc-400">
-            查看、下载历史成片；也可复制为可编辑项目继续精修。
+            查看与下载历史成片，也可复制为可编辑项目继续精修。
           </p>
         </div>
-
-        {/* Search */}
-        <div className="relative max-w-xs w-full">
+        <div className="relative w-full max-w-xs">
           <input
             type="text"
-            placeholder="搜索任务名称或工作流..."
+            placeholder="搜索标题或配置…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#101114] border border-zinc-800 rounded pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 placeholder-zinc-500"
+            className="ui-input pl-9"
           />
-          <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
         </div>
       </div>
 
-      {/* Filters and Sorters */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#101114] border border-zinc-900 px-3 py-2 rounded-md">
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] uppercase text-zinc-500 tracking-wider mr-2 font-mono">状态筛选:</span>
-          {["all", "completed", "generating", "failed", "cancelled"].map((status) => (
+      {/* Filters */}
+      <div className="ui-panel flex flex-wrap items-center justify-between gap-3 !py-2">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-caption mr-1 font-medium">状态</span>
+          {STATUS_FILTERS.map((status) => (
             <button
-              key={status}
-              onClick={() => setFilter(status)}
-              className={`px-2.5 py-1 text-xs rounded transition-colors ${
-                filter === status
-                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium"
-                  : "text-zinc-400 hover:text-zinc-200"
+              key={status.id}
+              type="button"
+              onClick={() => setFilter(status.id)}
+              className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+                filter === status.id
+                  ? "bg-amber-500/10 font-medium text-amber-300 ring-1 ring-amber-500/25"
+                  : "text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
               }`}
             >
-              {status === "all" && "全部"}
-              {status === "completed" && "已完成"}
-              {status === "generating" && "生成中"}
-              {status === "failed" && "生成失败"}
-              {status === "cancelled" && "已取消"}
+              {status.label}
             </button>
           ))}
         </div>
-
         <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-500" />
-          <span className="text-[10px] uppercase text-zinc-500 tracking-wider font-mono">排序:</span>
+          <SlidersHorizontal className="h-3.5 w-3.5 text-zinc-500" />
+          <span className="text-caption">排序</span>
           <Select
             value={sortBy}
             onChange={(e: any) => setSortBy(e.target.value)}
-            className="bg-[#17181c] border border-zinc-800 text-xs rounded text-zinc-300 py-0.5 px-2 focus:outline-none"
+            className="ui-input !h-8 !w-auto !py-0"
           >
             <option value="createdTime">创建时间</option>
             <option value="sceneCount">分镜数量</option>
             <option value="title">任务标题</option>
           </Select>
-
           <button
+            type="button"
             onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}
-            className="p-1 hover:bg-zinc-850 rounded text-zinc-300"
+            className="ui-btn ui-btn-ghost ui-btn-icon !h-8 !w-8"
+            aria-label={sortOrder === "desc" ? "降序" : "升序"}
           >
-            {sortOrder === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+            {sortOrder === "desc" ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
           </button>
         </div>
       </div>
 
-      {/* Task List */}
-      <div className="space-y-3">
-        {filteredTasks.length === 0 ? (
-          <EmptyState
-            icon={<History className="h-10 w-10" />}
-            title={tasks.length === 0 ? "还没有历史任务" : "没有找到匹配的历史任务"}
-            description={
-              tasks.length === 0
-                ? "完成一次快捷创作后，成片与任务会显示在这里，可下载或复制为可编辑项目。"
-                : "试试调整筛选条件或清空搜索关键词。"
-            }
-          />
-        ) : (
-          filteredTasks.map((task) => {
+      {/* Card grid */}
+      {filteredTasks.length === 0 ? (
+        <EmptyState
+          icon={<Film className="h-10 w-10" />}
+          title={tasks.length === 0 ? "还没有作品" : "没有找到匹配的作品"}
+          description={
+            tasks.length === 0
+              ? "完成一次创作后，成片会显示在这里，可下载或复制为可编辑项目。"
+              : "试试调整筛选条件或清空搜索关键词。"
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredTasks.map((task) => {
             const isExpanded = expandedTaskId === task.id;
             const thumb = task.scenes?.find((scene) => scene.imageUrl)?.imageUrl;
-            const statusBar =
-              task.status === "completed" ? "bg-emerald-500" :
-              task.status === "failed" ? "bg-rose-500" :
-              task.status === "generating" ? "bg-amber-500" :
-              "bg-zinc-600";
+            const chip = statusChip(task.status);
             return (
-              <div
+              <article
                 key={task.id}
-                className="overflow-hidden rounded-lg border border-zinc-900 bg-[#101114] transition-all duration-200 hover:border-zinc-700"
+                className="ui-card group flex flex-col overflow-hidden !p-0 transition-shadow hover:shadow-[var(--shadow-soft)]"
               >
-                <div className={`h-0.5 w-full ${statusBar}`} />
-                <div className="flex items-stretch gap-0 flex-wrap md:flex-nowrap">
-                  <div className="hidden w-36 shrink-0 bg-zinc-950 sm:block">
-                    {thumb ? (
-                      <img src={thumb} alt="" className="h-full min-h-[96px] w-full object-cover" />
-                    ) : task.videoUrl && task.status === "completed" ? (
-                      <div className="flex h-full min-h-[96px] items-center justify-center text-xs text-zinc-600">成片就绪</div>
-                    ) : (
-                      <div className="flex h-full min-h-[96px] items-center justify-center text-xs text-zinc-600">暂无预览</div>
-                    )}
-                  </div>
-
-                  <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="flex-shrink-0 sm:hidden">
-                      {task.status === "completed" && (
-                        <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
-                          <CheckCircle2 className="w-4 h-4" />
-                        </div>
-                      )}
-                      {task.status === "failed" && (
-                        <div className="w-8 h-8 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-400 border border-rose-500/20">
-                          <XCircle className="w-4 h-4" />
-                        </div>
-                      )}
-                      {task.status === "generating" && (
-                        <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20">
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                        </div>
-                      )}
-                      {task.status === "cancelled" && (
-                        <div className="w-8 h-8 rounded-full bg-zinc-500/10 flex items-center justify-center text-zinc-400 border border-zinc-500/20">
-                          <XCircle className="w-4 h-4" />
-                        </div>
-                      )}
+                {/* Cover */}
+                <div className="relative aspect-video w-full overflow-hidden bg-[var(--color-surface-0)]">
+                  {thumb ? (
+                    <img
+                      src={thumb}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                    />
+                  ) : task.videoUrl && task.status === "completed" ? (
+                    <div className="flex h-full items-center justify-center gap-2 text-xs text-zinc-500">
+                      <Film className="h-5 w-5" />
+                      成片就绪
                     </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-zinc-600">
+                      暂无预览
+                    </div>
+                  )}
+                  <div className="absolute left-2 top-2 flex flex-wrap gap-1">
+                    <span className={chip.className}>{chip.label}</span>
+                  </div>
+                  {task.status === "generating" && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <RefreshCw className="h-6 w-6 animate-spin text-amber-400" />
+                    </div>
+                  )}
+                </div>
 
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-sm font-medium text-zinc-100 truncate">{task.title}</h4>
-                        <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-caption text-zinc-400">
-                          {task.tabType === "quick-create" && "快捷创作"}
-                          {task.tabType === "custom-media" && "自定义素材"}
-                          {task.tabType === "digital-human" && "数字人口播"}
-                          {task.tabType === "image-to-video" && "图生视频"}
-                          {task.tabType === "action-transfer" && "动作迁移"}
+                {/* Body */}
+                <div className="flex flex-1 flex-col gap-3 p-4">
+                  <div className="min-w-0 space-y-1.5">
+                    <h3 className="truncate text-sm font-semibold text-zinc-100" title={task.title}>
+                      {task.title}
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption">
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {task.createdTime}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Layers className="h-3 w-3" />
+                        {task.sceneCount} 分镜
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="ui-chip !py-0">{tabTypeLabel(task.tabType)}</span>
+                      {task.configSummary && (
+                        <span className="ui-chip max-w-full truncate !py-0" title={task.configSummary}>
+                          {task.configSummary}
                         </span>
-                        <span className={`rounded px-1.5 py-0.5 text-caption ${
-                          task.status === "completed" ? "bg-emerald-500/10 text-emerald-400" :
-                          task.status === "failed" ? "bg-rose-500/10 text-rose-400" :
-                          task.status === "generating" ? "bg-amber-500/10 text-amber-400" :
-                          "bg-zinc-800 text-zinc-400"
-                        }`}>
-                          {task.status === "completed" && "已完成"}
-                          {task.status === "failed" && "失败"}
-                          {task.status === "generating" && "生成中"}
-                          {task.status === "cancelled" && "已取消"}
-                          {task.status === "ready" && "就绪"}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> {task.createdTime}
-                        </span>
-                        <span>{task.sceneCount} 分镜</span>
-                        {task.configSummary && <span className="truncate max-w-[240px]">{task.configSummary}</span>}
-                      </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-[var(--color-border-subtle)] pt-3">
                     {(task.status === "completed" || task.status === "failed") && (
                       <button
                         type="button"
                         onClick={() => onOpenWorkbench(task)}
-                        className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
+                        className="ui-btn ui-btn-secondary ui-btn-sm"
                         title="从该历史创建一份新的可编辑项目，原记录保留"
                       >
-                        复制为可编辑项目
+                        复制为项目
                       </button>
                     )}
                     {task.status === "completed" && task.videoUrl && (
                       <a
                         href={task.videoUrl}
                         download
-                        className="inline-flex items-center gap-1 rounded bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-black hover:bg-amber-400"
+                        className="ui-btn ui-btn-primary ui-btn-sm"
                         title="下载成片视频"
                         onClick={() => {
                           addToast("开始下载高质量 MP4 成片", "success");
                         }}
                       >
-                        <Download className="w-3.5 h-3.5" />
+                        <Download className="h-3.5 w-3.5" />
                         下载
                       </a>
                     )}
@@ -293,10 +297,10 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                       <button
                         type="button"
                         onClick={() => onResumeTask(task)}
-                        className="inline-flex items-center gap-1 rounded border border-amber-500/20 px-2 py-1.5 text-xs text-amber-400 hover:bg-amber-500/10"
+                        className="ui-btn ui-btn-outline ui-btn-sm text-amber-300"
                         title="继续/重新生成"
                       >
-                        <RefreshCw className="w-3.5 h-3.5" />
+                        <RefreshCw className="h-3.5 w-3.5" />
                         重试
                       </button>
                     )}
@@ -304,61 +308,74 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                       <button
                         type="button"
                         onClick={() => onCancelTask(task)}
-                        className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1.5 text-xs text-zinc-300 hover:text-white"
+                        className="ui-btn ui-btn-secondary ui-btn-sm"
                         aria-label={`取消任务 ${task.title}`}
                       >
-                        <XCircle className="w-3.5 h-3.5" />
+                        <XCircle className="h-3.5 w-3.5" />
                         取消
                       </button>
                     )}
                     <button
                       type="button"
                       onClick={() => toggleExpand(task.id)}
-                      className="inline-flex items-center gap-1 rounded border border-zinc-800 px-2 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+                      className="ui-btn ui-btn-ghost ui-btn-sm ml-auto"
                     >
                       {isExpanded ? "收起" : "详情"}
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      />
                     </button>
                     {task.status !== "generating" && (
                       <button
                         type="button"
                         onClick={() => setDeleteTarget(task)}
-                        className="rounded p-1.5 text-zinc-500 hover:bg-rose-950/25 hover:text-rose-400"
+                        className="ui-btn ui-btn-ghost ui-btn-icon !h-8 !w-8 text-zinc-500 hover:text-rose-400"
                         title="删除任务"
                         aria-label={`删除任务 ${task.title}`}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
-                  </div>
                 </div>
 
-                {/* Expanded Details Panel */}
+                {/* Expanded details */}
                 {isExpanded && (
-                  <div className="border-t border-zinc-900 bg-[#0c0d10] p-4 text-xs space-y-4 rounded-b">
+                  <div className="space-y-4 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-0)]/60 p-4 text-xs animate-fade-in">
                     {task.errorMsg && (
-                      <div className="bg-rose-500/10 text-rose-400 p-2.5 rounded border border-rose-500/20 font-mono">
-                        <strong className="font-semibold block mb-0.5">报错日志 Output:</strong>
+                      <div className="rounded-[var(--radius-md)] border border-rose-500/20 bg-rose-500/10 p-2.5 font-mono text-rose-300">
+                        <strong className="mb-0.5 block font-semibold">报错日志:</strong>
                         {task.errorMsg}
                       </div>
                     )}
 
-                    {/* Details lists */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="space-y-1.5">
-                        <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block">运行参数摘要:</span>
-                        <div className="bg-[#121318] p-2.5 rounded border border-zinc-900 space-y-1 font-mono text-zinc-450">
-                          <p><span className="text-zinc-500">成片时长:</span> {task.duration || "自动预估"}s</p>
-                          <p><span className="text-zinc-500">主渲染流:</span> {task.configSummary?.split("/")[1]?.trim() || "未配置"}</p>
-                          <p><span className="text-zinc-500">音频配音:</span> {task.configSummary?.split("/")[0]?.trim() || "Edge TTS"}</p>
-                          <p><span className="text-zinc-500">伴奏配轨:</span> {task.configSummary?.split("/")[2]?.trim() || "无配乐"}</p>
+                        <span className="text-caption font-medium uppercase tracking-wider">运行参数</span>
+                        <div className="ui-panel space-y-1 font-mono text-zinc-400">
+                          <p>
+                            <span className="text-zinc-500">成片时长:</span> {task.duration || "自动预估"}s
+                          </p>
+                          <p>
+                            <span className="text-zinc-500">主渲染流:</span>{" "}
+                            {task.configSummary?.split("/")[1]?.trim() || "未配置"}
+                          </p>
+                          <p>
+                            <span className="text-zinc-500">音频配音:</span>{" "}
+                            {task.configSummary?.split("/")[0]?.trim() || "Edge TTS"}
+                          </p>
+                          <p>
+                            <span className="text-zinc-500">伴奏配轨:</span>{" "}
+                            {task.configSummary?.split("/")[2]?.trim() || "无配乐"}
+                          </p>
                         </div>
                       </div>
 
                       {task.status === "completed" && task.videoUrl && (
                         <div>
-                          <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block mb-1">高清成片预览:</span>
+                          <span className="text-caption mb-1 block font-medium uppercase tracking-wider">
+                            成片预览
+                          </span>
                           <VideoPreview
                             src={task.videoUrl}
                             poster={task.scenes?.[0]?.imageUrl}
@@ -367,34 +384,42 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                       )}
                     </div>
 
-                    {/* Scene breakdown if present */}
                     {task.scenes && task.scenes.length > 0 && (
-                      <div className="space-y-2 pt-2 border-t border-zinc-900">
-                        <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider block">分镜脚本切片 ({task.scenes.length}):</span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="space-y-2 border-t border-[var(--color-border-subtle)] pt-3">
+                        <span className="text-caption font-medium uppercase tracking-wider">
+                          分镜 ({task.scenes.length})
+                        </span>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           {task.scenes.map((scene, index) => (
-                            <div key={scene.id} className="bg-[#121318] rounded border border-zinc-850 p-2.5 flex flex-col justify-between space-y-2">
-                              <div>
-                                <div className="flex justify-between items-center mb-1 pb-1 border-b border-zinc-800/60">
-                                  <span className="text-amber-500 font-mono font-bold">#SCENE 0{index + 1}</span>
-                                  <span className={`text-[9px] font-mono px-1 rounded ${
-                                    scene.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
-                                  }`}>
-                                    {scene.status === "completed" ? "绘制成功" : "未绘制"}
-                                  </span>
-                                </div>
-                                <p className="text-zinc-300 mb-1 leading-relaxed">{scene.ttsText}</p>
-                                <p className="text-[10px] text-zinc-500 italic leading-relaxed font-mono">
-                                  Prompt: {scene.visualPrompt}
-                                </p>
+                            <div
+                              key={scene.id}
+                              className="ui-panel flex flex-col space-y-2 !p-2.5"
+                            >
+                              <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-1">
+                                <span className="font-mono text-xs font-bold text-amber-500">
+                                  #{index + 1}
+                                </span>
+                                <span
+                                  className={
+                                    scene.status === "completed"
+                                      ? "ui-chip ui-chip-success !py-0"
+                                      : "ui-chip ui-chip-danger !py-0"
+                                  }
+                                >
+                                  {scene.status === "completed" ? "就绪" : "未完成"}
+                                </span>
                               </div>
+                              <p className="leading-relaxed text-zinc-300">{scene.ttsText}</p>
+                              <p className="font-mono text-caption italic leading-relaxed">
+                                {scene.visualPrompt}
+                              </p>
                               {scene.imageUrl && (
                                 <img
                                   src={scene.imageUrl}
                                   alt={`Scene ${scene.id}`}
-                                  className="w-full h-24 object-cover rounded border border-zinc-800/80 mt-2"
+                                  className="mt-1 h-24 w-full rounded-[var(--radius-sm)] border border-[var(--color-border-subtle)] object-cover"
                                   onError={(e) => {
-                                    (e.target as any).style.display = 'none';
+                                    (e.target as HTMLImageElement).style.display = "none";
                                   }}
                                 />
                               )}
@@ -405,11 +430,11 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                     )}
                   </div>
                 )}
-              </div>
+              </article>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 };

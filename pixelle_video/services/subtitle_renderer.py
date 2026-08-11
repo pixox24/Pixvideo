@@ -270,30 +270,70 @@ class SubtitleRenderer:
         return display_segments
 
     def _split_overlong_segment(self, text: str, capacity: int) -> list[str]:
-        """Phrase-mode only: break at soft punctuation, never mid-character if avoidable."""
-        if len(text) <= capacity:
-            return [text]
+        """Break long text at soft punctuation when possible; last resort keeps the whole piece."""
+        cleaned = self.strip_display_punctuation(text)
+        if not cleaned:
+            return []
+        if len(cleaned) <= capacity:
+            return [cleaned]
 
-        soft_parts = [part for part in _SOFT_BREAK_RE.split(text) if part]
+        soft_parts = [part for part in _SOFT_BREAK_RE.split(cleaned) if part]
         if len(soft_parts) <= 1:
-            # Still avoid arbitrary mid-word cuts when possible: keep whole text as one cue.
-            return [text]
+            # No soft punctuation left — keep intact rather than inventing a mid-phrase cut here.
+            # Callers may still apply hard capacity cuts as a final fallback.
+            return [cleaned]
 
         chunks: list[str] = []
         current = ""
         for part in soft_parts:
             candidate = current + part
             if current and len(self.strip_display_punctuation(candidate)) > capacity:
-                cleaned = self.strip_display_punctuation(current)
-                if cleaned:
-                    chunks.append(cleaned)
+                piece = self.strip_display_punctuation(current)
+                if piece:
+                    chunks.append(piece)
                 current = part
             else:
                 current = candidate
-        cleaned = self.strip_display_punctuation(current)
-        if cleaned:
-            chunks.append(cleaned)
-        return chunks or [text]
+        piece = self.strip_display_punctuation(current)
+        if piece:
+            chunks.append(piece)
+        return chunks or [cleaned]
+
+    def _expand_phrase_segments(
+        self,
+        text: str,
+        capacity: int,
+        highlight_words: list[str] | None = None,
+    ) -> list[str]:
+        """
+        Phrase mode: prefer punctuation-bounded phrases, then soft commas, then capacity.
+
+        Fixed character packing alone produces mid-sentence cuts such as
+        「后半生该|找回真正的自己」. Natural Chinese short-video captions should
+        break at ，。！？ first.
+        """
+        words = list(highlight_words or [])
+        # 1) Atomic phrases by the same punctuation class as sentence mode.
+        atomic = self.split_raw_segments(text, "sentence")
+        if not atomic:
+            cleaned = " ".join(str(text or "").split())
+            cleaned = self.strip_display_punctuation(cleaned)
+            atomic = [cleaned] if cleaned else []
+
+        expanded: list[str] = []
+        for phrase in atomic:
+            if len(phrase) <= capacity:
+                expanded.append(phrase)
+                continue
+            # 2) Soft punctuation packing inside an overlong phrase.
+            soft_chunks = self._split_overlong_segment(phrase, capacity)
+            for chunk in soft_chunks:
+                if len(chunk) <= capacity:
+                    expanded.append(chunk)
+                else:
+                    # 3) Last resort: hard capacity (keeps highlight tokens intact when possible).
+                    expanded.extend(self._split_by_capacity(chunk, capacity, words))
+        return [segment for segment in expanded if segment]
 
     def _highlight_tokens(self, text: str, highlight_words: list[str]) -> list[str]:
         words = sorted(
@@ -370,9 +410,8 @@ class SubtitleRenderer:
         words = list(highlight_words or [])
 
         if mode == "phrase":
-            cleaned = " ".join(str(text or "").split())
-            expanded = self._split_by_capacity(cleaned, capacity, words)
-            # Phrase mode may wrap to maxLines for long chunks.
+            expanded = self._expand_phrase_segments(text, capacity, words)
+            # Multi-line wrap is display-only; each cue already prefers punctuation.
             if words:
                 return [
                     self._wrap_with_highlights(segment, max_chars, max_lines, words)

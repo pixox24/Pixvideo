@@ -657,8 +657,80 @@ class MediaService(ComfyBaseService):
         timeout_seconds = self.BIZYAIR_MAX_POLL_ATTEMPTS * self.BIZYAIR_POLL_INTERVAL_SECONDS
         raise TimeoutError(f"BizyAir task {request_id} timed out after {timeout_seconds}s")
 
-    @staticmethod
-    def _local_storyboard_image(prompt: str, width: int | None, height: int | None, scene_id: str | None) -> Path:
+    # Ratio folder aliases: Windows forbids ":" in names so installs often use
+    # 16x9/9x16; macOS/Linux folders are frequently named 16:9/9:16.
+    _LANDSCAPE_RATIO_ALIASES = ("16x9", "16:9", "16-9", "landscape")
+    _PORTRAIT_RATIO_ALIASES = ("9x16", "9:16", "9-16", "portrait")
+    _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
+
+    @classmethod
+    def _normalize_ratio_folder_name(cls, name: str) -> str:
+        """Normalize ratio folder names for cross-platform matching (16:9 ≈ 16x9)."""
+        return (
+            name.strip()
+            .casefold()
+            .replace("：", ":")  # full-width colon (common when pasting on CN systems)
+            .replace("∶", ":")
+            .replace(":", "x")
+            .replace("-", "x")
+            .replace("_", "x")
+            .replace(" ", "")
+        )
+
+    @classmethod
+    def _resolve_storyboard_ratio_dir(cls, library: Path, *, landscape: bool) -> Path | None:
+        """
+        Resolve the aspect-ratio subfolder inside a material library.
+
+        Accepts Windows-safe names (16x9 / 9x16) and ratio-style names (16:9 / 9:16)
+        so the same project works on both platforms without renaming folders.
+        """
+        aliases = cls._LANDSCAPE_RATIO_ALIASES if landscape else cls._PORTRAIT_RATIO_ALIASES
+        for name in aliases:
+            candidate = library / name
+            if candidate.is_dir():
+                return candidate
+
+        if not library.is_dir():
+            return None
+
+        wanted = {cls._normalize_ratio_folder_name(name) for name in aliases}
+        try:
+            children = list(library.iterdir())
+        except OSError as exc:
+            logger.warning(f"Cannot list material library {library}: {exc}")
+            return None
+
+        for child in children:
+            if not child.is_dir() or child.name.startswith("."):
+                continue
+            if cls._normalize_ratio_folder_name(child.name) in wanted:
+                return child
+        return None
+
+    @classmethod
+    def _list_storyboard_images(cls, ratio_dir: Path) -> list[Path]:
+        try:
+            return sorted(
+                (
+                    path
+                    for path in ratio_dir.iterdir()
+                    if path.is_file() and path.suffix.lower() in cls._IMAGE_SUFFIXES
+                ),
+                key=lambda path: path.name.casefold(),
+            )
+        except OSError as exc:
+            logger.warning(f"Cannot read material folder {ratio_dir}: {exc}")
+            return []
+
+    @classmethod
+    def _local_storyboard_image(
+        cls,
+        prompt: str,
+        width: int | None,
+        height: int | None,
+        scene_id: str | None,
+    ) -> Path:
         configured = os.getenv("PIXELLE_TEST_IMAGE_PATH", "").strip()
         if configured:
             return Path(configured).expanduser().resolve()
@@ -667,13 +739,28 @@ class MediaService(ComfyBaseService):
             os.getenv("PIXELLE_TEST_IMAGE_LIBRARY", "").strip()
             or Path(__file__).resolve().parents[2] / "素材库"
         ).expanduser().resolve()
-        ratio_dir = library / ("16x9" if not height or not width or width >= height else "9x16")
-        images = sorted(
-            (path for path in ratio_dir.iterdir() if path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}),
-            key=lambda path: path.name.casefold(),
-        ) if ratio_dir.is_dir() else []
+
+        landscape = not height or not width or width >= height
+        ratio_dir = cls._resolve_storyboard_ratio_dir(library, landscape=landscape)
+        images = cls._list_storyboard_images(ratio_dir) if ratio_dir is not None else []
+
         if images:
             key = scene_id or prompt
             index = int.from_bytes(hashlib.sha256(key.encode("utf-8")).digest()[:8], "big") % len(images)
-            return images[index]
-        return (Path(__file__).resolve().parents[2] / "resources" / "example.png").resolve()
+            chosen = images[index]
+            logger.debug(
+                "Storyboard material library hit: library={}, ratio_dir={}, image={}",
+                library,
+                ratio_dir,
+                chosen.name,
+            )
+            return chosen
+
+        fallback = (Path(__file__).resolve().parents[2] / "resources" / "example.png").resolve()
+        logger.warning(
+            "Material library miss (expected 16x9|16:9 or 9x16|9:16 under {}); "
+            "falling back to {}",
+            library,
+            fallback,
+        )
+        return fallback

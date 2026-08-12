@@ -38,6 +38,10 @@ from loguru import logger
 
 from pixelle_video.config import config_manager
 from pixelle_video.services.hyperframes_caption_renderer import HyperframesCaptionRenderer
+from pixelle_video.services.pillow_caption_renderer import (
+    PillowCaptionRenderer,
+    should_use_pillow_captions,
+)
 from pixelle_video.services.subtitle_renderer import SubtitleRenderer
 from pixelle_video.utils.os_util import get_resource_path, list_resource_files, resource_exists
 
@@ -871,6 +875,9 @@ class VideoService:
             if subtitle_enabled and subtitle_text and str(subtitle_text).strip():
                 renderer = SubtitleRenderer()
                 normalized_style = renderer.normalize_style(subtitle_style)
+                subtitle_burned = False
+
+                # 1) Hyperframes dynamic path (rounded box + animations when available).
                 if normalized_style["mode"] == "hyperframes":
                     try:
                         subtitle_workspace = tempfile.mkdtemp(prefix="pixelle-hyperframes-")
@@ -905,14 +912,71 @@ class VideoService:
                             overlay_stream,
                             eof_action="pass",
                         )
+                        subtitle_burned = True
                     except (OSError, RuntimeError, ValueError) as exc:
                         logger.warning(
-                            "Dynamic subtitle rendering failed; falling back to ASS: {}",
+                            "Dynamic subtitle rendering failed; trying Pillow/ASS fallback: {}",
                             exc,
                         )
                         normalized_style["mode"] = "ass"
+                        if subtitle_workspace and os.path.exists(subtitle_workspace):
+                            shutil.rmtree(subtitle_workspace, ignore_errors=True)
+                        subtitle_workspace = None
+                        subtitle_overlay_path = None
 
-                if normalized_style["mode"] != "hyperframes":
+                # 2) Pillow rounded-box path (no Node; supports radius ASS cannot draw).
+                if (
+                    not subtitle_burned
+                    and should_use_pillow_captions(normalized_style)
+                ):
+                    try:
+                        subtitle_workspace = tempfile.mkdtemp(prefix="pixelle-pillow-captions-")
+                        custom_font_path = str(normalized_style.get("fontPath") or "").strip()
+                        if not custom_font_path:
+                            try:
+                                custom_font_path = self._find_subtitle_font()
+                            except RuntimeError:
+                                custom_font_path = ""
+                        pillow_renderer = PillowCaptionRenderer(subtitle_renderer=renderer)
+                        pillow_overlays = pillow_renderer.render_overlays(
+                            text=subtitle_text,
+                            duration=target_duration,
+                            width=width,
+                            height=height,
+                            style=normalized_style,
+                            alignment=subtitle_alignment,
+                            output_dir=subtitle_workspace,
+                            font_path=custom_font_path or None,
+                        )
+                        for item in pillow_overlays:
+                            # Still PNGs need loop+duration so enable=between can hold them on screen.
+                            cue = (
+                                ffmpeg
+                                .input(item.path, loop=1, framerate=fps, t=target_duration)
+                                .filter("setpts", "PTS-STARTPTS")
+                            )
+                            video_stream = ffmpeg.overlay(
+                                video_stream,
+                                cue,
+                                enable=f"between(t,{item.start:.3f},{item.end:.3f})",
+                                eof_action="pass",
+                            )
+                        subtitle_burned = True
+                        logger.info(
+                            "Pillow caption overlays applied ({} cues, rounded box fallback)",
+                            len(pillow_overlays),
+                        )
+                    except (OSError, RuntimeError, ValueError) as exc:
+                        logger.warning(
+                            "Pillow caption rendering failed; falling back to ASS: {}",
+                            exc,
+                        )
+                        if subtitle_workspace and os.path.exists(subtitle_workspace):
+                            shutil.rmtree(subtitle_workspace, ignore_errors=True)
+                        subtitle_workspace = None
+
+                # 3) ASS / drawtext / legacy static PIL.
+                if not subtitle_burned:
                     font_path = self._find_subtitle_font()
                     max_chars = max(8, min(22, width // 54))
                     wrapped_text = self._wrap_subtitle_text(
@@ -926,7 +990,6 @@ class VideoService:
                     bottom_margin = max(48, height // 14)
                     if (
                         wrapped_text
-                        and normalized_style["mode"] == "ass"
                         and self._ffmpeg_filter_available("subtitles")
                     ):
                         # Prefer user font; otherwise discover a local Chinese-capable font.
@@ -983,14 +1046,30 @@ class VideoService:
                             shadowx=max(0, int(normalized_style.get("shadow", 0))),
                             shadowy=max(0, int(normalized_style.get("shadow", 0))),
                             shadowcolor=str(normalized_style.get("outlineColor") or "#000000"),
-                            box=1 if normalized_style.get("preset") == "caption-box" else 0,
+                            box=1 if (
+                                normalized_style.get("boxEnabled")
+                                or normalized_style.get("preset") == "caption-box"
+                            ) else 0,
                             boxcolor=(
-                                f"{str(normalized_style.get('backColor') or '#000000')}@"
-                                f"{max(0, min(100, int(normalized_style.get('backgroundOpacity', 72)))) / 100:.2f}"
+                                f"{str(normalized_style.get('boxColor') or normalized_style.get('backColor') or '#000000')}@"
+                                f"{max(0, min(100, int(normalized_style.get('boxOpacity', normalized_style.get('backgroundOpacity', 72))))) / 100:.2f}"
                             ),
                             boxborderw=(
-                                max(4, int(normalized_style.get("outlineWidth", 0)) * 2)
-                                if normalized_style.get("preset") == "caption-box"
+                                max(
+                                    4,
+                                    int(
+                                        normalized_style.get(
+                                            "boxPadding",
+                                            normalized_style.get("outlineWidth", 0),
+                                        )
+                                        or 0
+                                    )
+                                    * 2,
+                                )
+                                if (
+                                    normalized_style.get("boxEnabled")
+                                    or normalized_style.get("preset") == "caption-box"
+                                )
                                 else 0
                             ),
                             line_spacing=max(4, font_size // 6),

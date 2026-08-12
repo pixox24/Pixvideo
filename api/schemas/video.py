@@ -29,9 +29,14 @@ class SubtitleStyle(BaseModel):
     fontSize: int = Field(52, ge=12, le=120, description="Subtitle font size in pixels")
     primaryColor: str = Field("#FFFFFF", description="Primary text color")
     accentColor: str = Field("#FFD43B", description="Accent/highlight color")
-    outlineColor: str = Field("#000000", description="Outline color")
-    backColor: str = Field("#000000", description="Background box color")
-    outlineWidth: int = Field(3, ge=0, le=12, description="Outline width")
+    outlineColor: str = Field("#000000", description="Text stroke color (non box) / legacy")
+    backColor: str = Field("#000000", description="Caption box fill color (legacy dual-write of boxColor)")
+    outlineWidth: int = Field(
+        3,
+        ge=0,
+        le=24,
+        description="Text stroke width, or box padding when preset is caption-box (legacy dual-write)",
+    )
     shadow: int = Field(0, ge=0, le=12, description="ASS shadow depth")
     marginV: int = Field(120, ge=0, le=600, description="Vertical margin from aligned edge")
     alignment: int = Field(2, ge=1, le=9, description="ASS alignment code")
@@ -58,6 +63,14 @@ class SubtitleStyle(BaseModel):
     backgroundOpacity: int = Field(72, ge=0, le=100, description="Caption-box background opacity percentage")
     fadeInMs: int = Field(120, ge=0, le=1000, description="Ease-in duration in milliseconds")
     fadeOutMs: int = Field(120, ge=0, le=1000, description="Ease-out duration in milliseconds")
+    # Intent fields (optional; server normalizes from preset + legacy fields when omitted).
+    boxEnabled: Optional[bool] = Field(None, description="Whether a background box is enabled")
+    boxColor: Optional[str] = Field(None, description="Background box fill color")
+    boxOpacity: Optional[int] = Field(None, ge=0, le=100, description="Background box opacity 0-100")
+    boxPadding: Optional[int] = Field(None, ge=0, le=24, description="Background box padding / thickness")
+    boxRadius: Optional[int] = Field(None, ge=0, le=48, description="Background box corner radius (CSS/dynamic only)")
+    strokeWidth: Optional[int] = Field(None, ge=0, le=12, description="Text stroke width (non box modes)")
+    strokeColor: Optional[str] = Field(None, description="Text stroke color (non box modes)")
 
 
 class VideoSceneInput(BaseModel):

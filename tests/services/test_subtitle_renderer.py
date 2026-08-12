@@ -141,9 +141,51 @@ def test_ass_presets_have_distinct_rendered_styles(tmp_path):
 
     assert len(set(style_lines.values())) == 4
     assert ",1,4,0,2,60,60,120,1" in style_lines["short-video-bold"]
-    assert ",3,0,0,2,60,60,200,1" in style_lines["caption-box"]
-    # 72% opacity is encoded as ASS alpha 0x47 (0 transparent, 255 opaque).
+    # caption-box: BorderStyle=3, Outline=default box padding (10), not 0.
+    assert ",3,10,0,2,60,60,200,1" in style_lines["caption-box"]
+    # libass uses OutlineColour for BorderStyle=3 fill; 72% → alpha 0x47 on box color.
     assert "&H47000000" in style_lines["caption-box"]
+
+
+def test_caption_box_intent_defaults_and_box_color_on_outline_colour(tmp_path):
+    renderer = SubtitleRenderer()
+    # Legacy broken default (outlineWidth=0) must still produce a visible box padding.
+    normalized = renderer.normalize_style({"preset": "caption-box", "outlineWidth": 0})
+    assert normalized["boxEnabled"] is True
+    assert normalized["boxPadding"] == 10
+    assert normalized["outlineWidth"] == 10
+    assert normalized["boxColor"] == "#000000"
+
+    ass_path = renderer.create_ass_file(
+        text="底色测试",
+        duration=1.0,
+        width=1080,
+        height=1920,
+        style={
+            "preset": "caption-box",
+            "backColor": "#FF0000",
+            "outlineColor": "#00FF00",  # must NOT become the box fill
+            "outlineWidth": 6,
+            "backgroundOpacity": 100,
+        },
+        output_dir=tmp_path,
+    )
+    content = Path(ass_path).read_text(encoding="utf-8")
+    style_line = next(line for line in content.splitlines() if line.startswith("Style:"))
+    # Fully opaque red box → OutlineColour &H00BBGGRR with RR=FF → &H000000FF
+    assert "&H000000FF" in style_line
+    # Green stroke colour must not be the box fill colour.
+    assert "&H0000FF00" not in style_line
+    assert ",3,6,0," in style_line
+
+
+def test_caption_box_explicit_box_padding_wins(tmp_path):
+    renderer = SubtitleRenderer()
+    normalized = renderer.normalize_style(
+        {"preset": "caption-box", "boxPadding": 12, "outlineWidth": 3}
+    )
+    assert normalized["boxPadding"] == 12
+    assert normalized["outlineWidth"] == 12
 
 
 def test_ass_highlights_use_override_colors(tmp_path):

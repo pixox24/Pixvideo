@@ -4,6 +4,14 @@ set -u
 # macOS Finder shortcut for launching the Pixelle-Video React workbench.
 cd "$(dirname "$0")"
 
+# Prefer ffmpeg-full (libass/subtitles/drawtext) over the default Homebrew ffmpeg.
+# Without libass, styled ASS subtitles fall back to a static PIL overlay.
+for _ffdir in /opt/homebrew/opt/ffmpeg-full/bin /usr/local/opt/ffmpeg-full/bin; do
+  if [ -x "$_ffdir/ffmpeg" ]; then
+    export PATH="$_ffdir:$PATH"
+    break
+  fi
+done
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 clear
@@ -21,8 +29,15 @@ fi
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "[WARN] ffmpeg was not found. The Web UI can start, but video generation may fail."
-  echo "On macOS, install it with: brew install ffmpeg"
+  echo "On macOS, install it with: brew install ffmpeg-full"
   echo
+elif ! ffmpeg -hide_banner -filters 2>/dev/null | grep -q "subtitles"; then
+  echo "[WARN] Current ffmpeg has no 'subtitles' filter (libass)."
+  echo "Styled subtitles (punctuation split / custom font) need: brew install ffmpeg-full"
+  echo "Then restart this app so PATH picks up /opt/homebrew/opt/ffmpeg-full/bin"
+  echo
+else
+  echo "ffmpeg: $(command -v ffmpeg) (subtitles filter OK)"
 fi
 
 if ! command -v npm >/dev/null 2>&1; then

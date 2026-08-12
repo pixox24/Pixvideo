@@ -62,6 +62,10 @@ test_*.py
 
 !bgm/default.mp3
 
+# Bundled project music library (root-level BGM pack)
+!音乐库/
+!音乐库/**
+
 # Temp files
 temp/
 tmp/

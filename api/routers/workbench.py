@@ -137,7 +137,7 @@ PRESET_DEFAULTS = {
         "mode": "hyperframes",
         "preset": "caption-box",
         "fontSize": 80,
-        "outlineWidth": 0,
+        "outlineWidth": 10,  # dual-write of boxPadding for caption-box
         "marginV": 200,
         "maxCharsPerLine": 20,
         "maxLines": 1,
@@ -145,6 +145,11 @@ PRESET_DEFAULTS = {
         "accentColor": "#F97316",
         "shadow": 0,
         "segmentMode": "sentence",
+        "boxEnabled": True,
+        "boxPadding": 10,
+        "boxOpacity": 72,
+        "boxColor": "#000000",
+        "boxRadius": 12,
     },
 }
 
@@ -294,21 +299,11 @@ def _coerce_float(value: Any, default: float, minimum: float, maximum: float) ->
 
 
 def _normalize_subtitle_style(value: Any) -> dict[str, Any]:
-    style = {**SUBTITLE_STYLE_DEFAULTS, **(value if isinstance(value, dict) else {})}
-    integer_ranges = {
-        "fontSize": (52, 12, 120),
-        "outlineWidth": (3, 0, 12),
-        "shadow": (0, 0, 12),
-        "marginV": (120, 0, 600),
-        "alignment": (2, 1, 9),
-        "maxCharsPerLine": (14, 4, 40),
-        "maxLines": (2, 1, 4),
-        "highlightScale": (125, 100, 180),
-        "backgroundOpacity": (72, 0, 100),
-    }
-    for key, (default, minimum, maximum) in integer_ranges.items():
-        style[key] = _coerce_int(style.get(key), default, minimum, maximum)
-    return style
+    """Normalize via SubtitleRenderer so box/stroke intent matches export."""
+    from pixelle_video.services.subtitle_renderer import SubtitleRenderer
+
+    raw = value if isinstance(value, dict) else {}
+    return SubtitleRenderer().normalize_style(raw)
 
 
 def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = None) -> dict[str, Any]:

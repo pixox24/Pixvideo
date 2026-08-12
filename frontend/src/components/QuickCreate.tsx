@@ -179,6 +179,10 @@ const clampNumber = (value: unknown, fallback: number, min: number, max: number)
   return Math.min(max, Math.max(min, Number.isFinite(parsed) ? parsed : fallback));
 };
 
+const DEFAULT_BOX_PADDING = 10;
+const DEFAULT_BOX_RADIUS = 12;
+const DEFAULT_BOX_OPACITY = 72;
+
 const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   mode: "hyperframes",
   preset: "caption-box",
@@ -189,7 +193,8 @@ const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   accentColor: "#F97316",
   outlineColor: "#000000",
   backColor: "#000000",
-  outlineWidth: 0,
+  // Dual-write: outlineWidth mirrors boxPadding for caption-box.
+  outlineWidth: DEFAULT_BOX_PADDING,
   shadow: 0,
   marginV: 200,
   alignment: 2,
@@ -201,9 +206,16 @@ const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
   keywordColors: {},
   highlightStyle: "accent",
   highlightScale: 125,
-  backgroundOpacity: 72,
+  backgroundOpacity: DEFAULT_BOX_OPACITY,
   fadeInMs: 120,
   fadeOutMs: 120,
+  boxEnabled: true,
+  boxColor: "#000000",
+  boxOpacity: DEFAULT_BOX_OPACITY,
+  boxPadding: DEFAULT_BOX_PADDING,
+  boxRadius: DEFAULT_BOX_RADIUS,
+  strokeWidth: 0,
+  strokeColor: "#000000",
 };
 
 const SUBTITLE_PRESET_STYLES: Record<SubtitleStyle["preset"], Partial<SubtitleStyle>> = {
@@ -244,16 +256,23 @@ const SUBTITLE_PRESET_STYLES: Record<SubtitleStyle["preset"], Partial<SubtitleSt
     animation: "fade",
   },
   "caption-box": {
-    fontSize: 52,
+    fontSize: 80,
     primaryColor: "#FFFFFF",
-    accentColor: "#FFD43B",
+    accentColor: "#F97316",
     outlineColor: "#000000",
     backColor: "#000000",
-    outlineWidth: 0,
+    outlineWidth: DEFAULT_BOX_PADDING,
     shadow: 0,
-    marginV: 120,
-    maxLines: 2,
-    backgroundOpacity: 72,
+    marginV: 200,
+    maxLines: 1,
+    backgroundOpacity: DEFAULT_BOX_OPACITY,
+    boxEnabled: true,
+    boxColor: "#000000",
+    boxOpacity: DEFAULT_BOX_OPACITY,
+    boxPadding: DEFAULT_BOX_PADDING,
+    boxRadius: DEFAULT_BOX_RADIUS,
+    strokeWidth: 0,
+    strokeColor: "#000000",
     animation: "fade",
   },
 };
@@ -397,27 +416,75 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     reuseAssetsEnabled ? (reuseSourceTaskId || latestCompletedTaskId || null) : null;
   const lastAppliedPresetId = React.useRef<string | null>(null);
 
-  const normalizeSubtitleStyle = (value?: Partial<SubtitleStyle>): SubtitleStyle => ({
-    ...DEFAULT_SUBTITLE_STYLE,
-    ...(value || {}),
-    fontSize: clampNumber(value?.fontSize, 80, 12, 120),
-    outlineWidth: clampNumber(value?.outlineWidth, 0, 0, 12),
-    shadow: clampNumber(value?.shadow, 0, 0, 12),
-    marginV: clampNumber(value?.marginV, 200, 0, 600),
-    alignment: clampNumber(value?.alignment, 2, 1, 9),
-    maxCharsPerLine: clampNumber(value?.maxCharsPerLine, 20, 4, 40),
-    maxLines: clampNumber(value?.maxLines, 1, 1, 4),
-    highlightScale: clampNumber(value?.highlightScale, 125, 100, 180),
-    backgroundOpacity: clampNumber(value?.backgroundOpacity, 72, 0, 100),
-    fadeInMs: clampNumber(value?.fadeInMs, 120, 0, 1000),
-    fadeOutMs: clampNumber(value?.fadeOutMs, 120, 0, 1000),
-    segmentMode: value?.segmentMode && ["line", "sentence", "phrase"].includes(value.segmentMode)
-      ? value.segmentMode
-      : "sentence",
-    keywordColors: value?.keywordColors && typeof value.keywordColors === "object"
-      ? value.keywordColors
-      : {},
-  });
+  const normalizeSubtitleStyle = (value?: Partial<SubtitleStyle>): SubtitleStyle => {
+    const merged: SubtitleStyle = {
+      ...DEFAULT_SUBTITLE_STYLE,
+      ...(value || {}),
+      fontSize: clampNumber(value?.fontSize, 80, 12, 120),
+      outlineWidth: clampNumber(value?.outlineWidth, DEFAULT_BOX_PADDING, 0, 24),
+      shadow: clampNumber(value?.shadow, 0, 0, 12),
+      marginV: clampNumber(value?.marginV, 200, 0, 600),
+      alignment: clampNumber(value?.alignment, 2, 1, 9),
+      maxCharsPerLine: clampNumber(value?.maxCharsPerLine, 20, 4, 40),
+      maxLines: clampNumber(value?.maxLines, 1, 1, 4),
+      highlightScale: clampNumber(value?.highlightScale, 125, 100, 180),
+      backgroundOpacity: clampNumber(value?.backgroundOpacity, DEFAULT_BOX_OPACITY, 0, 100),
+      fadeInMs: clampNumber(value?.fadeInMs, 120, 0, 1000),
+      fadeOutMs: clampNumber(value?.fadeOutMs, 120, 0, 1000),
+      segmentMode: value?.segmentMode && ["line", "sentence", "phrase"].includes(value.segmentMode)
+        ? value.segmentMode
+        : "sentence",
+      keywordColors: value?.keywordColors && typeof value.keywordColors === "object"
+        ? value.keywordColors
+        : {},
+    };
+    const boxEnabled = merged.preset === "caption-box" || value?.boxEnabled === true;
+    if (boxEnabled) {
+      // Prefer explicit boxPadding; else outlineWidth if >0; else safe default (never 0).
+      let boxPadding = DEFAULT_BOX_PADDING;
+      if (typeof value?.boxPadding === "number") {
+        boxPadding = value.boxPadding > 0
+          ? clampNumber(value.boxPadding, DEFAULT_BOX_PADDING, 1, 24)
+          : DEFAULT_BOX_PADDING;
+      } else if (typeof value?.outlineWidth === "number" && value.outlineWidth > 0) {
+        boxPadding = clampNumber(value.outlineWidth, DEFAULT_BOX_PADDING, 1, 24);
+      }
+      const boxColor = value?.boxColor || value?.backColor || merged.backColor || "#000000";
+      const boxOpacity = clampNumber(
+        value?.boxOpacity ?? value?.backgroundOpacity ?? merged.backgroundOpacity,
+        DEFAULT_BOX_OPACITY,
+        0,
+        100,
+      );
+      const boxRadius = clampNumber(value?.boxRadius ?? merged.boxRadius, DEFAULT_BOX_RADIUS, 0, 48);
+      return {
+        ...merged,
+        boxEnabled: true,
+        boxColor,
+        boxOpacity,
+        boxPadding,
+        boxRadius,
+        backColor: boxColor,
+        backgroundOpacity: boxOpacity,
+        outlineWidth: boxPadding,
+        strokeWidth: 0,
+        strokeColor: value?.strokeColor || value?.outlineColor || merged.outlineColor || "#000000",
+      };
+    }
+    const stroke = clampNumber(
+      value?.strokeWidth ?? value?.outlineWidth ?? merged.outlineWidth,
+      0,
+      0,
+      12,
+    );
+    return {
+      ...merged,
+      boxEnabled: false,
+      strokeWidth: stroke,
+      strokeColor: value?.strokeColor || value?.outlineColor || merged.outlineColor || "#000000",
+      outlineWidth: stroke,
+    };
+  };
 
   React.useEffect(() => {
     try {
@@ -645,9 +712,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   };
 
   const handleSubtitlePresetChange = (preset: SubtitleStyle["preset"]) => {
-    updateSubtitleStyle({ preset, ...SUBTITLE_PRESET_STYLES[preset] });
+    updateSubtitleStyle(normalizeSubtitleStyle({ preset, ...SUBTITLE_PRESET_STYLES[preset] }));
   };
 
+  const isCaptionBox = subtitleStyle.preset === "caption-box" || subtitleStyle.boxEnabled === true;
   const dynamicSubtitleEnabled = subtitleStyle.mode === "hyperframes";
 
   const handleSubtitleFontChange = (fontPath: string) => {
@@ -3169,14 +3237,21 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   </div>
                   <div>
                     <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
-                      描边
+                      {isCaptionBox ? "底框边距" : "描边"}
                     </label>
                     <input
                       type="number"
-                      min="0"
-                      max="12"
-                      value={subtitleStyle.outlineWidth}
-                      onChange={(e) => updateSubtitleStyle({ outlineWidth: parseInt(e.target.value || "3", 10) })}
+                      min={isCaptionBox ? 1 : 0}
+                      max={isCaptionBox ? 24 : 12}
+                      value={isCaptionBox ? (subtitleStyle.boxPadding ?? subtitleStyle.outlineWidth) : subtitleStyle.outlineWidth}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value || (isCaptionBox ? "10" : "3"), 10);
+                        if (isCaptionBox) {
+                          updateSubtitleStyle({ boxPadding: n, outlineWidth: n });
+                        } else {
+                          updateSubtitleStyle({ outlineWidth: n, strokeWidth: n });
+                        }
+                      }}
                       className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                     />
                   </div>
@@ -3222,25 +3297,49 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                  {[
-                    ["文字", "primaryColor"],
-                    ["强调", "accentColor"],
-                    ["描边色", "outlineColor"],
-                    ["底色", "backColor"],
-                  ].map(([label, key]) => (
+                  {(
+                    isCaptionBox
+                      ? [
+                          ["文字", "primaryColor"],
+                          ["强调", "accentColor"],
+                          ["底色", "backColor"],
+                        ]
+                      : [
+                          ["文字", "primaryColor"],
+                          ["强调", "accentColor"],
+                          ["描边色", "outlineColor"],
+                        ]
+                  ).map(([label, key]) => (
                     <label key={key} className="block">
                       <span className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                         {label}
                       </span>
                       <input
                         type="color"
-                        value={subtitleStyle[key as keyof SubtitleStyle] as string}
-                        onChange={(e) => updateSubtitleStyle({ [key]: e.target.value } as Partial<SubtitleStyle>)}
+                        value={
+                          key === "backColor"
+                            ? (subtitleStyle.boxColor || subtitleStyle.backColor || "#000000")
+                            : (subtitleStyle[key as keyof SubtitleStyle] as string)
+                        }
+                        onChange={(e) => {
+                          if (key === "backColor") {
+                            updateSubtitleStyle({ backColor: e.target.value, boxColor: e.target.value });
+                          } else if (key === "outlineColor") {
+                            updateSubtitleStyle({ outlineColor: e.target.value, strokeColor: e.target.value });
+                          } else {
+                            updateSubtitleStyle({ [key]: e.target.value } as Partial<SubtitleStyle>);
+                          }
+                        }}
                         className="w-full h-8 bg-[#101114] border border-zinc-900 rounded px-1 py-1"
                       />
                     </label>
                   ))}
                 </div>
+                {isCaptionBox && (
+                  <p className="text-[10px] text-zinc-500">
+                    黑底框：边距控制底框厚度；底色控制框填充。标准字幕（ASS）为直角框；圆角需动态字幕路径成功时生效。
+                  </p>
+                )}
 
                 <div className="border-t border-zinc-800 pt-3 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

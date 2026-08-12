@@ -92,23 +92,39 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
     setSegmentIndex(0);
     setIsPlaying(true);
   };
-  const subtitleBackground = style.preset === "caption-box" ? colorWithOpacity(style.backColor, style.backgroundOpacity ?? 72) : "transparent";
+  const boxEnabled = style.preset === "caption-box" || style.boxEnabled === true;
+  const boxColor = style.boxColor || style.backColor || "#000000";
+  const boxOpacity = style.boxOpacity ?? style.backgroundOpacity ?? 72;
+  const boxPadding = Math.max(
+    boxEnabled ? 1 : 0,
+    style.boxPadding ?? (boxEnabled ? (style.outlineWidth || 10) : 0),
+  );
+  const boxRadius = style.boxRadius ?? 12;
+  const strokeWidth = boxEnabled ? 0 : scaledStyle.outlineWidth;
+  const strokeColor = style.strokeColor || style.outlineColor;
+  const subtitleBackground = boxEnabled ? colorWithOpacity(boxColor, boxOpacity) : "transparent";
   // Soft glow (blur) instead of hard offset double-shadow.
   const textShadow =
     scaledStyle.shadow > 0
-      ? `0 0 ${Math.max(2, scaledStyle.shadow * 2)}px ${style.outlineColor}, 0 0 ${Math.max(4, scaledStyle.shadow * 3)}px ${style.outlineColor}`
+      ? `0 0 ${Math.max(2, scaledStyle.shadow * 2)}px ${strokeColor}, 0 0 ${Math.max(4, scaledStyle.shadow * 3)}px ${strokeColor}`
       : "none";
   const highlightStyle = style.highlightStyle || "accent";
   const highlightScale = Math.min(Math.max(style.highlightScale || 125, 100), 180) / 100;
   const highlightAnimated = isPlaying && style.animation === "word-pop";
   const activeFontFamily = previewFontFamily || style.fontFamily || "system-ui, sans-serif";
+  const boxPadY = boxEnabled ? Math.max(4, Math.round(boxPadding * 0.55)) : 4;
+  const boxPadX = boxEnabled ? Math.max(6, Math.round(boxPadding * 0.9)) : 8;
 
   return (
     <section className="rounded-md border border-zinc-800 bg-[#101114] p-3 space-y-2.5" aria-label="字幕样式预览">
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-xs font-semibold text-zinc-200">样式预览</p>
-          <p className="text-[10px] text-zinc-500">实时近似效果，最终以渲染成片为准</p>
+          <p className="text-[10px] text-zinc-500">
+            {boxEnabled
+              ? "底框预览与成片对齐（ASS 为直角；圆角仅动态字幕）"
+              : "样式预览；描边/颜色与成片一致"}
+          </p>
         </div>
         <button type="button" onClick={replay} className="rounded border border-amber-500/50 px-2 py-1 text-[10px] font-medium text-amber-300 hover:bg-amber-500/10">
           {isPlaying ? "播放中" : "播放效果"}
@@ -132,9 +148,16 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
       <div className={`mx-auto overflow-hidden rounded border border-white/10 ${aspect === "landscape" ? "aspect-video w-full" : "aspect-[9/16] w-36"}`} style={{ background: activeScene.background }}>
         <div className="relative h-full w-full bg-gradient-to-t from-black/60 via-transparent to-black/10">
           <div className="absolute inset-x-[8%]" style={{ bottom: `${scaledStyle.marginBottom}px`, textAlign: previewTextAlignment(style.alignment) }}>
-            <div className="inline-block max-w-full rounded px-2 py-1" style={{ backgroundColor: subtitleBackground }}>
+            <div
+              className="inline-block max-w-full"
+              style={{
+                backgroundColor: subtitleBackground,
+                borderRadius: boxEnabled ? boxRadius : 0,
+                padding: `${boxPadY}px ${boxPadX}px`,
+              }}
+            >
               {lines.map((line, index) => (
-                <p key={`${line}-${index}`} className={isPlaying && style.animation === "pop" ? "animate-[bounce_0.55s_ease-out]" : isPlaying && style.animation === "fade" ? "animate-[pulse_0.7s_ease-out]" : undefined} style={{ color: style.primaryColor, fontFamily: activeFontFamily, fontSize: `${scaledStyle.fontSize}px`, fontWeight: style.preset === "short-video-bold" ? 800 : 600, lineHeight: 1.35, WebkitTextStroke: `${scaledStyle.outlineWidth}px ${style.outlineColor}`, textShadow }}>
+                <p key={`${line}-${index}`} className={isPlaying && style.animation === "pop" ? "animate-[bounce_0.55s_ease-out]" : isPlaying && style.animation === "fade" ? "animate-[pulse_0.7s_ease-out]" : undefined} style={{ color: style.primaryColor, fontFamily: activeFontFamily, fontSize: `${scaledStyle.fontSize}px`, fontWeight: style.preset === "short-video-bold" ? 800 : 600, lineHeight: 1.35, WebkitTextStroke: strokeWidth > 0 ? `${strokeWidth}px ${strokeColor}` : "0", textShadow }}>
                   {splitPreviewHighlights(line, style.highlightWords, style.keywordColors, style.accentColor).map((fragment, fragmentIndex) => fragment.highlighted ? (
                     <span key={`${fragment.text}-${fragmentIndex}`} className={highlightAnimated ? "inline-block animate-[bounce_0.55s_ease-out]" : "inline-block"} style={{ color: highlightStyle === "badge" ? "#17110a" : (fragment.color || style.accentColor), backgroundColor: highlightStyle === "badge" ? (fragment.color || style.accentColor) : "transparent", borderRadius: highlightStyle === "badge" ? "0.16em" : undefined, padding: highlightStyle === "badge" ? "0.02em 0.16em" : undefined, fontWeight: highlightStyle === "pop" ? 900 : undefined, transform: highlightAnimated ? `scale(${highlightScale})` : undefined, WebkitTextStroke: highlightStyle === "badge" ? "0" : undefined, textShadow: highlightStyle === "badge" ? "none" : undefined }}>
                       {fragment.text}

@@ -5,8 +5,25 @@ set -e
 
 cd "$(dirname "$0")"
 
+# Prefer ffmpeg-full (libass) so ASS subtitle burn-in works on macOS.
+for _ffdir in /opt/homebrew/opt/ffmpeg-full/bin /usr/local/opt/ffmpeg-full/bin; do
+  if [ -x "$_ffdir/ffmpeg" ]; then
+    export PATH="$_ffdir:$PATH"
+    break
+  fi
+done
+
 echo "🚀 Building and starting Pixelle-Video..."
 echo ""
+
+if command -v ffmpeg >/dev/null 2>&1; then
+  if ffmpeg -hide_banner -filters 2>/dev/null | grep -q "subtitles"; then
+    echo "🎞️  ffmpeg: $(command -v ffmpeg) (subtitles OK)"
+  else
+    echo "⚠️  ffmpeg has no 'subtitles' filter. Install: brew install ffmpeg-full"
+  fi
+  echo ""
+fi
 
 if ! command -v npm >/dev/null 2>&1; then
     echo "❌ Error: npm was not found. Install Node.js 22+ first."

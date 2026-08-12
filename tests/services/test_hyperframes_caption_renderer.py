@@ -56,7 +56,13 @@ def test_prepared_project_uses_custom_font_and_escaped_caption_text(tmp_path):
     assert (project_dir / "index.html").read_text(encoding="utf-8") == composition
     assert "@font-face" in composition
     assert "assets/" + font_path.name in composition
-    assert '\"Microsoft YaHei\"' in composition
+    assert "DynamicCaptionFont" in composition
+    assert "Microsoft YaHei" in composition
+    # Clip/inner split for hyperframes --strict GSAP rules.
+    assert 'class="clip"' in composition
+    assert 'id="caption-1-inner"' in composition
+    assert 'class="caption-inner' in composition
+    assert 'tl.set("#caption-1-inner"' in composition or "tl.set(\"#caption-1-inner\"" in composition
     assert "<script>不要执行" not in composition
     assert "&lt;script&gt;" in composition
     assert "ript&gt;" in composition
@@ -105,14 +111,44 @@ def test_dynamic_preset_changes_font_weight_and_caption_box_background(tmp_path)
             encoding="utf-8"
         )
         weights[preset] = next(
-            line for line in composition.splitlines() if "font-size:" in line and "font-weight:" in line
+            line
+            for line in composition.splitlines()
+            if "font-size:" in line and "font-weight:" in line and "caption-inner" in composition
         )
+        # font-weight lives on .caption-inner rule
+        assert "font-weight:" in composition
         if preset == "caption-box":
             assert "background: rgba(0, 0, 0, 0.72)" in composition
+            assert "border-radius:" in composition
         else:
             assert "background: transparent" in composition
 
     assert len(set(weights.values())) == 4
+
+
+def test_timeline_targets_inner_node_with_hard_kill(tmp_path):
+    renderer = HyperframesCaptionRenderer()
+    plan = renderer.build_caption_plan(
+        text="第一句。第二句。",
+        duration=3.0,
+        width=720,
+        height=1280,
+        fps=24,
+        style={"mode": "hyperframes", "animation": "fade", "segmentMode": "sentence"},
+    )
+    project_dir = renderer.prepare_project(plan, tmp_path / "project")
+    composition = (project_dir / "compositions" / "caption-overlay.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'id="caption-1-inner"' in composition
+    assert 'id="caption-2-inner"' in composition
+    assert 'tl.fromTo("#caption-1-inner"' in composition
+    assert 'tl.to("#caption-1-inner"' in composition
+    assert 'tl.set("#caption-1-inner", { autoAlpha: 0 }' in composition
+    assert 'tl.set("#caption-2-inner", { autoAlpha: 0 }' in composition
+    # Must not animate the clip host directly.
+    assert 'tl.fromTo("#caption-1",' not in composition
+    assert 'tl.to("#caption-1",' not in composition
 
 
 def test_npx_command_can_be_configured_for_service_environment(monkeypatch):

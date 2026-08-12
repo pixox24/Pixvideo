@@ -186,29 +186,78 @@ class HyperframesCaptionRenderer:
         height = plan.canvas["height"]
         fps = plan.canvas["fps"]
         style = plan.style
-        outline = max(0, min(12, int(style["outlineWidth"])))
+        box_enabled = bool(style.get("boxEnabled")) or style.get("preset") == "caption-box"
+        # Stroke applies only outside caption-box; box mode uses padding instead.
+        stroke_width = 0 if box_enabled else max(0, min(12, int(style.get("strokeWidth", style.get("outlineWidth", 0)))))
+        box_padding = max(0, min(24, int(style.get("boxPadding", style.get("outlineWidth", 10)))))
+        box_radius = max(0, min(48, int(style.get("boxRadius", 12))))
         requested_font_size = max(12, min(120, int(style["fontSize"])))
         max_chars_per_line = max(4, int(style["maxCharsPerLine"]))
         available_width = width * 0.8
-        max_font_size = int((available_width - 2 * outline) / (max_chars_per_line + 0.7))
+        max_font_size = int((available_width - 2 * stroke_width) / (max_chars_per_line + 0.7))
         font_size = max(12, min(requested_font_size, max_font_size))
         bottom = max(0, min(height // 2, int(style["marginV"])))
         shadow = max(0, min(12, int(style["shadow"])))
         text_color = self._hex_color(style.get("primaryColor"), "#FFFFFF")
         accent_color = self._hex_color(style.get("accentColor"), "#FFD43B")
-        outline_color = self._hex_color(style.get("outlineColor"), "#000000")
-        background_color = self._rgba_color(
-            style.get("backColor"),
-            max(0, min(100, int(style.get("backgroundOpacity", 72)))) / 100,
+        outline_color = self._hex_color(
+            style.get("strokeColor") or style.get("outlineColor"),
+            "#000000",
         )
+        box_color = style.get("boxColor") or style.get("backColor")
+        box_opacity = max(
+            0,
+            min(100, int(style.get("boxOpacity", style.get("backgroundOpacity", 72)))),
+        )
+        background_color = self._rgba_color(box_color, box_opacity / 100)
+        # CSS padding roughly matches ASS box padding (px at render font size).
+        pad_y = max(4, int(round(box_padding * 0.55))) if box_enabled else max(2, int(font_size * 0.08))
+        pad_x = max(6, int(round(box_padding * 0.9))) if box_enabled else max(4, int(font_size * 0.12))
         alignment = int(style.get("alignment", 2))
         text_alignment, caption_position = self._caption_alignment(alignment)
         highlight_words = self._highlight_words(style.get("highlightWords"))
         highlight_style = str(style.get("highlightStyle") or "accent")
         highlight_scale = max(100, min(180, int(style.get("highlightScale", 125)))) / 100
-        font_family = "DynamicCaptionFont" if font_url else str(style.get("fontFamily") or "")
-        if not font_family:
-            font_family = "PingFang SC"
+        # Font stack must only include families with matching @font-face (hyperframes --strict).
+        system_faces = [
+            ("PingFang SC", 'local("PingFang SC")'),
+            ("Hiragino Sans GB", 'local("Hiragino Sans GB")'),
+            ("Microsoft YaHei", 'local("Microsoft YaHei"), local("微软雅黑")'),
+            ("Noto Sans CJK SC", 'local("Noto Sans CJK SC"), local("Noto Sans SC")'),
+        ]
+        font_face_rules: list[str] = []
+        stack: list[str] = []
+        if font_url:
+            font_face_rules.append(
+                "@font-face {"
+                "font-family: DynamicCaptionFont;"
+                f"src: url({json.dumps('./' + font_url, ensure_ascii=False)});"
+                "}"
+            )
+            stack.append("DynamicCaptionFont")
+        else:
+            requested = str(style.get("fontFamily") or "").strip()
+            if requested:
+                # Declare the requested family as local so strict font checks pass.
+                font_face_rules.append(
+                    "@font-face {"
+                    f"font-family: {json.dumps(requested, ensure_ascii=False)};"
+                    f"src: local({json.dumps(requested, ensure_ascii=False)});"
+                    "}"
+                )
+                stack.append(requested)
+        for family_name, src in system_faces:
+            font_face_rules.append(
+                f"@font-face {{ font-family: {json.dumps(family_name)}; src: {src}; }}"
+            )
+            stack.append(family_name)
+        stack.append("sans-serif")
+        font_face = "\n      ".join(font_face_rules)
+        font_family_css = ", ".join(
+            json.dumps(name, ensure_ascii=False) if name != "sans-serif" else "sans-serif"
+            for name in stack
+        )
+
         font_weight = {
             "short-video-bold": 800,
             "clean-white": 600,
@@ -216,24 +265,20 @@ class HyperframesCaptionRenderer:
             "caption-box": 700,
         }.get(str(style.get("preset")), 600)
 
-        font_face = ""
-        if font_url:
-            font_face = (
-                "@font-face {"
-                "font-family: DynamicCaptionFont;"
-                f"src: url({json.dumps('./' + font_url, ensure_ascii=False)});"
-                "}"
-            )
-        background_rule = background_color if style.get("preset") == "caption-box" else "transparent"
-        caption_class = "caption pop" if style.get("animation") == "pop" else "caption"
+        background_rule = background_color if box_enabled else "transparent"
+        radius_rule = f"{box_radius}px" if box_enabled else "0"
+        # Outer node is a time clip (framework-owned visibility).
+        # Inner node receives GSAP enter/exit + hard kill (hyperframes strict rule).
+        caption_inner_class = "caption-inner pop" if style.get("animation") == "pop" else "caption-inner"
         captions = "\n".join(
             (
-                f'<div id="{caption.id}" class="{caption_class} clip" '
+                f'<div id="{caption.id}" class="clip" '
                 f'data-start="{caption.start_ms / 1000:.3f}" '
                 f'data-duration="{(caption.end_ms - caption.start_ms) / 1000:.3f}" '
                 'data-track-index="1" data-layout-allow-occlusion>'
+                f'<div id="{caption.id}-inner" class="{caption_inner_class}">'
                 f"{self._caption_markup(caption.text, highlight_words, highlight_style, style)}"
-                "</div>"
+                f"</div></div>"
             )
             for caption in plan.captions
         )
@@ -258,22 +303,23 @@ class HyperframesCaptionRenderer:
     <script src=\"https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js\"></script>
     <style>
       {font_face}
-      @font-face {{ font-family: \"PingFang SC\"; src: local(\"PingFang SC\"); }}
-      @font-face {{ font-family: \"Hiragino Sans GB\"; src: local(\"Hiragino Sans GB\"); }}
       * {{ box-sizing: border-box; }}
       html, body {{ width: {width}px; height: {height}px; margin: 0; overflow: hidden; background: transparent; }}
-      body {{ font-family: {json.dumps(font_family, ensure_ascii=False)}, \"Microsoft YaHei\", \"PingFang SC\", \"Hiragino Sans GB\", \"Noto Sans CJK SC\", sans-serif; }}
+      body {{ font-family: {font_family_css}; }}
       #caption-root {{ position: relative; width: {width}px; height: {height}px; overflow: hidden; }}
-        .caption {{
+      .clip {{
         position: absolute; {caption_position} bottom: {bottom}px;
-        width: fit-content; max-width: 86.6%; padding: 0.2em 0.35em;
-        color: {text_color}; background: {background_rule}; border-radius: 12px;
+        width: fit-content; max-width: 86.6%;
+      }}
+      .caption-inner {{
+        width: fit-content; max-width: 100%; padding: {pad_y}px {pad_x}px;
+        color: {text_color}; background: {background_rule}; border-radius: {radius_rule};
         font-size: {font_size}px; font-weight: {font_weight}; line-height: 1.28; text-align: {text_alignment};
         white-space: nowrap; word-break: keep-all;
-        -webkit-text-stroke: {outline}px {outline_color};
+        -webkit-text-stroke: {stroke_width}px {outline_color};
         text-shadow: {shadow}px {shadow}px {max(1, shadow * 2)}px {outline_color};
       }}
-      .caption.pop {{ color: {accent_color}; }}
+      .caption-inner.pop {{ color: {accent_color}; }}
       .highlight {{ display: inline-block; color: {accent_color}; }}
       .highlight-pop {{ font-weight: 900; }}
       .highlight-badge {{
@@ -304,44 +350,53 @@ class HyperframesCaptionRenderer:
         fade_in: float = 0.12,
         fade_out: float = 0.12,
     ) -> str:
+        """GSAP targets the inner non-clip node; hard-kill at clip end for --strict."""
         start = caption.start_ms / 1000
         end = caption.end_ms / 1000
         duration = max(0.05, end - start)
         enter = min(fade_in if fade_in > 0 else 0.18, max(0.05, duration * 0.35))
         exit_dur = min(fade_out if fade_out > 0 else 0.12, max(0.04, duration * 0.3))
         exit_at = max(start + enter, end - exit_dur)
+        # Keep exit fully before the clip end so hard kill sits on the boundary cleanly.
+        if exit_at + exit_dur > end:
+            exit_at = max(start, end - exit_dur)
+        inner = f"#{caption.id}-inner"
+        hard_kill = f'tl.set("{inner}", {{ autoAlpha: 0 }}, {end:.3f});'
 
         if animation == "none":
             return (
-                f'tl.set("#{caption.id}", {{ autoAlpha: 1 }}, {start:.3f});\n'
-                f'tl.set("#{caption.id}", {{ autoAlpha: 0 }}, {end:.3f});'
+                f'tl.set("{inner}", {{ autoAlpha: 1 }}, {start:.3f});\n'
+                f"{hard_kill}"
             )
         if animation == "word-pop":
             return (
-                f'tl.fromTo("#{caption.id}", {{ autoAlpha: 0, y: 22 }}, '
+                f'tl.fromTo("{inner}", {{ autoAlpha: 0, y: 22 }}, '
                 f'{{ autoAlpha: 1, y: 0, duration: {enter:.3f}, ease: "power2.out" }}, {start:.3f});\n'
-                f'tl.fromTo("#{caption.id} .highlight", {{ autoAlpha: 0, scale: 0.72 }}, '
+                f'tl.fromTo("{inner} .highlight", {{ autoAlpha: 0, scale: 0.72 }}, '
                 f'{{ autoAlpha: 1, scale: {highlight_scale:.2f}, duration: {enter:.3f}, '
                 f'ease: "back.out(2.4)", stagger: 0.08 }}, {start + 0.08:.3f});\n'
-                f'tl.to("#{caption.id} .highlight", {{ scale: 1, duration: 0.14, '
+                f'tl.to("{inner} .highlight", {{ scale: 1, duration: 0.14, '
                 f'ease: "power2.out", stagger: 0.08 }}, {start + enter:.3f});\n'
-                f'tl.to("#{caption.id}", {{ autoAlpha: 0, y: 10, duration: {exit_dur:.3f}, '
-                f'ease: "power2.in" }}, {exit_at:.3f});'
+                f'tl.to("{inner}", {{ autoAlpha: 0, y: 10, duration: {exit_dur:.3f}, '
+                f'ease: "power2.in" }}, {exit_at:.3f});\n'
+                f"{hard_kill}"
             )
         if animation == "pop":
             return (
-                f'tl.fromTo("#{caption.id}", {{ autoAlpha: 0, scale: 0.72, y: 26 }}, '
+                f'tl.fromTo("{inner}", {{ autoAlpha: 0, scale: 0.72, y: 26 }}, '
                 f'{{ autoAlpha: 1, scale: 1.08, y: 0, duration: {enter:.3f}, ease: "back.out(2.4)" }}, {start:.3f});\n'
-                f'tl.to("#{caption.id}", {{ scale: 1, duration: 0.16, ease: "power2.out" }}, {start + enter:.3f});\n'
-                f'tl.to("#{caption.id}", {{ autoAlpha: 0, scale: 0.96, y: 10, duration: {exit_dur:.3f}, '
-                f'ease: "power2.in" }}, {exit_at:.3f});'
+                f'tl.to("{inner}", {{ scale: 1, duration: 0.16, ease: "power2.out" }}, {start + enter:.3f});\n'
+                f'tl.to("{inner}", {{ autoAlpha: 0, scale: 0.96, y: 10, duration: {exit_dur:.3f}, '
+                f'ease: "power2.in" }}, {exit_at:.3f});\n'
+                f"{hard_kill}"
             )
         # Default: ease-in / ease-out fade.
         return (
-            f'tl.fromTo("#{caption.id}", {{ autoAlpha: 0, y: 22 }}, '
+            f'tl.fromTo("{inner}", {{ autoAlpha: 0, y: 22 }}, '
             f'{{ autoAlpha: 1, y: 0, duration: {enter:.3f}, ease: "power2.out" }}, {start:.3f});\n'
-            f'tl.to("#{caption.id}", {{ autoAlpha: 0, y: 10, duration: {exit_dur:.3f}, '
-            f'ease: "power2.in" }}, {exit_at:.3f});'
+            f'tl.to("{inner}", {{ autoAlpha: 0, y: 10, duration: {exit_dur:.3f}, '
+            f'ease: "power2.in" }}, {exit_at:.3f});\n'
+            f"{hard_kill}"
         )
 
     @staticmethod

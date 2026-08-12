@@ -158,6 +158,15 @@ export interface SubtitleStyle {
   fadeInMs?: number;
   /** Ease-out duration in ms. */
   fadeOutMs?: number;
+  /** Intent: background box (caption-box). Server dual-writes legacy fields. */
+  boxEnabled?: boolean;
+  boxColor?: string;
+  boxOpacity?: number;
+  boxPadding?: number;
+  boxRadius?: number;
+  /** Intent: text stroke (non box presets). */
+  strokeWidth?: number;
+  strokeColor?: string;
 }
 
 export interface FontOption {

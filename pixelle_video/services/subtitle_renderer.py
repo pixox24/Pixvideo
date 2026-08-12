@@ -17,6 +17,12 @@ _SENTENCE_PARTS_RE = re.compile(rf"[^{_SPLIT_PUNCT_CLASS}\s]+")
 # Soft break only for phrase mode oversize handling.
 _SOFT_BREAK_RE = re.compile(r"(?<=[，,、；;])")
 
+# Default caption-box padding (ASS BorderStyle=3 uses Outline as box thickness).
+# Never default to 0 — that produces an invisible box under libass.
+DEFAULT_BOX_PADDING = 10
+DEFAULT_BOX_RADIUS = 12
+DEFAULT_BOX_OPACITY = 72
+
 SUBTITLE_STYLE_DEFAULTS: dict[str, Any] = {
     "mode": "ass",
     "preset": "short-video-bold",
@@ -39,9 +45,17 @@ SUBTITLE_STYLE_DEFAULTS: dict[str, Any] = {
     "keywordColors": {},
     "highlightStyle": "accent",
     "highlightScale": 125,
-    "backgroundOpacity": 72,
+    "backgroundOpacity": DEFAULT_BOX_OPACITY,
     "fadeInMs": 120,
     "fadeOutMs": 120,
+    # Intent fields (normalized always writes these; callers may also send them).
+    "boxEnabled": False,
+    "boxColor": "#000000",
+    "boxOpacity": DEFAULT_BOX_OPACITY,
+    "boxPadding": DEFAULT_BOX_PADDING,
+    "boxRadius": DEFAULT_BOX_RADIUS,
+    "strokeWidth": 0,
+    "strokeColor": "#000000",
 }
 
 # Presets provide defaults only. Values explicitly supplied by the caller are
@@ -86,11 +100,16 @@ SUBTITLE_PRESET_DEFAULTS: dict[str, dict[str, Any]] = {
         "accentColor": "#F97316",
         "outlineColor": "#000000",
         "backColor": "#000000",
-        "outlineWidth": 0,
+        # Dual-write: outlineWidth mirrors boxPadding for legacy UI controls.
+        "outlineWidth": DEFAULT_BOX_PADDING,
         "shadow": 0,
         "marginV": 200,
         "maxLines": 1,
-        "backgroundOpacity": 72,
+        "backgroundOpacity": DEFAULT_BOX_OPACITY,
+        "boxPadding": DEFAULT_BOX_PADDING,
+        "boxOpacity": DEFAULT_BOX_OPACITY,
+        "boxColor": "#000000",
+        "boxRadius": DEFAULT_BOX_RADIUS,
         "animation": "fade",
     },
 }
@@ -121,7 +140,8 @@ class SubtitleRenderer:
             "preset": preset,
         }
         normalized["fontSize"] = self._coerce_int(normalized.get("fontSize"), 52, 12, 120)
-        normalized["outlineWidth"] = self._coerce_int(normalized.get("outlineWidth"), 3, 0, 12)
+        # Allow up to 24 so caption-box padding can dual-write via outlineWidth.
+        normalized["outlineWidth"] = self._coerce_int(normalized.get("outlineWidth"), 3, 0, 24)
         normalized["shadow"] = self._coerce_int(normalized.get("shadow"), 0, 0, 12)
         normalized["marginV"] = self._coerce_int(normalized.get("marginV"), 120, 0, 600)
         normalized["alignment"] = self._coerce_int(normalized.get("alignment"), 2, 1, 9)
@@ -191,12 +211,140 @@ class SubtitleRenderer:
         )
         normalized["backgroundOpacity"] = self._coerce_int(
             normalized.get("backgroundOpacity"),
-            72,
+            DEFAULT_BOX_OPACITY,
             0,
             100,
         )
         normalized["fadeInMs"] = self._coerce_int(normalized.get("fadeInMs"), 120, 0, 1000)
         normalized["fadeOutMs"] = self._coerce_int(normalized.get("fadeOutMs"), 120, 0, 1000)
+        return self._apply_subtitle_intent(normalized, raw_style)
+
+    def _apply_subtitle_intent(
+        self,
+        normalized: dict[str, Any],
+        raw_style: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Derive box/stroke intent and dual-write legacy fields.
+
+        caption-box (libass BorderStyle=3):
+          - box fill colour is OutlineColour (not BackColour)
+          - box thickness is Outline width (= boxPadding)
+          - stroke is not available in the same ASS style layer
+        """
+        box_enabled = (
+            normalized.get("preset") == "caption-box"
+            or bool(normalized.get("boxEnabled"))
+            or str(raw_style.get("boxEnabled") or "").lower() in {"1", "true", "yes"}
+        )
+        raw_keys = set(raw_style.keys()) if isinstance(raw_style, dict) else set()
+
+        # Prefer explicitly provided fields over preset dual-write defaults.
+        if "boxColor" in raw_keys:
+            box_color = self._normalize_hex_color(raw_style.get("boxColor"), "#000000")
+        elif "backColor" in raw_keys:
+            box_color = self._normalize_hex_color(raw_style.get("backColor"), "#000000")
+        else:
+            box_color = self._normalize_hex_color(
+                normalized.get("boxColor") or normalized.get("backColor"),
+                "#000000",
+            )
+
+        if "boxOpacity" in raw_keys:
+            box_opacity = self._coerce_int(raw_style.get("boxOpacity"), DEFAULT_BOX_OPACITY, 0, 100)
+        elif "backgroundOpacity" in raw_keys:
+            box_opacity = self._coerce_int(
+                raw_style.get("backgroundOpacity"),
+                DEFAULT_BOX_OPACITY,
+                0,
+                100,
+            )
+        else:
+            box_opacity = self._coerce_int(
+                normalized.get("boxOpacity", normalized.get("backgroundOpacity")),
+                DEFAULT_BOX_OPACITY,
+                0,
+                100,
+            )
+
+        # boxPadding resolution for caption-box:
+        # 1) explicit boxPadding
+        # 2) outlineWidth if caller set it (>0) — legacy "use stroke slider as padding"
+        # 3) DEFAULT_BOX_PADDING when outlineWidth is 0 (old broken default)
+        if "boxPadding" in raw_keys and raw_style.get("boxPadding") is not None:
+            box_padding = self._coerce_int(raw_style.get("boxPadding"), DEFAULT_BOX_PADDING, 0, 24)
+        elif box_enabled:
+            raw_outline = raw_style.get("outlineWidth", None)
+            if raw_outline is not None:
+                try:
+                    outline_as_padding = int(raw_outline)
+                except (TypeError, ValueError):
+                    outline_as_padding = 0
+                if outline_as_padding > 0:
+                    box_padding = self._coerce_int(outline_as_padding, DEFAULT_BOX_PADDING, 1, 24)
+                else:
+                    # Explicit 0 or legacy preset 0 → use safe default so the box is visible.
+                    box_padding = DEFAULT_BOX_PADDING
+            else:
+                box_padding = self._coerce_int(
+                    normalized.get("boxPadding", normalized.get("outlineWidth")),
+                    DEFAULT_BOX_PADDING,
+                    1,
+                    24,
+                )
+                if box_padding <= 0:
+                    box_padding = DEFAULT_BOX_PADDING
+        else:
+            box_padding = self._coerce_int(
+                normalized.get("boxPadding"),
+                DEFAULT_BOX_PADDING,
+                0,
+                24,
+            )
+
+        box_radius = self._coerce_int(
+            normalized.get("boxRadius"),
+            DEFAULT_BOX_RADIUS,
+            0,
+            48,
+        )
+
+        if box_enabled:
+            stroke_width = 0
+            stroke_color = self._normalize_hex_color(
+                normalized.get("strokeColor") or normalized.get("outlineColor"),
+                "#000000",
+            )
+            normalized["boxEnabled"] = True
+            normalized["boxColor"] = box_color
+            normalized["boxOpacity"] = box_opacity
+            normalized["boxPadding"] = box_padding
+            normalized["boxRadius"] = box_radius
+            # Dual-write legacy fields used by UI / drawtext / hyperframes.
+            normalized["backColor"] = box_color
+            normalized["backgroundOpacity"] = box_opacity
+            normalized["outlineWidth"] = box_padding
+            # Keep outlineColor as stroke intent for non-ASS; box fill is boxColor.
+            normalized["strokeWidth"] = stroke_width
+            normalized["strokeColor"] = stroke_color
+        else:
+            stroke_width = self._coerce_int(normalized.get("outlineWidth"), 0, 0, 12)
+            if "strokeWidth" in raw_keys and raw_style.get("strokeWidth") is not None:
+                stroke_width = self._coerce_int(raw_style.get("strokeWidth"), stroke_width, 0, 12)
+            stroke_color = self._normalize_hex_color(
+                normalized.get("strokeColor") or normalized.get("outlineColor"),
+                "#000000",
+            )
+            normalized["boxEnabled"] = False
+            normalized["boxColor"] = box_color
+            normalized["boxOpacity"] = box_opacity
+            normalized["boxPadding"] = box_padding
+            normalized["boxRadius"] = box_radius
+            normalized["strokeWidth"] = stroke_width
+            normalized["strokeColor"] = stroke_color
+            normalized["outlineWidth"] = stroke_width
+            normalized["outlineColor"] = stroke_color
+
         return normalized
 
     def _coerce_int(self, value: Any, default: int, minimum: int, maximum: int) -> int:
@@ -599,11 +747,31 @@ class SubtitleRenderer:
 
         # Escape commas in font name for ASS style line safety.
         safe_font = str(font_name).replace(",", " ")
-        is_caption_box = normalized["preset"] == "caption-box"
-        background_opacity = normalized.get("backgroundOpacity", 72)
-        background_alpha = round(255 * (1 - (int(background_opacity) / 100)))
-        border_style = 3 if is_caption_box else 1
+        is_caption_box = bool(normalized.get("boxEnabled")) or normalized.get("preset") == "caption-box"
         bold = 1 if normalized["preset"] == "short-video-bold" else 0
+
+        if is_caption_box:
+            # libass BorderStyle=3: opaque box fill uses OutlineColour; Outline is padding.
+            # BackColour is ignored for the fill — we still write the same colour for clarity.
+            box_color = str(normalized.get("boxColor") or normalized.get("backColor") or "#000000")
+            box_opacity = int(normalized.get("boxOpacity", normalized.get("backgroundOpacity", DEFAULT_BOX_OPACITY)))
+            box_padding = max(
+                1,
+                int(normalized.get("boxPadding", normalized.get("outlineWidth", DEFAULT_BOX_PADDING)) or DEFAULT_BOX_PADDING),
+            )
+            background_alpha = round(255 * (1 - (max(0, min(100, box_opacity)) / 100)))
+            outline_colour = self.hex_to_ass_color(box_color, background_alpha)
+            back_colour = self.hex_to_ass_color(box_color, background_alpha)
+            border_style = 3
+            outline_width = box_padding
+        else:
+            outline_colour = self.hex_to_ass_color(
+                str(normalized.get("strokeColor") or normalized.get("outlineColor") or "#000000")
+            )
+            back_colour = self.hex_to_ass_color(normalized.get("backColor") or "#000000", 0)
+            border_style = 1
+            outline_width = int(normalized.get("strokeWidth", normalized.get("outlineWidth", 0)) or 0)
+
         ass = "\n".join(
             [
                 "[Script Info]",
@@ -622,10 +790,10 @@ class SubtitleRenderer:
                 f"{safe_font},{normalized['fontSize']},"
                 f"{self.hex_to_ass_color(normalized['primaryColor'])},"
                 f"{self.hex_to_ass_color(normalized['accentColor'])},"
-                f"{self.hex_to_ass_color(normalized['outlineColor'])},"
-                f"{self.hex_to_ass_color(normalized['backColor'], background_alpha if is_caption_box else 0)},"
+                f"{outline_colour},"
+                f"{back_colour},"
                 f"{bold},0,0,0,100,100,0,0,{border_style},"
-                f"{normalized['outlineWidth']},{style_shadow},"
+                f"{outline_width},{style_shadow},"
                 f"{normalized['alignment']},60,60,{normalized['marginV']},1",
                 "",
                 "[Events]",

@@ -19,6 +19,8 @@ from api.schemas.workbench import (
     GenerationRunItemResponse,
     GenerationRunResponse,
     LatestExportResponse,
+    PipelineProgressResponse,
+    PipelineSceneCellResponse,
     ProjectResponse,
     ProjectSceneResponse,
     ProjectUpdateRequest,
@@ -52,6 +54,7 @@ from pixelle_video.services.workbench_generation import (
 )
 from pixelle_video.utils.content_generators import generate_image_prompts
 from pixelle_video.utils.os_util import get_data_path, get_root_path
+from pixelle_video.utils.project_config import normalize_project_config
 
 router = APIRouter(prefix="/projects", tags=["Workbench Projects"])
 
@@ -61,8 +64,13 @@ _PROJECT_CONFIG_KEYS = {
     "voice", "tts_voice", "speed", "tts_speed", "minimaxModel", "minimax_model",
     "emotion", "minimax_emotion", "mimoModel", "mimo_model", "mimoStyle", "mimo_style",
     "mediaWidth", "mediaHeight", "media_width", "media_height",
+    "videoFps", "video_fps",
+    # imageGenWidth/Height removed: gen size always maps from media canvas whitelist
     "imageAspectRatio", "bgm", "bgm_path", "bgmVolume", "bgm_volume", "promptPrefix",
     "prompt_prefix", "enableMotion", "enableSubtitles", "subtitleStyle", "subtitle_enabled",
+    "bookendEnabled", "bookend_enabled", "bookendIntroSeconds", "bookendOutroSeconds",
+    "bookendIntroFadeSeconds", "bookendOutroFadeSeconds", "bookend",
+    "intro_seconds", "outro_seconds", "intro_fade_seconds", "outro_fade_seconds",
     "splitType", "frame_template", "template_params", "composition_mode", "image_motion_enabled",
     "image_motion_mode", "image_motion_strength", "image_fit_mode", "video_fps", "ttsWorkflow",
     "tts_workflow", "ref_audio", "scenes", "n_scenes", "mode", "split_mode",
@@ -151,6 +159,16 @@ def _latest_export_response(project, repository, media, request: Request):
         except (OSError, ValueError):
             output_url = None
     completed = repository.get_latest_completed_export_revision(project.project_id)
+    progress = None
+    if isinstance(revision.snapshot, dict):
+        raw = revision.snapshot.get("progress")
+        if isinstance(raw, dict):
+            progress = raw
+    task_id = None
+    if isinstance(revision.snapshot, dict):
+        raw_task = revision.snapshot.get("taskId") or revision.snapshot.get("task_id")
+        if raw_task:
+            task_id = str(raw_task)
     return LatestExportResponse(
         exportId=revision.export_id,
         purpose=revision.snapshot.get("purpose"),
@@ -158,7 +176,240 @@ def _latest_export_response(project, repository, media, request: Request):
         outputUrl=output_url,
         createdAt=revision.created_at.isoformat(),
         updatedAt=revision.updated_at.isoformat(),
+        progress=progress,
+        taskId=task_id,
     ), completed is None or project.updated_at > completed.updated_at
+
+
+def _map_tts_cell(item_status: str | None, tts_status: str | None, audio_state: str | None) -> str:
+    status = (tts_status or item_status or "").lower()
+    if status in {"failed"}:
+        return "failed"
+    if status in {"running", "running_tts"}:
+        return "running"
+    if status in {"skipped"}:
+        return "skipped"
+    if status in {"completed", "ready"} or audio_state == "ready":
+        return "ready"
+    if status in {"queued", "pending"}:
+        return "queued"
+    if audio_state == "stale":
+        return "stale"
+    if audio_state == "missing":
+        return "missing"
+    return "queued" if status else "idle"
+
+
+def _map_image_cell(item_status: str | None, image_status: str | None, image_state: str | None, candidate: int) -> str:
+    status = (image_status or item_status or "").lower()
+    if status in {"failed"}:
+        return "failed"
+    if status in {"candidate_review"} or candidate > 0 and status not in {"completed", "ready"}:
+        if status in {"running", "running_image"}:
+            return "running"
+        if candidate > 0 and status in {"completed", "candidate_review"}:
+            return "candidate"
+    if status in {"running", "running_image"}:
+        return "running"
+    if status in {"skipped"}:
+        return "skipped"
+    if status in {"completed", "ready"} or image_state == "ready":
+        return "ready"
+    if status in {"candidate_review"}:
+        return "candidate"
+    if status in {"queued", "pending"}:
+        return "queued"
+    if image_state == "stale":
+        return "stale"
+    if image_state == "missing":
+        return "missing"
+    return "queued" if status else "idle"
+
+
+def _build_pipeline_progress(project, scenes, scene_responses, repository) -> PipelineProgressResponse:
+    """Assemble observatory payload: assets run + export segment progress."""
+    run = repository.get_active_generation_run(project.project_id)
+    if run is None:
+        # Prefer latest non-terminal-looking recent run if just finished
+        runs = repository.list_generation_runs(project.project_id, limit=1)
+        run = runs[0] if runs else None
+
+    run_items = repository.list_generation_run_items(run.run_id) if run else []
+    items_by_scene = {item.scene_id: item for item in run_items}
+    export_revision = repository.get_latest_export_revision(project.project_id)
+    export_progress = {}
+    if export_revision and isinstance(export_revision.snapshot, dict):
+        raw = export_revision.snapshot.get("progress")
+        if isinstance(raw, dict):
+            export_progress = raw
+    segment_by_scene = {}
+    for row in export_progress.get("segments") or []:
+        if isinstance(row, dict) and row.get("sceneId"):
+            segment_by_scene[str(row["sceneId"])] = str(row.get("status") or "queued")
+
+    cells: list[PipelineSceneCellResponse] = []
+    for scene, scene_resp in zip(scenes, scene_responses):
+        item = items_by_scene.get(scene.scene_id)
+        gen = scene_resp.generation_state or {}
+        item_status = item.status.value if item and hasattr(item.status, "value") else (str(item.status) if item else None)
+        tts_status = item.tts_status.value if item and hasattr(item.tts_status, "value") else (str(item.tts_status) if item else None)
+        image_status = item.image_status.value if item and hasattr(item.image_status, "value") else (str(item.image_status) if item else None)
+        tts = _map_tts_cell(item_status, tts_status, gen.get("audio"))
+        image = _map_image_cell(
+            item_status,
+            image_status,
+            gen.get("image"),
+            int(gen.get("candidateCount") or 0),
+        )
+        # Segment only meaningful during/after export
+        if export_revision and export_revision.status in {
+            GenerationStatus.PENDING,
+            GenerationStatus.RUNNING,
+            GenerationStatus.COMPLETED,
+            GenerationStatus.FAILED,
+        }:
+            if export_revision.status == GenerationStatus.COMPLETED:
+                segment = "ready"
+            else:
+                segment = segment_by_scene.get(scene.scene_id, "idle")
+                if segment == "queued" and export_progress.get("stage") in {None, "prepare"}:
+                    segment = "queued"
+        else:
+            segment = "idle"
+        cells.append(
+            PipelineSceneCellResponse(
+                sceneId=scene.scene_id,
+                position=scene.position,
+                narration=(scene.narration or "")[:48],
+                tts=tts,
+                image=image,
+                segment=segment,
+            )
+        )
+
+    run_terminal = bool(run and run.status in {
+        GenerationRunStatus.COMPLETED,
+        GenerationRunStatus.COMPLETED_WITH_FAILURES,
+        GenerationRunStatus.CANCELLED,
+        GenerationRunStatus.FAILED,
+    })
+    export_active = bool(
+        export_revision
+        and export_revision.status in {GenerationStatus.PENDING, GenerationStatus.RUNNING}
+    )
+    export_done = bool(export_revision and export_revision.status == GenerationStatus.COMPLETED)
+    export_failed = bool(export_revision and export_revision.status == GenerationStatus.FAILED)
+
+    assets_payload = None
+    focus = None
+    updated_at = None
+    if run:
+        assets_payload = {
+            "runId": run.run_id,
+            "status": run.status.value,
+            "completed": run.completed_count,
+            "total": run.total_count,
+            "failed": run.failed_count,
+            "currentSceneId": run.current_scene_id,
+        }
+        updated_at = run.updated_at.isoformat()
+        if not run_terminal:
+            current = next((c for c in cells if c.scene_id == run.current_scene_id), None)
+            cell = "tts"
+            if current:
+                if current.tts == "running":
+                    cell = "tts"
+                elif current.image == "running":
+                    cell = "image"
+                else:
+                    cell = "image" if current.tts == "ready" else "tts"
+            focus = {
+                "phase": "assets",
+                "sceneId": run.current_scene_id,
+                "sceneIndex": (current.position + 1) if current else None,
+                "sceneTotal": run.total_count,
+                "cell": cell,
+            }
+
+    export_payload = None
+    if export_revision:
+        stage = export_progress.get("stage") or (
+            "done" if export_done else "failed" if export_failed else "prepare"
+        )
+        export_payload = {
+            "exportId": export_revision.export_id,
+            "status": export_revision.status.value,
+            "purpose": export_revision.snapshot.get("purpose") if isinstance(export_revision.snapshot, dict) else None,
+            "stage": stage,
+            "segmentCurrent": export_progress.get("segmentCurrent") or 0,
+            "segmentTotal": export_progress.get("segmentTotal") or len(cells),
+            "segments": export_progress.get("segments") or [],
+            "error": export_revision.error or export_progress.get("error"),
+            "updatedAt": export_progress.get("updatedAt") or export_revision.updated_at.isoformat(),
+        }
+        updated_at = export_payload["updatedAt"] or updated_at
+        if export_active:
+            seg_cur = int(export_payload["segmentCurrent"] or 0)
+            focus = {
+                "phase": "export",
+                "sceneIndex": seg_cur or None,
+                "sceneTotal": export_payload["segmentTotal"],
+                "cell": "concat" if stage == "concat" else "segment",
+                "stage": stage,
+            }
+
+    # Phase + summary
+    if export_active:
+        stage = (export_payload or {}).get("stage") or "segments"
+        if stage == "concat":
+            summary = "素材完成 · 正在合并成片"
+        elif stage == "finalize":
+            summary = "素材完成 · 正在写入成片"
+        else:
+            cur = (export_payload or {}).get("segmentCurrent") or 0
+            total = (export_payload or {}).get("segmentTotal") or len(cells)
+            summary = f"素材完成 · 导出编码 {cur}/{total}"
+        phase = "export"
+    elif run and not run_terminal:
+        cur = run.completed_count
+        total = run.total_count or len(cells)
+        cell_label = {"tts": "配音", "image": "画面"}.get((focus or {}).get("cell") or "", "素材")
+        idx = (focus or {}).get("sceneIndex")
+        if idx:
+            summary = f"素材 {cur}/{total} · 第{idx}镜{cell_label}"
+        else:
+            summary = f"素材 {cur}/{total}"
+        phase = "assets"
+    elif export_failed:
+        err_scene = next((c for c in cells if c.segment == "failed"), None)
+        if err_scene:
+            summary = f"导出失败 · 第{err_scene.position + 1}镜编码"
+        else:
+            summary = "导出失败"
+        phase = "failed"
+    elif export_done and (not run or run_terminal):
+        purpose = (export_payload or {}).get("purpose")
+        summary = "初稿已就绪" if purpose == "initial" else "成片已就绪"
+        phase = "done"
+    elif run and run_terminal and run.status == GenerationRunStatus.COMPLETED_WITH_FAILURES:
+        summary = f"素材有失败 · {run.failed_count} 项"
+        phase = "assets_failed"
+    elif run and run_terminal:
+        summary = "素材已完成 · 待导出"
+        phase = "assets_done"
+    else:
+        summary = "尚未开始"
+        phase = "idle"
+
+    return PipelineProgressResponse(
+        phase=phase,
+        summary=summary,
+        updatedAt=updated_at,
+        assets=assets_payload,
+        export=export_payload,
+        scenes=cells,
+        focus=focus,
+    )
 
 
 def _response(project, scenes, repository, media, request: Request, runtime_config=None) -> ProjectResponse:
@@ -235,11 +486,17 @@ def _response(project, scenes, repository, media, request: Request, runtime_conf
                                   error=job.error)
             for job in repository.list_generation_jobs(project.project_id)]
     latest_export, dirty = _latest_export_response(project, repository, media, request)
+    try:
+        pipeline_progress = _build_pipeline_progress(project, scenes, scene_responses, repository)
+    except Exception as exc:
+        logger.warning("pipeline progress build failed: {}", exc)
+        pipeline_progress = None
     return ProjectResponse(
         projectId=project.project_id, title=project.title, source=project.source,
         sourceHistoryTaskId=project.source_history_task_id, config=project.config,
         scenes=scene_responses, jobs=jobs, updatedAt=project.updated_at.isoformat(),
         latestExport=latest_export, dirty=dirty,
+        pipelineProgress=pipeline_progress,
     )
 
 
@@ -313,8 +570,9 @@ async def _autofill_image_prompts(core, scenes: list[Scene]) -> None:
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(body: CreateProjectRequest, core: PixelleVideoDep, request: Request):
-    _validate_project_bgm(body.config)
-    project = Project(title=body.title, config=body.config, source=body.source)
+    normalized_config = normalize_project_config(body.config)
+    _validate_project_bgm(normalized_config)
+    project = Project(title=body.title, config=normalized_config, source=body.source)
     scenes = [Scene(project.project_id, position, item.narration, item.visual_prompt.strip())
               for position, item in enumerate(body.scenes)]
     await _autofill_image_prompts(core, scenes)
@@ -350,7 +608,14 @@ async def update_project(project_id: str, body: ProjectUpdateRequest, core: Pixe
     project = core.workbench_repository.get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
-    if body.expected_updated_at and body.expected_updated_at != project.updated_at.isoformat():
+    # Scene updates during generation bump project.updated_at and used to 409 every
+    # settings save. Config-only patches skip OCC; title changes still require a fresh stamp.
+    config_only = body.config is not None and body.title is None
+    if (
+        body.expected_updated_at
+        and body.expected_updated_at != project.updated_at.isoformat()
+        and not config_only
+    ):
         raise HTTPException(status_code=409, detail="project changed since it was loaded")
     changes = {}
     if body.title is not None:
@@ -361,8 +626,8 @@ async def update_project(project_id: str, body: ProjectUpdateRequest, core: Pixe
             raise HTTPException(status_code=422, detail={"message": "unsupported project config", "keys": unknown})
         _validate_project_bgm(body.config)
         # Preserve server-owned config keys while allowing editor-owned fields to change.
-        merged_config = dict(project.config)
-        merged_config.update(body.config)
+        # Normalize dual camel/snake keys so export prefers the latest editor values.
+        merged_config = normalize_project_config({**dict(project.config), **body.config})
         changes["config"] = merged_config
     if changes:
         core.workbench_repository.update_project(project_id, **changes)
@@ -457,9 +722,12 @@ async def create_project_from_history(task_id: str, core: PixelleVideoDep, reque
         raise HTTPException(status_code=404, detail="history task not found")
     storyboard = detail["storyboard"]
     metadata = detail.get("metadata") or {}
-    project = Project(title=storyboard.title or metadata.get("title") or task_id,
-                      config=dict(metadata.get("input") or {}), source="history",
-                      source_history_task_id=task_id)
+    project = Project(
+        title=storyboard.title or metadata.get("title") or task_id,
+        config=normalize_project_config(dict(metadata.get("input") or {})),
+        source="history",
+        source_history_task_id=task_id,
+    )
     _validate_project_bgm(project.config)
     frames = list(storyboard.frames or [])
     scenes = [Scene(project.project_id, index, frame.narration or "", frame.image_prompt or "",
@@ -604,11 +872,56 @@ async def batch_image_generations(project_id: str, body: BatchImageRequest, core
     return {"jobs": jobs}
 
 
+def _active_exports_for_project(repository, project_id: str):
+    return [
+        rev
+        for rev in repository.list_active_export_revisions()
+        if rev.project_id == project_id
+    ]
+
+
+async def _cancel_export_work(core, revision, *, reason: str = "export cancelled") -> None:
+    """Cancel task + kill tracked ffmpeg for this process; terminalize revision."""
+    from api.tasks import task_manager
+    from pixelle_video.services.video import kill_tracked_ffmpeg_processes
+
+    snap = dict(revision.snapshot or {})
+    task_id = snap.get("taskId") or snap.get("task_id")
+    if task_id:
+        try:
+            await task_manager.cancel_task(str(task_id))
+        except Exception as exc:
+            logger.debug("cancel export task {} ignored: {}", task_id, exc)
+    try:
+        kill_tracked_ffmpeg_processes()
+    except Exception as exc:
+        logger.debug("kill tracked ffmpeg ignored: {}", exc)
+    current = core.workbench_repository.get_export_revision(revision.export_id)
+    if current is None:
+        return
+    if current.status in {GenerationStatus.PENDING, GenerationStatus.RUNNING}:
+        core.workbench_repository.update_export_revision(
+            revision.export_id,
+            status=GenerationStatus.CANCELLED,
+            error=reason,
+        )
+
+
 @router.post("/{project_id}/exports", status_code=202)
 async def create_export(project_id: str, core: PixelleVideoDep, body: ExportRequest = ExportRequest()):
     project = core.workbench_repository.get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
+    active = _active_exports_for_project(core.workbench_repository, project_id)
+    if active:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "export already in progress",
+                "exportId": active[0].export_id,
+                "status": active[0].status.value,
+            },
+        )
     _validate_project_bgm(project.config)
     scenes = core.workbench_repository.list_project_scenes(project_id)
     snapshot_scenes = []
@@ -645,9 +958,10 @@ async def create_export(project_id: str, core: PixelleVideoDep, body: ExportRequ
         "purpose": "manual",
         "sceneOrder": [scene["sceneId"] for scene in snapshot_scenes],
         "scenes": snapshot_scenes,
-        "config": project.config,
+        "config": normalize_project_config(project.config),
         "allowIncomplete": body.allow_incomplete,
         "createdFromRunId": None,
+        "taskId": task.task_id,
     })
     core.workbench_repository.create_export_revision(revision)
     if core.workbench_jobs and hasattr(core.workbench_jobs, "run_export_job"):
@@ -662,6 +976,26 @@ async def create_export(project_id: str, core: PixelleVideoDep, body: ExportRequ
     }
 
 
+@router.post("/{project_id}/exports/{export_id}/cancel", status_code=200)
+async def cancel_export(project_id: str, export_id: str, core: PixelleVideoDep):
+    if core.workbench_repository.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    revision = core.workbench_repository.get_export_revision(export_id)
+    if revision is None or revision.project_id != project_id:
+        raise HTTPException(status_code=404, detail="export revision not found")
+    if revision.status not in {GenerationStatus.PENDING, GenerationStatus.RUNNING}:
+        raise HTTPException(
+            status_code=409,
+            detail=f"export status {revision.status.value} cannot be cancelled",
+        )
+    await _cancel_export_work(core, revision, reason="export cancelled by user")
+    updated = core.workbench_repository.get_export_revision(export_id)
+    return {
+        "exportId": export_id,
+        "status": (updated.status.value if updated else GenerationStatus.CANCELLED.value),
+    }
+
+
 @router.post("/{project_id}/exports/{export_id}/retry", status_code=202)
 async def retry_export(project_id: str, export_id: str, core: PixelleVideoDep):
     if core.workbench_repository.get_project(project_id) is None:
@@ -669,21 +1003,60 @@ async def retry_export(project_id: str, export_id: str, core: PixelleVideoDep):
     revision = core.workbench_repository.get_export_revision(export_id)
     if revision is None or revision.project_id != project_id:
         raise HTTPException(status_code=404, detail="export revision not found")
-    if revision.status not in {GenerationStatus.FAILED, GenerationStatus.CANCELLED}:
-        raise HTTPException(status_code=409, detail="only failed exports can be retried")
+    # Allow retry when failed/cancelled, OR when stuck in pending/running
+    # (ffmpeg hang leaves status=running forever; users need a force-retry path).
+    if revision.status == GenerationStatus.COMPLETED:
+        raise HTTPException(status_code=409, detail="completed exports cannot be retried; start a new export")
+    if revision.status not in {
+        GenerationStatus.FAILED,
+        GenerationStatus.CANCELLED,
+        GenerationStatus.PENDING,
+        GenerationStatus.RUNNING,
+    }:
+        raise HTTPException(status_code=409, detail=f"export status {revision.status.value} cannot be retried")
     if not core.workbench_jobs or not hasattr(core.workbench_jobs, "run_export_job"):
         raise HTTPException(status_code=503, detail="video pipeline is unavailable")
-    core.workbench_repository.update_export_revision(
-        export_id,
-        status=GenerationStatus.PENDING,
-        error=None,
-    )
+    # Stop previous attempt cleanly (task + tracked ffmpeg PIDs only — not global taskkill).
+    if revision.status in {GenerationStatus.PENDING, GenerationStatus.RUNNING}:
+        await _cancel_export_work(core, revision, reason="export superseded by retry")
+    # Reset progress snapshot so the observatory does not keep the old stuck frame.
     from api.tasks import task_manager
     from api.tasks.models import TaskType
+
     task = task_manager.create_task(
         TaskType.WORKBENCH_EXPORT,
         request_params={"project_id": project_id, "export_id": export_id, "retry": True},
     )
+    try:
+        snap = dict(revision.snapshot or {})
+        scenes = list(snap.get("scenes") or [])
+        snap["progress"] = {
+            "stage": "prepare",
+            "segmentCurrent": 0,
+            "segmentTotal": len(scenes),
+            "segments": [
+                {
+                    "sceneId": str(item.get("sceneId") or ""),
+                    "position": int(item.get("position") if item.get("position") is not None else index),
+                    "status": "queued",
+                }
+                for index, item in enumerate(scenes)
+            ],
+            "updatedAt": None,
+        }
+        snap["taskId"] = task.task_id
+        core.workbench_repository.update_export_revision(
+            export_id,
+            status=GenerationStatus.PENDING,
+            error=None,
+            snapshot=snap,
+        )
+    except Exception:
+        core.workbench_repository.update_export_revision(
+            export_id,
+            status=GenerationStatus.PENDING,
+            error=None,
+        )
     await task_manager.execute_task(
         task.task_id,
         core.workbench_jobs.run_export_job,

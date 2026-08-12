@@ -218,6 +218,30 @@ class LatestExportResponse(BaseModel):
     output_url: str | None = Field(default=None, alias="outputUrl")
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
+    progress: dict[str, Any] | None = None
+    task_id: str | None = Field(default=None, alias="taskId")
+
+
+class PipelineSceneCellResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    scene_id: str = Field(alias="sceneId")
+    position: int
+    narration: str = ""
+    tts: str
+    image: str
+    segment: str
+
+
+class PipelineProgressResponse(BaseModel):
+    """Workbench progress observatory payload (assets + export)."""
+    model_config = ConfigDict(populate_by_name=True)
+    phase: str
+    summary: str
+    updated_at: str | None = Field(default=None, alias="updatedAt")
+    assets: dict[str, Any] | None = None
+    export: dict[str, Any] | None = None
+    scenes: list[PipelineSceneCellResponse] = Field(default_factory=list)
+    focus: dict[str, Any] | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -232,3 +256,4 @@ class ProjectResponse(BaseModel):
     updated_at: str = Field(alias="updatedAt")
     latest_export: LatestExportResponse | None = Field(default=None, alias="latestExport")
     dirty: bool = False
+    pipeline_progress: PipelineProgressResponse | None = Field(default=None, alias="pipelineProgress")

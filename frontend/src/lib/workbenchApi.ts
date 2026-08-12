@@ -30,6 +30,10 @@ export const updateTimeline = (projectId: string, sceneIds: string[], holds: Rec
 export const submitBatchImageGeneration = (projectId: string, sceneIds: string[], promptPrefix = "") => requestJson<{ jobs: GenerationJob[] }>(`/api/projects/${projectId}/batch/image-generations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds, promptPrefix }) });
 export const createExport = (projectId: string, allowIncomplete = false) => requestJson<ExportSubmission>(`/api/projects/${projectId}/exports`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allowIncomplete }) });
 export const retryExport = (projectId: string, exportId: string) => requestJson<ExportSubmission>(`/api/projects/${projectId}/exports/${exportId}/retry`, { method: "POST" });
+export const cancelExport = (projectId: string, exportId: string) =>
+  requestJson<{ exportId: string; status: string }>(`/api/projects/${projectId}/exports/${exportId}/cancel`, {
+    method: "POST",
+  });
 export const cancelWorkbenchJob = (taskId: string) => requestJson(`/api/tasks/${taskId}`, { method: "DELETE" });
 
 export const startGenerationRun = (projectId: string, sceneIds?: string[], configOverride?: Record<string, unknown>) => requestJson<GenerationRun>(`/api/projects/${projectId}/generation-runs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sceneIds, configOverride }) });

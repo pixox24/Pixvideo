@@ -671,48 +671,73 @@ class StandardPipeline(LinearVideoPipeline):
                 logger.info(f"✅ Frame {i+1} completed ({processed_frame.duration:.2f}s)")
 
     async def post_production(self, ctx: PipelineContext):
-        """Step 7: Concatenate videos and add BGM."""
+        """Step 7: Concatenate videos, apply intro/outro bookends, and add BGM."""
         self._report_progress(ctx.progress_callback, "concatenating", 0.85)
-        
+
         storyboard = ctx.storyboard
         segment_paths = [frame.video_segment_path for frame in storyboard.frames]
-        
-        video_service = VideoService()
-
-        # Continuous TTS / workbench: visual holds must not insert speech silence
-        # between scenes (音画分离). Video freezes per hold; narrations concat gaplessly.
-        use_gapless_speech = bool(ctx.params.get("continuous_av_hold_split"))
         speech_audios = [frame.audio_path for frame in storyboard.frames]
-        if use_gapless_speech and all(path and Path(path).is_file() for path in speech_audios):
-            logger.info(
-                "Using gapless speech mux (continuous A/V hold split) for {} segments",
-                len(segment_paths),
-            )
-            final_video_path = video_service.concat_videos_gapless_speech(
-                video_segments=segment_paths,
-                speech_audios=speech_audios,
-                output=ctx.final_video_path,
-                bgm_path=ctx.params.get("bgm_path"),
-                bgm_volume=ctx.params.get("bgm_volume", 0.2),
-                bgm_mode=ctx.params.get("bgm_mode", "loop"),
-            )
-        else:
+        use_gapless_speech = bool(ctx.params.get("continuous_av_hold_split"))
+        final_output = ctx.final_video_path
+        bgm_path = ctx.params.get("bgm_path")
+        bgm_volume = ctx.params.get("bgm_volume", 0.2)
+        bgm_mode = ctx.params.get("bgm_mode", "loop")
+        params = dict(ctx.params or {})
+
+        def _run_post_production() -> str:
+            """CPU-bound FFmpeg post path — runs in a worker thread."""
+            video_service = VideoService()
+            from pixelle_video.utils.bookend import normalize_bookend_config
+
+            bookend = params.get("bookend")
+            if not isinstance(bookend, dict):
+                bookend = normalize_bookend_config(params)
+            else:
+                bookend = normalize_bookend_config({**params, **bookend})
+
+            # Continuous TTS / workbench: visual holds must not insert speech silence
+            # between scenes (音画分离). Missing speech must fail hard — silent
+            # fallback reintroduces mid-sentence holds and looks like a "success" bug.
             if use_gapless_speech:
-                logger.warning(
-                    "continuous_av_hold_split requested but speech audio missing; "
-                    "falling back to legacy concat (holds will insert silence)"
+                missing = [
+                    index
+                    for index, path in enumerate(speech_audios)
+                    if not path or not Path(path).is_file()
+                ]
+                if missing:
+                    raise ValueError(
+                        "continuous_av_hold_split requires speech audio for every scene; "
+                        f"missing or unreadable audio at frame index(es): {missing}"
+                    )
+                logger.info(
+                    "Using gapless speech mux (continuous A/V hold split) for {} segments",
+                    len(segment_paths),
                 )
-            final_video_path = video_service.concat_videos(
+                return video_service.concat_videos_gapless_speech(
+                    video_segments=segment_paths,
+                    speech_audios=speech_audios,
+                    output=final_output,
+                    bgm_path=bgm_path,
+                    bgm_volume=bgm_volume,
+                    bgm_mode=bgm_mode,
+                    bookend=bookend,
+                )
+
+            return video_service.concat_videos(
                 videos=segment_paths,
-                output=ctx.final_video_path,
-                bgm_path=ctx.params.get("bgm_path"),
-                bgm_volume=ctx.params.get("bgm_volume", 0.2),
-                bgm_mode=ctx.params.get("bgm_mode", "loop")
+                output=final_output,
+                bgm_path=bgm_path,
+                bgm_volume=bgm_volume,
+                bgm_mode=bgm_mode,
+                bookend=bookend,
             )
-        
+
+        # Off the event loop so export progress polling stays responsive.
+        final_video_path = await asyncio.to_thread(_run_post_production)
+
         storyboard.final_video_path = final_video_path
         storyboard.completed_at = datetime.now()
-        
+
         # Copy to user-specified path if provided
         user_specified_output = ctx.params.get("output_path")
         if user_specified_output:
@@ -721,7 +746,7 @@ class StandardPipeline(LinearVideoPipeline):
             logger.info(f"📹 Final video copied to: {user_specified_output}")
             ctx.final_video_path = user_specified_output
             storyboard.final_video_path = user_specified_output
-        
+
         logger.success(f"🎬 Video generation completed: {ctx.final_video_path}")
 
     async def finalize(self, ctx: PipelineContext) -> VideoGenerationResult:

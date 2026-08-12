@@ -37,9 +37,9 @@ def _ffmpeg_scratch_dir() -> Path:
     Security software (e.g. 360) often prompts on every ffmpeg write into
     project ``assets/`` paths; temp + Python move avoids per-scene popups.
     """
-    root = Path(tempfile.gettempdir()) / "pixelle_video_ffmpeg"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+    from pixelle_video.utils.ffmpeg_scratch import ffmpeg_scratch_dir
+
+    return ffmpeg_scratch_dir()
 
 
 def proportional_slices(
@@ -470,12 +470,15 @@ def _try_ffmpeg_extract(source: Path, dest: Path, start: float, duration: float)
             output_kwargs["acodec"] = "libmp3lame"
             output_kwargs["audio_bitrate"] = "192k"
 
-        (
+        stream = (
             ffmpeg.input(str(source), ss=start, t=duration)
             .output(str(temporary), **output_kwargs)
-            .overwrite_output()
-            .run(quiet=True, capture_stdout=True, capture_stderr=True)
         )
+        # Bound cut time so continuous TTS phase cannot hang forever.
+        cut_timeout = max(45.0, min(180.0, 30.0 + float(duration) * 4.0))
+        from pixelle_video.services.video import run_ffmpeg_stream
+
+        run_ffmpeg_stream(stream, timeout=cut_timeout, label="continuous-tts-cut")
         if temporary.is_file() and temporary.stat().st_size > 0:
             dest.parent.mkdir(parents=True, exist_ok=True)
             # Python process moves the file into the project tree (not ffmpeg).
@@ -528,11 +531,18 @@ def _try_ffmpeg_extract_batch(
                 output_kwargs["audio_bitrate"] = "192k"
             nodes.append(stream.output(str(temporary), **output_kwargs))
 
-        # Run all outputs in one process.
-        ffmpeg.merge_outputs(*nodes).overwrite_output().run(
-            quiet=True,
-            capture_stdout=True,
-            capture_stderr=True,
+        # Run all outputs in one process with a hard timeout.
+        total_span = 0.0
+        for _dest, start, end in cuts:
+            total_span += max(0.05, float(end) - float(start))
+        batch_timeout = max(60.0, min(300.0, 45.0 + total_span * 3.0 + len(cuts) * 5.0))
+        from pixelle_video.services.video import run_ffmpeg_compiled
+
+        merged = ffmpeg.merge_outputs(*nodes).overwrite_output()
+        run_ffmpeg_compiled(
+            merged.compile(),
+            timeout=batch_timeout,
+            label=f"continuous-tts-batch({len(cuts)})",
         )
         for temporary, dest in tmp_pairs:
             if not temporary.is_file() or temporary.stat().st_size <= 0:

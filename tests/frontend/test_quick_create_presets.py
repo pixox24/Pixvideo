@@ -42,6 +42,7 @@ def test_quick_create_preset_payload_includes_global_workbench_parameters_only()
     assert "copyDraftMode" in component
     assert "mediaWidth: imageWidth" in component
     assert "mediaHeight: imageHeight" in component
+    assert "videoFps" in component
     assert "imageAspectRatio" in component
     assert "subtitleStyle" in component
     assert "aiTopic:" not in component

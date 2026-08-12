@@ -29,6 +29,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import uuid
 from pathlib import Path
 from typing import List, Literal, Optional
@@ -82,6 +83,143 @@ def decode_ffmpeg_output(data: bytes | str | None) -> str:
         except UnicodeDecodeError:
             continue
     return data.decode("utf-8", errors="replace")
+
+
+def segment_encode_timeout_seconds(duration: float | None, *, width: int = 0, height: int = 0) -> float:
+    """
+    Bound wall-clock time for one segment encode.
+
+    Short clips should finish in seconds; high-res + caption overlays can take
+    longer, but must never hang the workbench forever (historical failure mode:
+    frozen ffmpeg, 0-byte output, FastAPI event loop blocked).
+    """
+    base = 45.0
+    dur = max(0.0, float(duration or 0.0))
+    # ~8s budget per second of media, with a floor for filter-graph startup.
+    scaled = base + dur * 8.0
+    pixels = max(0, int(width)) * max(0, int(height))
+    if pixels >= 1440 * 2560:
+        scaled *= 1.5
+    elif pixels >= 1080 * 1920:
+        scaled *= 1.25
+    # Hard cap 15 min: long holds + motion + captions can legitimately exceed 3 min.
+    return min(900.0, max(45.0, scaled))
+
+
+def post_mux_timeout_seconds(
+    duration: float | None = None,
+    *,
+    reencode: bool = False,
+    segment_count: int = 1,
+) -> float:
+    """
+    Bound wall-clock time for concat / gapless mux / BGM post-production steps.
+
+    Stream-copy demuxer is usually fast; filter re-encode and gapless remux scale
+    with timeline length. Never unbounded (export used to hang at ~90% forever).
+    """
+    dur = max(0.0, float(duration or 0.0))
+    n = max(1, int(segment_count or 1))
+    if reencode:
+        # ~6s budget per second of output + per-segment overhead
+        scaled = 90.0 + dur * 6.0 + n * 8.0
+        return min(900.0, max(90.0, scaled))
+    # stream copy / strip audio
+    scaled = 45.0 + dur * 1.5 + n * 3.0
+    return min(300.0, max(45.0, scaled))
+
+
+# Track in-flight ffmpeg children so export cancel/retry can kill *our* processes
+# without a global `taskkill /IM ffmpeg.exe` (which nukes unrelated jobs).
+_active_ffmpeg_lock = threading.Lock()
+_active_ffmpeg_procs: set[subprocess.Popen] = set()
+
+
+def _kill_popen(proc: subprocess.Popen) -> bool:
+    try:
+        if proc.poll() is None:
+            proc.kill()
+            try:
+                proc.communicate(timeout=5)
+            except Exception:
+                pass
+            return True
+    except Exception:
+        return False
+    return False
+
+
+def kill_tracked_ffmpeg_processes() -> int:
+    """Kill ffmpeg processes started by this API process (export cancel / retry)."""
+    with _active_ffmpeg_lock:
+        procs = list(_active_ffmpeg_procs)
+    killed = 0
+    for proc in procs:
+        if _kill_popen(proc):
+            killed += 1
+        with _active_ffmpeg_lock:
+            _active_ffmpeg_procs.discard(proc)
+    return killed
+
+
+def run_ffmpeg_compiled(
+    cmd: list[str],
+    *,
+    timeout: float,
+    label: str = "ffmpeg",
+) -> None:
+    """
+    Run a compiled ffmpeg command with a hard timeout.
+
+    Uses Popen + communicate(timeout=...) so that:
+    1) hung encodes are killed
+    2) capture pipes cannot deadlock forever on a stuck child
+    3) live PIDs are tracked for cooperative export cancel
+    """
+    if timeout <= 0:
+        timeout = 45.0
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    with _active_ffmpeg_lock:
+        _active_ffmpeg_procs.add(proc)
+    try:
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_popen(proc)
+            stderr_tail = ""
+            try:
+                if proc.stderr:
+                    leftover = proc.stderr.read() if hasattr(proc.stderr, "read") else b""
+                    stderr_tail = decode_ffmpeg_output(leftover)[-800:]
+            except Exception:
+                pass
+            raise TimeoutError(
+                f"{label} timed out after {timeout:.0f}s"
+                + (f": {stderr_tail}" if stderr_tail else "")
+            )
+        if proc.returncode != 0:
+            err = decode_ffmpeg_output(stderr)[-1200:]
+            raise RuntimeError(
+                f"{label} failed (code={proc.returncode}): {err or '(no stderr)'}"
+            )
+    finally:
+        with _active_ffmpeg_lock:
+            _active_ffmpeg_procs.discard(proc)
+
+
+def run_ffmpeg_stream(
+    stream,
+    *,
+    timeout: float,
+    label: str = "ffmpeg",
+) -> None:
+    """Compile an ffmpeg-python stream and run it with timeout."""
+    cmd = stream.overwrite_output().compile()
+    run_ffmpeg_compiled(cmd, timeout=timeout, label=label)
 
 
 class VideoService:
@@ -142,6 +280,7 @@ class VideoService:
         bgm_path: Optional[str] = None,
         bgm_volume: float = 0.2,
         bgm_mode: Literal["once", "loop"] = "loop",
+        bookend: Optional[dict] = None,
     ) -> str:
         """
         Concatenate video segments with gapless speech mux (音画分离).
@@ -224,10 +363,8 @@ class VideoService:
             self._concat_audio_files(speech_audios, speech_path)
 
             # 4) Mux gapless speech under full visual timeline
-            muxed = output
-            if bgm_path:
-                muxed = self._get_unique_temp_path("gapless_mux", Path(output).name)
-                temp_paths.append(muxed)
+            muxed = self._get_unique_temp_path("gapless_mux", Path(output).name)
+            temp_paths.append(muxed)
 
             self._mux_gapless_speech_onto_video(
                 video=video_only,
@@ -235,16 +372,38 @@ class VideoService:
                 output=muxed,
             )
 
-            # 5) Optional BGM mix
+            # 5) Project-level intro/outro packaging (before BGM so music covers pads)
+            packed = muxed
+            bookend = bookend or {}
+            if bookend.get("enabled") or (
+                float(bookend.get("intro_seconds") or 0) > 0
+                or float(bookend.get("outro_seconds") or 0) > 0
+            ):
+                packed = self._get_unique_temp_path("bookend", Path(output).name)
+                temp_paths.append(packed)
+                self.apply_bookend_packaging(
+                    video=muxed,
+                    output=packed,
+                    intro_seconds=float(bookend.get("intro_seconds") or 0),
+                    outro_seconds=float(bookend.get("outro_seconds") or 0),
+                    intro_fade_seconds=float(bookend.get("intro_fade_seconds") or 0),
+                    outro_fade_seconds=float(bookend.get("outro_fade_seconds") or 0),
+                )
+
+            # 6) Optional BGM mix with matching edge fades
             if bgm_path:
                 return self._add_bgm_to_video(
-                    video=muxed,
+                    video=packed,
                     bgm_path=bgm_path,
                     output=output,
                     volume=bgm_volume,
                     mode=bgm_mode,
+                    fade_in=float(bookend.get("intro_fade_seconds") or 0),
+                    fade_out=float(bookend.get("outro_fade_seconds") or 0),
                 )
 
+            if os.path.abspath(packed) != os.path.abspath(output):
+                shutil.copy(packed, output)
             logger.success(f"Gapless speech video created: {output}")
             return output
         finally:
@@ -259,32 +418,33 @@ class VideoService:
         """Copy video stream only (drop audio, keep holds/visual length)."""
         self._ensure_ffmpeg()
         Path(output).parent.mkdir(parents=True, exist_ok=True)
+        timeout = post_mux_timeout_seconds(reencode=False)
+        # Prefer CLI: ffmpeg-python maps -an / -map awkwardly on some builds.
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video,
+            "-map", "0:v:0",
+            "-c:v", "copy",
+            "-an",
+            output,
+        ]
         try:
-            (
-                ffmpeg
-                .input(video)
-                .output(output, vcodec="copy", an=None, map="0:v:0")
-                .overwrite_output()
-                .run(capture_stdout=True, capture_stderr=True)
-            )
+            run_ffmpeg_compiled(cmd, timeout=timeout, label="strip-audio")
             return output
-        except ffmpeg.Error as e:
-            # ffmpeg-python maps kwargs awkwardly for -an / -map; use CLI fallback.
-            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
-            logger.debug("strip_audio via ffmpeg-python failed, CLI fallback: {}", error_msg)
-            cmd = [
-                "ffmpeg", "-y",
-                "-i", video,
-                "-map", "0:v:0",
-                "-c:v", "copy",
-                "-an",
-                output,
-            ]
-            result = subprocess.run(cmd, capture_output=True)
-            if result.returncode != 0:
-                err = decode_ffmpeg_output(result.stderr)
-                raise RuntimeError(f"Failed to strip audio from video: {err}") from e
-            return output
+        except Exception as primary_exc:
+            logger.debug("strip_audio primary failed, trying ffmpeg-python: {}", primary_exc)
+            try:
+                stream = (
+                    ffmpeg
+                    .input(video)
+                    .output(output, vcodec="copy", an=None, map="0:v:0")
+                )
+                run_ffmpeg_stream(stream, timeout=timeout, label="strip-audio-py")
+                return output
+            except Exception as secondary_exc:
+                raise RuntimeError(
+                    f"Failed to strip audio from video: {primary_exc}; {secondary_exc}"
+                ) from secondary_exc
 
     def _concat_video_only_filter(self, videos: List[str], output: str) -> str:
         """Concatenate video streams only (no audio) via filter concat."""
@@ -308,10 +468,11 @@ class VideoService:
             "-y",
             output,
         ])
-        result = subprocess.run(cmd, capture_output=True)
-        if result.returncode != 0:
-            err = decode_ffmpeg_output(result.stderr)
-            raise RuntimeError(f"Failed to concatenate video-only segments: {err}")
+        timeout = post_mux_timeout_seconds(reencode=True, segment_count=n)
+        try:
+            run_ffmpeg_compiled(cmd, timeout=timeout, label="concat-video-only")
+        except Exception as exc:
+            raise RuntimeError(f"Failed to concatenate video-only segments: {exc}") from exc
         return output
 
     def _concat_audio_files(self, audios: List[str], output: str) -> str:
@@ -320,29 +481,20 @@ class VideoService:
         if not audios:
             raise ValueError("audios list cannot be empty")
         Path(output).parent.mkdir(parents=True, exist_ok=True)
+        n = len(audios)
+        timeout = post_mux_timeout_seconds(reencode=True, segment_count=n)
 
-        if len(audios) == 1:
-            # Re-encode to a stable AAC track for muxing
+        if n == 1:
+            cmd = [
+                "ffmpeg", "-y", "-i", audios[0],
+                "-vn", "-c:a", "aac", "-b:a", "192k", output,
+            ]
             try:
-                (
-                    ffmpeg
-                    .input(audios[0])
-                    .output(output, acodec="aac", audio_bitrate="192k", vn=None)
-                    .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
-                )
-            except ffmpeg.Error as e:
-                cmd = [
-                    "ffmpeg", "-y", "-i", audios[0],
-                    "-vn", "-c:a", "aac", "-b:a", "192k", output,
-                ]
-                result = subprocess.run(cmd, capture_output=True)
-                if result.returncode != 0:
-                    err = decode_ffmpeg_output(result.stderr)
-                    raise RuntimeError(f"Failed to encode speech audio: {err}") from e
+                run_ffmpeg_compiled(cmd, timeout=timeout, label="encode-speech")
+            except Exception as exc:
+                raise RuntimeError(f"Failed to encode speech audio: {exc}") from exc
             return output
 
-        n = len(audios)
         stream_spec = "".join([f"[{i}:a]" for i in range(n)])
         filter_complex = f"{stream_spec}concat=n={n}:v=0:a=1[a]"
         cmd = ["ffmpeg"]
@@ -356,10 +508,10 @@ class VideoService:
             "-y",
             output,
         ])
-        result = subprocess.run(cmd, capture_output=True)
-        if result.returncode != 0:
-            err = decode_ffmpeg_output(result.stderr)
-            raise RuntimeError(f"Failed to concatenate speech audio: {err}")
+        try:
+            run_ffmpeg_compiled(cmd, timeout=timeout, label="concat-speech")
+        except Exception as exc:
+            raise RuntimeError(f"Failed to concatenate speech audio: {exc}") from exc
         return output
 
     def _mux_gapless_speech_onto_video(
@@ -381,6 +533,7 @@ class VideoService:
         video_duration = self._get_video_duration(video)
         speech_duration = self._get_audio_duration(speech)
         target_duration = max(video_duration, speech_duration, 0.1)
+        timeout = post_mux_timeout_seconds(target_duration, reencode=True)
 
         # Pad speech to video length when holds extend the picture timeline.
         # Do not insert silence between scenes — only trailing pad if needed.
@@ -404,11 +557,11 @@ class VideoService:
             "-t", f"{target_duration:.6f}",
             output,
         ]
-        result = subprocess.run(cmd, capture_output=True)
-        if result.returncode != 0:
+        try:
+            run_ffmpeg_compiled(cmd, timeout=timeout, label="gapless-mux")
+        except Exception as primary_exc:
             # Stream-copy video when re-encode fails (geometry already compatible)
-            err1 = decode_ffmpeg_output(result.stderr)
-            logger.warning("Gapless mux re-encode failed, trying copy video: {}", err1)
+            logger.warning("Gapless mux re-encode failed, trying copy video: {}", primary_exc)
             cmd_copy = [
                 "ffmpeg", "-y",
                 "-i", video,
@@ -423,12 +576,16 @@ class VideoService:
                 "-t", f"{target_duration:.6f}",
                 output,
             ]
-            result2 = subprocess.run(cmd_copy, capture_output=True)
-            if result2.returncode != 0:
-                err2 = decode_ffmpeg_output(result2.stderr)
-                raise RuntimeError(
-                    f"Failed to mux gapless speech onto video: {err1}; {err2}"
+            try:
+                run_ffmpeg_compiled(
+                    cmd_copy,
+                    timeout=post_mux_timeout_seconds(target_duration, reencode=False),
+                    label="gapless-mux-copy",
                 )
+            except Exception as secondary_exc:
+                raise RuntimeError(
+                    f"Failed to mux gapless speech onto video: {primary_exc}; {secondary_exc}"
+                ) from secondary_exc
         logger.success(
             "Muxed gapless speech (video={:.2f}s speech={:.2f}s target={:.2f}s): {}",
             video_duration,
@@ -445,7 +602,8 @@ class VideoService:
         method: Literal["demuxer", "filter"] = "demuxer",
         bgm_path: Optional[str] = None,
         bgm_volume: float = 0.2,
-        bgm_mode: Literal["once", "loop"] = "loop"
+        bgm_mode: Literal["once", "loop"] = "loop",
+        bookend: Optional[dict] = None,
     ) -> str:
         """
         Concatenate multiple videos into one
@@ -464,40 +622,63 @@ class VideoService:
         if not videos:
             raise ValueError("Videos list cannot be empty")
 
-        if len(videos) == 1:
-            logger.info(f"Only one video provided, copying to {output}")
-            shutil.copy(videos[0], output)
-            return output
+        bookend = bookend or {}
+        needs_bookend = bool(
+            bookend.get("enabled")
+            or float(bookend.get("intro_seconds") or 0) > 0
+            or float(bookend.get("outro_seconds") or 0) > 0
+        )
 
         logger.info(f"Concatenating {len(videos)} videos using {method} method")
 
-        # Step 1: Concatenate videos
-        if bgm_path:
-            # If BGM needed, concatenate to temp file first
-            temp_output = output.replace('.mp4', '_no_bgm.mp4')
-            concat_result = self._concat_demuxer(videos, temp_output) if method == "demuxer" else self._concat_filter(videos, temp_output)
-
-            # Step 2: Add BGM
-            logger.info(f"Adding BGM: {bgm_path} (volume={bgm_volume}, mode={bgm_mode})")
-            final_result = self._add_bgm_to_video(
-                video=concat_result,
-                bgm_path=bgm_path,
-                output=output,
-                volume=bgm_volume,
-                mode=bgm_mode
-            )
-
-            # Clean up temp file
-            if os.path.exists(temp_output):
-                os.unlink(temp_output)
-
-            return final_result
+        # Step 1: Concatenate videos (single clip is a no-op copy)
+        temp_concat = output.replace(".mp4", "_concat_tmp.mp4")
+        if len(videos) == 1:
+            logger.info(f"Only one video provided, using as base: {videos[0]}")
+            shutil.copy(videos[0], temp_concat)
+            concat_result = temp_concat
+        elif method == "demuxer":
+            concat_result = self._concat_demuxer(videos, temp_concat)
         else:
-            # No BGM, direct concatenation
-            if method == "demuxer":
-                return self._concat_demuxer(videos, output)
-            else:
-                return self._concat_filter(videos, output)
+            concat_result = self._concat_filter(videos, temp_concat)
+
+        temp_paths = [temp_concat]
+        try:
+            packed = concat_result
+            if needs_bookend:
+                packed = output.replace(".mp4", "_bookend_tmp.mp4")
+                temp_paths.append(packed)
+                self.apply_bookend_packaging(
+                    video=concat_result,
+                    output=packed,
+                    intro_seconds=float(bookend.get("intro_seconds") or 0),
+                    outro_seconds=float(bookend.get("outro_seconds") or 0),
+                    intro_fade_seconds=float(bookend.get("intro_fade_seconds") or 0),
+                    outro_fade_seconds=float(bookend.get("outro_fade_seconds") or 0),
+                )
+
+            if bgm_path:
+                logger.info(f"Adding BGM: {bgm_path} (volume={bgm_volume}, mode={bgm_mode})")
+                return self._add_bgm_to_video(
+                    video=packed,
+                    bgm_path=bgm_path,
+                    output=output,
+                    volume=bgm_volume,
+                    mode=bgm_mode,
+                    fade_in=float(bookend.get("intro_fade_seconds") or 0),
+                    fade_out=float(bookend.get("outro_fade_seconds") or 0),
+                )
+
+            if os.path.abspath(packed) != os.path.abspath(output):
+                shutil.copy(packed, output)
+            return output
+        finally:
+            for path in temp_paths:
+                try:
+                    if path and os.path.exists(path) and os.path.abspath(path) != os.path.abspath(output):
+                        os.unlink(path)
+                except OSError:
+                    pass
 
     def _concat_demuxer(self, videos: List[str], output: str) -> str:
         """
@@ -524,26 +705,30 @@ class VideoService:
 
         try:
             logger.debug(f"Created filelist: {filelist}")
-            (
-                ffmpeg
-                .input(filelist, format='concat', safe=0)
-                .output(str(output_path), c='copy')
-                .overwrite_output()
-                .run(capture_stdout=True, capture_stderr=True)
-            )
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", filelist,
+                "-c", "copy",
+                str(output_path),
+            ]
+            timeout = post_mux_timeout_seconds(reencode=False, segment_count=len(videos))
+            try:
+                run_ffmpeg_compiled(cmd, timeout=timeout, label="concat-demuxer")
+            except Exception as demuxer_exc:
+                error_msg = str(demuxer_exc)
+                logger.error(f"FFmpeg concat error: {error_msg}")
+                # Fall back to filter concat when stream-copy demuxer fails.
+                logger.warning("Concat demuxer failed; retrying with filter method (re-encode)")
+                try:
+                    return self._concat_filter(videos, str(output_path))
+                except Exception as filter_exc:
+                    raise RuntimeError(
+                        f"Failed to concatenate videos (demuxer and filter): {error_msg}; {filter_exc}"
+                    ) from filter_exc
             logger.success(f"Videos concatenated successfully: {output}")
             return str(output_path)
-        except ffmpeg.Error as e:
-            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
-            logger.error(f"FFmpeg concat error: {error_msg}")
-            # Fall back to filter concat when stream-copy demuxer fails (e.g. mismatched streams).
-            logger.warning("Concat demuxer failed; retrying with filter method (re-encode)")
-            try:
-                return self._concat_filter(videos, str(output_path))
-            except Exception as filter_exc:
-                raise RuntimeError(
-                    f"Failed to concatenate videos (demuxer and filter): {error_msg}; {filter_exc}"
-                ) from filter_exc
         finally:
             if filelist_path.exists():
                 try:
@@ -560,43 +745,29 @@ class VideoService:
                    -map "[v]" -map "[a]" output.mp4
         """
         try:
-            # Build filter_complex string manually
             n = len(videos)
-
-            # Build input stream labels: [0:v][0:a][1:v][1:a]...
             stream_spec = "".join([f"[{i}:v][{i}:a]" for i in range(n)])
             filter_complex = f"{stream_spec}concat=n={n}:v=1:a=1[v][a]"
 
-            # Build ffmpeg command
-            cmd = ['ffmpeg']
+            cmd = ["ffmpeg"]
             for video in videos:
-                cmd.extend(['-i', video])
+                cmd.extend(["-i", video])
             cmd.extend([
-                '-filter_complex', filter_complex,
-                '-map', '[v]',
-                '-map', '[a]',
-                '-y',  # Overwrite output
-                output
+                "-filter_complex", filter_complex,
+                "-map", "[v]",
+                "-map", "[a]",
+                "-y",
+                output,
             ])
 
-            # Run command
-            import subprocess
-            subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True
-            )
+            timeout = post_mux_timeout_seconds(reencode=True, segment_count=n)
+            run_ffmpeg_compiled(cmd, timeout=timeout, label="concat-filter")
 
             logger.success(f"Videos concatenated successfully: {output}")
             return output
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr if e.stderr else str(e)
-            logger.error(f"FFmpeg concat filter error: {error_msg}")
-            raise RuntimeError(f"Failed to concatenate videos: {error_msg}")
         except Exception as e:
             logger.error(f"Concatenation error: {e}")
-            raise RuntimeError(f"Failed to concatenate videos: {e}")
+            raise RuntimeError(f"Failed to concatenate videos: {e}") from e
 
     def _get_video_duration(self, video: str) -> float:
         """Get video duration in seconds"""
@@ -872,12 +1043,34 @@ class VideoService:
                     .filter("setpts", "PTS-STARTPTS")
                 )
 
+            encode_timeout = segment_encode_timeout_seconds(
+                target_duration, width=width, height=height
+            )
+
             if subtitle_enabled and subtitle_text and str(subtitle_text).strip():
                 renderer = SubtitleRenderer()
                 normalized_style = renderer.normalize_style(subtitle_style)
                 subtitle_burned = False
 
                 # 1) Hyperframes dynamic path (rounded box + animations when available).
+                # High-res VP9 overlay has been observed to hang ffmpeg indefinitely
+                # (0-byte output, frozen CPU, blocked API). Skip unless forced.
+                force_hyperframes = str(
+                    os.getenv("PIXELLE_FORCE_HYPERFRAMES") or ""
+                ).strip().lower() in {"1", "true", "yes", "on"}
+                high_res = width * height >= 1080 * 1080
+                if (
+                    normalized_style["mode"] == "hyperframes"
+                    and high_res
+                    and not force_hyperframes
+                ):
+                    logger.info(
+                        "Skipping hyperframes for {}x{} segment (hang risk); using Pillow/ASS",
+                        width,
+                        height,
+                    )
+                    normalized_style["mode"] = "ass"
+
                 if normalized_style["mode"] == "hyperframes":
                     try:
                         subtitle_workspace = tempfile.mkdtemp(prefix="pixelle-hyperframes-")
@@ -1089,7 +1282,7 @@ class VideoService:
                             ffmpeg.input(subtitle_overlay_path),
                         )
 
-            (
+            out_stream = (
                 ffmpeg
                 .output(
                     video_stream,
@@ -1100,14 +1293,38 @@ class VideoService:
                     acodec="aac",
                     pix_fmt="yuv420p",
                     audio_bitrate="192k",
-                    preset="medium",
+                    # faster preset: less CPU hang surface on caption overlays
+                    preset="veryfast",
                     crf=23,
                     r=fps,
                     **{"b:v": "2M"},
                 )
-                .overwrite_output()
-                .run(capture_stdout=True, capture_stderr=True)
             )
+            try:
+                run_ffmpeg_stream(
+                    out_stream,
+                    timeout=encode_timeout,
+                    label=f"pure-image-segment({Path(output).name})",
+                )
+            except TimeoutError:
+                # If hyperframes VP9 overlay hung, wipe partial file and re-raise
+                # with a clear message so callers/UI can retry without a dead API.
+                try:
+                    if output and os.path.exists(output) and os.path.getsize(output) < 1024:
+                        os.unlink(output)
+                except OSError:
+                    pass
+                logger.error(
+                    "Pure image segment encode timed out after {:.0f}s: {}",
+                    encode_timeout,
+                    output,
+                )
+                raise
+
+            if not output or not os.path.exists(output) or os.path.getsize(output) < 1024:
+                raise RuntimeError(
+                    f"Pure image segment produced empty/missing output: {output}"
+                )
 
             logger.success(f"Pure image video segment created: {output}")
             return output
@@ -1276,52 +1493,47 @@ class VideoService:
             # Use apad to add silence at the end
             audio_stream = audio_stream.filter('apad', whole_dur=target_duration)
 
+        merge_timeout = post_mux_timeout_seconds(target_duration, reencode=True)
+
         if not video_has_audio:
             logger.info("Video has no audio stream, adding audio track")
-            # Video is silent, just add the audio
             try:
-                (
+                stream = (
                     ffmpeg
                     .output(
                         video_stream,
                         audio_stream,
                         output,
-                        vcodec='libx264',  # Re-encode video if padded
+                        vcodec='libx264',
                         acodec='aac',
                         audio_bitrate='192k'
                     )
-                    .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
                 )
-
+                run_ffmpeg_stream(stream, timeout=merge_timeout, label="merge-audio-silent")
                 logger.success(f"Audio added to silent video: {output}")
                 return output
-            except ffmpeg.Error as e:
-                error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
-                logger.error(f"FFmpeg error adding audio to silent video: {error_msg}")
-                raise RuntimeError(f"Failed to add audio to video: {error_msg}")
+            except Exception as e:
+                logger.error(f"FFmpeg error adding audio to silent video: {e}")
+                raise RuntimeError(f"Failed to add audio to video: {e}") from e
 
         # Video has audio, proceed with merging
         logger.info(f"Merging audio with video (replace={replace_audio})")
 
         try:
             if replace_audio:
-                # Replace audio: use only new audio, ignore original
-                (
+                stream = (
                     ffmpeg
                     .output(
                         video_stream,
                         audio_stream,
                         output,
-                        vcodec='libx264',  # Re-encode video if padded
+                        vcodec='libx264',
                         acodec='aac',
                         audio_bitrate='192k'
                     )
-                    .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
                 )
+                run_ffmpeg_stream(stream, timeout=merge_timeout, label="merge-audio-replace")
             else:
-                # Mix audio: combine original and new audio
                 mixed_audio = ffmpeg.filter(
                     [
                         input_video.audio.filter('volume', video_volume),
@@ -1329,29 +1541,26 @@ class VideoService:
                     ],
                     'amix',
                     inputs=2,
-                    duration='longest'  # Use longest audio
+                    duration='longest'
                 )
-
-                (
+                stream = (
                     ffmpeg
                     .output(
                         video_stream,
                         mixed_audio,
                         output,
-                        vcodec='libx264',  # Re-encode video if padded
+                        vcodec='libx264',
                         acodec='aac',
                         audio_bitrate='192k'
                     )
-                    .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
                 )
+                run_ffmpeg_stream(stream, timeout=merge_timeout, label="merge-audio-mix")
 
             logger.success(f"Audio merged successfully: {output}")
             return output
-        except ffmpeg.Error as e:
-            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
-            logger.error(f"FFmpeg merge error: {error_msg}")
-            raise RuntimeError(f"Failed to merge audio and video: {error_msg}")
+        except Exception as e:
+            logger.error(f"FFmpeg merge error: {e}")
+            raise RuntimeError(f"Failed to merge audio and video: {e}") from e
 
     def overlay_image_on_video(
         self,
@@ -1492,7 +1701,7 @@ class VideoService:
 
             # Combine image and audio
             # Use -t to explicitly set video duration = audio duration
-            (
+            out_stream = (
                 ffmpeg
                 .output(
                     input_image,
@@ -1503,12 +1712,15 @@ class VideoService:
                     acodec='aac',
                     pix_fmt='yuv420p',
                     audio_bitrate='192k',
-                    preset='medium',
+                    preset='veryfast',
                     crf=23,
                     **{'b:v': '2M'}  # Video bitrate
                 )
-                .overwrite_output()
-                .run(capture_stdout=True, capture_stderr=True)
+            )
+            run_ffmpeg_stream(
+                out_stream,
+                timeout=segment_encode_timeout_seconds(target_duration),
+                label=f"image-segment({Path(output).name})",
             )
 
             logger.success(f"Video created from image: {output} (duration: {audio_duration:.3f}s)")
@@ -1517,6 +1729,139 @@ class VideoService:
             error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
             logger.error(f"FFmpeg error creating video from image: {error_msg}")
             raise RuntimeError(f"Failed to create video from image: {error_msg}")
+
+    def apply_bookend_packaging(
+        self,
+        video: str,
+        output: str,
+        *,
+        intro_seconds: float = 1.2,
+        outro_seconds: float = 2.0,
+        intro_fade_seconds: float = 0.6,
+        outro_fade_seconds: float = 1.0,
+    ) -> str:
+        """
+        Add project-level intro/outro packaging to a finished picture+speech video.
+
+        - Intro: clone first frame pad + leading silence on speech, video fade-in
+        - Outro: clone last frame pad + trailing silence, video fade-out
+        - Speech is delayed by intro (no mid-sentence silence inserted in content)
+
+        Outro is additive with per-scene manual holds already baked into segments.
+        """
+        self._ensure_ffmpeg()
+        intro = max(0.0, float(intro_seconds or 0.0))
+        outro = max(0.0, float(outro_seconds or 0.0))
+        fade_in = max(0.0, min(float(intro_fade_seconds or 0.0), intro if intro > 0 else 0.0))
+        fade_out = max(0.0, min(float(outro_fade_seconds or 0.0), outro if outro > 0 else 0.0))
+
+        if intro <= 0 and outro <= 0 and fade_in <= 0 and fade_out <= 0:
+            if os.path.abspath(video) != os.path.abspath(output):
+                shutil.copy(video, output)
+            return output
+
+        content_duration = max(0.1, self._get_video_duration(video))
+        total_duration = content_duration + intro + outro
+        fade_out_start = max(0.0, total_duration - fade_out)
+
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        logger.info(
+            "Applying bookend packaging: intro={:.2f}s outro={:.2f}s fade_in={:.2f}s fade_out={:.2f}s",
+            intro,
+            outro,
+            fade_in,
+            fade_out,
+        )
+
+        # Video: pad clone frames, then fades on the extended timeline.
+        v_filters: list[str] = []
+        if intro > 0 or outro > 0:
+            v_filters.append(
+                f"tpad=start_mode=clone:start_duration={intro:.6f}"
+                f":stop_mode=clone:stop_duration={outro:.6f}"
+            )
+        if fade_in > 0:
+            v_filters.append(f"fade=t=in:st=0:d={fade_in:.6f}")
+        if fade_out > 0:
+            v_filters.append(f"fade=t=out:st={fade_out_start:.6f}:d={fade_out:.6f}")
+        v_filters.append("setpts=PTS-STARTPTS")
+        v_chain = ",".join(v_filters)
+
+        # Audio: delay for intro (silence), pad for outro, light afade on edges.
+        # Content speech starts after intro_seconds (delayed narration entry).
+        a_filters: list[str] = []
+        if intro > 0:
+            delay_ms = int(round(intro * 1000))
+            a_filters.append(f"adelay={delay_ms}|{delay_ms}")
+        a_filters.append(f"apad=whole_dur={total_duration:.6f}")
+        if fade_in > 0:
+            a_filters.append(f"afade=t=in:st=0:d={fade_in:.6f}")
+        if fade_out > 0:
+            a_filters.append(f"afade=t=out:st={fade_out_start:.6f}:d={fade_out:.6f}")
+        a_chain = ",".join(a_filters)
+
+        # Some inputs may lack audio (silent video-only); generate silent track then.
+        has_audio = self.has_audio_stream(video)
+        if has_audio:
+            filter_complex = (
+                f"[0:v]{v_chain}[v];"
+                f"[0:a]{a_chain}[a]"
+            )
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", video,
+                "-filter_complex", filter_complex,
+                "-map", "[v]",
+                "-map", "[a]",
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-t", f"{total_duration:.6f}",
+                output,
+            ]
+        else:
+            filter_complex = f"[0:v]{v_chain}[v]"
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", video,
+                "-f", "lavfi", "-i", f"anullsrc=channel_layout=stereo:sample_rate=44100",
+                "-filter_complex", filter_complex,
+                "-map", "[v]",
+                "-map", "1:a",
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-t", f"{total_duration:.6f}",
+                "-shortest",
+                output,
+            ]
+
+        try:
+            run_ffmpeg_compiled(
+                cmd,
+                timeout=segment_encode_timeout_seconds(total_duration) + 60,
+                label="bookend-packaging",
+            )
+        except Exception as exc:
+            logger.error("Bookend packaging failed: {}", exc)
+            raise RuntimeError(f"Failed to apply intro/outro packaging: {exc}") from exc
+
+        if not Path(output).is_file() or Path(output).stat().st_size < 1024:
+            raise RuntimeError(f"Bookend packaging produced empty output: {output}")
+
+        logger.success(
+            "Bookend packaging applied ({:.2f}s → {:.2f}s): {}",
+            content_duration,
+            total_duration,
+            output,
+        )
+        return output
 
     def add_bgm(
         self,
@@ -1538,72 +1883,77 @@ class VideoService:
             bgm_volume: BGM volume relative to original (0.0 to 1.0+)
             loop: If True, loop BGM to match video duration
             fade_in: BGM fade-in duration in seconds
-            fade_out: BGM fade-out duration in seconds (not yet implemented)
+            fade_out: BGM fade-out duration in seconds (from end of video)
 
         Returns:
             Path to the output video file
-
-        Raises:
-            RuntimeError: If FFmpeg execution fails
-
-        Note:
-            - BGM is mixed with original video audio
-            - If loop=True, BGM repeats until video ends
-            - Fade effects are applied to BGM only
         """
         self._ensure_ffmpeg()
-        logger.info(f"Adding BGM to video (volume={bgm_volume}, loop={loop})")
+        logger.info(
+            "Adding BGM to video (volume={}, loop={}, fade_in={:.2f}, fade_out={:.2f})",
+            bgm_volume,
+            loop,
+            fade_in,
+            fade_out,
+        )
 
         try:
+            video_duration = max(0.1, self._get_video_duration(video))
+            fade_in = max(0.0, float(fade_in or 0.0))
+            fade_out = max(0.0, float(fade_out or 0.0))
+            fade_out_start = max(0.0, video_duration - fade_out)
+
             input_video = ffmpeg.input(video)
-
-            # Configure BGM input with looping if needed
-            bgm_input = ffmpeg.input(
-                bgm,
-                stream_loop=-1 if loop else 0  # -1 = infinite loop
-            )
-
-            # Apply volume adjustment to BGM
-            bgm_audio = bgm_input.audio.filter('volume', bgm_volume)
-
-            # Apply fade effects if specified
+            bgm_input = ffmpeg.input(bgm, stream_loop=-1 if loop else 0)
+            bgm_audio = bgm_input.audio.filter("volume", bgm_volume)
             if fade_in > 0:
-                bgm_audio = bgm_audio.filter('afade', type='in', duration=fade_in)
-            # Note: fade_out at the end requires knowing the duration, which is complex
-            # For now, we skip fade_out in this implementation
-            # A more advanced implementation would need to:
-            # 1. Get video duration
-            # 2. Calculate fade_out start time
-            # 3. Apply fade filter with specific start_time
-
-            # Mix original audio with BGM
-            mixed_audio = ffmpeg.filter(
-                [input_video.audio, bgm_audio],
-                'amix',
-                inputs=2,
-                duration='first'  # Use video's duration
+                bgm_audio = bgm_audio.filter("afade", type="in", start_time=0, duration=fade_in)
+            if fade_out > 0:
+                bgm_audio = bgm_audio.filter(
+                    "afade",
+                    type="out",
+                    start_time=fade_out_start,
+                    duration=fade_out,
+                )
+            # Match video length exactly
+            bgm_audio = bgm_audio.filter("atrim", duration=video_duration).filter(
+                "asetpts", "PTS-STARTPTS"
             )
 
-            (
+            if self.has_audio_stream(video):
+                mixed_audio = ffmpeg.filter(
+                    [input_video.audio, bgm_audio],
+                    "amix",
+                    inputs=2,
+                    duration="first",
+                    dropout_transition=0,
+                )
+            else:
+                mixed_audio = bgm_audio
+
+            stream = (
                 ffmpeg
                 .output(
                     input_video.video,
                     mixed_audio,
                     output,
-                    vcodec='copy',
-                    acodec='aac',
-                    audio_bitrate='192k'
+                    vcodec="copy",
+                    acodec="aac",
+                    audio_bitrate="192k",
+                    t=video_duration,
                 )
-                .overwrite_output()
-                .run(capture_stdout=True, capture_stderr=True)
+            )
+            run_ffmpeg_stream(
+                stream,
+                timeout=post_mux_timeout_seconds(video_duration, reencode=False),
+                label="add-bgm",
             )
 
             logger.success(f"BGM added successfully: {output}")
             return output
-        except ffmpeg.Error as e:
-            error_msg = decode_ffmpeg_output(e.stderr) if e.stderr else str(e)
-            logger.error(f"FFmpeg BGM error: {error_msg}")
-            raise RuntimeError(f"Failed to add BGM: {error_msg}")
+        except Exception as e:
+            logger.error(f"FFmpeg BGM error: {e}")
+            raise RuntimeError(f"Failed to add BGM: {e}") from e
 
     def _add_bgm_to_video(
         self,
@@ -1611,36 +1961,23 @@ class VideoService:
         bgm_path: str,
         output: str,
         volume: float = 0.2,
-        mode: Literal["once", "loop"] = "loop"
+        mode: Literal["once", "loop"] = "loop",
+        fade_in: float = 0.0,
+        fade_out: float = 0.0,
     ) -> str:
         """
         Internal helper to add BGM to video with path resolution
-
-        Args:
-            video: Video file path
-            bgm_path: BGM path (can be preset name or custom path)
-            output: Output file path
-            volume: BGM volume (0.0-1.0)
-            mode: "once" or "loop"
-
-        Returns:
-            Path to output video
-
-        Raises:
-            FileNotFoundError: If BGM file not found
         """
-        # Resolve BGM path (raises FileNotFoundError if not found)
         resolved_bgm = self._resolve_bgm_path(bgm_path)
-
-        # Add BGM using existing method
-        loop = (mode == "loop")
+        loop = mode == "loop"
         return self.add_bgm(
             video=video,
             bgm=resolved_bgm,
             output=output,
             bgm_volume=volume,
             loop=loop,
-            fade_in=0.0
+            fade_in=fade_in,
+            fade_out=fade_out,
         )
 
     def _get_unique_temp_path(self, prefix: str, original_filename: str) -> str:

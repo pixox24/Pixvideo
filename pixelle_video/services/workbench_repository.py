@@ -298,6 +298,29 @@ class WorkbenchRepository:
         rows = self._connection.execute(query + " ORDER BY created_at DESC", args).fetchall()
         return [self._generation_job_from_row(row) for row in rows]
 
+    def list_active_generation_jobs(self) -> list[GenerationJob]:
+        """All non-terminal scene jobs across projects (startup orphan cleanup)."""
+        rows = self._connection.execute(
+            """
+            SELECT * FROM generation_jobs
+            WHERE status NOT IN (?, ?, ?)
+            ORDER BY created_at
+            """,
+            (
+                GenerationStatus.COMPLETED.value,
+                GenerationStatus.FAILED.value,
+                GenerationStatus.CANCELLED.value,
+            ),
+        ).fetchall()
+        return [self._generation_job_from_row(row) for row in rows]
+
+    def list_scenes_by_status(self, status: str) -> list[Scene]:
+        rows = self._connection.execute(
+            "SELECT * FROM scenes WHERE status=? ORDER BY updated_at",
+            (status,),
+        ).fetchall()
+        return [self._scene_from_row(row) for row in rows]
+
     def get_generation_job_by_task_id(self, task_id: str) -> GenerationJob | None:
         row = self._connection.execute("SELECT * FROM generation_jobs WHERE task_id=?", (task_id,)).fetchone()
         if not row:
@@ -626,10 +649,12 @@ class WorkbenchRepository:
             self._connection.execute("INSERT INTO export_revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (revision.export_id, revision.project_id, _json(revision.snapshot), revision.output_relative_path, revision.status.value, revision.error, _dt(revision.created_at), _dt(revision.updated_at)))
 
     def update_export_revision(self, export_id: str, **changes: Any) -> None:
-        allowed = {"output_relative_path", "status", "error", "updated_at"}
+        allowed = {"output_relative_path", "status", "error", "updated_at", "snapshot"}
         values = {key: value for key, value in changes.items() if key in allowed}
         if "status" in values:
             values["status"] = values["status"].value if isinstance(values["status"], GenerationStatus) else values["status"]
+        if "snapshot" in values:
+            values["snapshot_json"] = _json(values.pop("snapshot"))
         if "updated_at" in values:
             values["updated_at"] = _dt(values["updated_at"])
         if not values:
@@ -638,6 +663,18 @@ class WorkbenchRepository:
             values["updated_at"] = _dt(utc_now())
         with self._connection:
             self._connection.execute(f"UPDATE export_revisions SET {', '.join(f'{k}=?' for k in values)} WHERE export_id=?", (*values.values(), export_id))
+
+    def update_export_progress(self, export_id: str, progress: dict[str, Any]) -> None:
+        """Merge pipeline progress into export snapshot (for workbench observatory)."""
+        revision = self.get_export_revision(export_id)
+        if revision is None:
+            return
+        snapshot = dict(revision.snapshot or {})
+        payload = dict(progress or {})
+        if "updatedAt" not in payload:
+            payload["updatedAt"] = utc_now().isoformat()
+        snapshot["progress"] = payload
+        self.update_export_revision(export_id, snapshot=snapshot)
 
     def get_export_revision(self, export_id: str) -> ExportRevision | None:
         row = self._connection.execute("SELECT * FROM export_revisions WHERE export_id=?", (export_id,)).fetchone()

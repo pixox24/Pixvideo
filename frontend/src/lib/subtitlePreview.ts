@@ -145,16 +145,35 @@ export const splitPreviewHighlights = (
 export const scaleStyleForPreview = (style: SubtitleStyle, aspect: PreviewAspect) => {
   const canvasWidth = aspect === "landscape" ? 480 : 260;
   const canvasHeight = aspect === "landscape" ? 270 : 462;
+  // Prefer portrait export coords when UI is portrait (matches workbench 9:16 defaults).
   const sourceWidth = aspect === "landscape" ? 1920 : 1080;
   const sourceHeight = aspect === "landscape" ? 1080 : 1920;
   const scale = canvasWidth / sourceWidth;
+  const boxEnabled = style.preset === "caption-box" || style.boxEnabled === true;
+  const padRaw = Math.max(
+    boxEnabled ? 1 : 0,
+    Number(style.boxPadding ?? (boxEnabled ? style.outlineWidth || 10 : 0)) || 0,
+  );
+  // Same product formula as Pillow export, then scale into preview pixels.
+  const padXExport = boxEnabled ? Math.max(6, Math.round(padRaw * 0.9)) : 0;
+  const padYExport = boxEnabled ? Math.max(4, Math.round(padRaw * 0.55)) : 0;
+  const radiusExport = boxEnabled ? Math.max(0, Number(style.boxRadius ?? 12) || 0) : 0;
 
   return {
     fontSize: Math.max(12, clamp(style.fontSize || 52, 12, 120) * scale),
-    outlineWidth: style.outlineWidth > 0 ? Math.max(0.75, clamp(style.outlineWidth, 0, 12) * scale) : 0,
+    outlineWidth:
+      boxEnabled
+        ? 0
+        : style.outlineWidth > 0
+          ? Math.max(0.75, clamp(style.outlineWidth, 0, 12) * scale)
+          : 0,
     // Soft blur-like glow for preview (CSS text-shadow blur, not hard offset ghost).
     shadow: clamp(style.shadow || 0, 0, 12) * scale * 1.2,
     marginBottom: clamp(style.marginV || 120, 0, 600) * (canvasHeight / sourceHeight),
+    boxPadX: padXExport * scale,
+    boxPadY: padYExport * scale,
+    boxRadius: radiusExport * scale,
+    scale,
   };
 };
 

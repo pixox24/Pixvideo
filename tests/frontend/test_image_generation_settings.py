@@ -4,7 +4,7 @@ from pathlib import Path
 def test_system_settings_exposes_image_generation_connection_fields():
     component = Path("frontend/src/components/SystemSettingsTab.tsx").read_text(encoding="utf-8")
 
-    assert "图片生成模型设置" in component
+    assert "图片生成模型" in component
     assert "settings.imageGeneration.baseUrl" in component
     assert "settings.imageGeneration.apiKey" in component
     assert "settings.imageGeneration.model" in component
@@ -31,24 +31,23 @@ def test_quick_create_sends_custom_image_dimensions():
     assert "imageHeight" in component
     assert "mediaWidth: imageWidth" in component
     assert "mediaHeight: imageHeight" in component
-    assert "width: imageWidth" in component
-    assert "height: imageHeight" in component
+    assert "videoFps" in component
+    # Test-image and production image gen use mapped whitelist size
+    assert "width: imageGenSize[0]" in component
+    assert "height: imageGenSize[1]" in component
     assert "media_width: input.mediaWidth || undefined" in api
     assert "media_height: input.mediaHeight || undefined" in api
+    assert "video_fps: input.videoFps || undefined" in api
 
 
-def test_quick_create_test_prompt_labels_image_motion_size_source():
+def test_quick_create_separates_video_canvas_from_image_gen_size():
     component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
-    assert "使用图片运动生成比例" in component
-    assert "{imageWidth}x{imageHeight}" in component
-
-
-def test_quick_create_uses_image_motion_output_size():
-    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
-
-    assert "图片/视频画布比例" in component
-    assert "此尺寸会同时用于生成图片素材和最终视频画布" in component
+    assert "成片规格 / Video Canvas" in component
+    assert "DEFAULT_VIDEO_WIDTH" in component
+    assert "mapImageGenSize" in component
+    assert "1080×1920@30" in component or "1080x1920" in component
+    assert "高级/慢" in component or "isAdvancedCanvas" in component
     assert "分镜模板渲染" not in component
     assert 'setViewMode("template")' not in component
 

@@ -48,6 +48,13 @@ import {
   STORYBOARD_SCENE_MIN,
   type DraftSplitType,
 } from "../lib/storyboardSplit";
+import {
+  DEFAULT_VIDEO_FPS,
+  DEFAULT_VIDEO_HEIGHT,
+  DEFAULT_VIDEO_WIDTH,
+  mapImageGenSize,
+  VIDEO_CANVAS_PRESETS,
+} from "../lib/videoCanvas";
 
 interface ServiceReadyState {
   llm: boolean;
@@ -130,17 +137,17 @@ const extractPreviewSentenceFromCopyDraft = (rawDraftText: string) => {
   return firstSentence || "";
 };
 
+/** 成片规格预设（非生图 API 尺寸；生图会映射到白名单） */
 const IMAGE_SIZE_PRESETS = [
-  { id: "1024x1024", label: "1:1 正方形", width: 1024, height: 1024 },
-  { id: "1024x1536", label: "2:3 竖版", width: 1024, height: 1536 },
-  { id: "1536x1024", label: "3:2 横版", width: 1536, height: 1024 },
-  { id: "2048x2048", label: "1:1 2K", width: 2048, height: 2048 },
-  { id: "2560x1440", label: "16:9 QHD", width: 2560, height: 1440 },
-  { id: "1440x2560", label: "9:16 QHD", width: 1440, height: 2560 },
-  { id: "2880x2880", label: "1:1 4K", width: 2880, height: 2880 },
-  { id: "3840x2160", label: "16:9 4K", width: 3840, height: 2160 },
-  { id: "2160x3840", label: "9:16 4K", width: 2160, height: 3840 },
-  { id: "custom", label: "自定义", width: 1024, height: 1536 },
+  ...VIDEO_CANVAS_PRESETS.map((preset) => ({
+    id: preset.id,
+    label: preset.label,
+    width: preset.width,
+    height: preset.height,
+    tier: preset.tier,
+    hint: preset.hint,
+  })),
+  { id: "custom", label: "自定义成片尺寸", width: DEFAULT_VIDEO_WIDTH, height: DEFAULT_VIDEO_HEIGHT, tier: "custom" as const, hint: "手动输入宽高" },
 ];
 
 const suggestCopyCharCount = (storyboardCount: number) =>
@@ -366,9 +373,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [aiKeywordSuggestions, setAiKeywordSuggestions] = useState<KeywordSuggestion[]>([]);
   const [keywordStatus, setKeywordStatus] = useState<KeywordStatus>("idle");
   const [keywordSourceSnapshot, setKeywordSourceSnapshot] = useState("");
-  const [imageAspectRatio, setImageAspectRatio] = useState("2560x1440");
-  const [imageWidth, setImageWidth] = useState(2560);
-  const [imageHeight, setImageHeight] = useState(1440);
+  const [imageAspectRatio, setImageAspectRatio] = useState("1080x1920");
+  const [imageWidth, setImageWidth] = useState(DEFAULT_VIDEO_WIDTH);
+  const [imageHeight, setImageHeight] = useState(DEFAULT_VIDEO_HEIGHT);
+  const [videoFps, setVideoFps] = useState(DEFAULT_VIDEO_FPS);
 
   // Render Workflow states
   const [workflowId, setWorkflowId] = useState("");
@@ -948,6 +956,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     }
   };
 
+  const imageGenSize = React.useMemo(
+    () => mapImageGenSize(imageWidth, imageHeight),
+    [imageWidth, imageHeight],
+  );
+  const selectedCanvasPreset = IMAGE_SIZE_PRESETS.find((item) => item.id === imageAspectRatio);
+  const isAdvancedCanvas = selectedCanvasPreset?.tier === "advanced"
+    || (imageWidth * imageHeight >= 1440 * 2560);
+
   const handleTestImageGenerate = async () => {
     if (!testImagePrompt.trim()) {
       addToast("请先填写测试出图提示词。", "error");
@@ -969,8 +985,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: mergedPrompt,
-          width: imageWidth,
-          height: imageHeight,
+          // Test image uses API whitelist size (same as production image gen mapping)
+          width: imageGenSize[0],
+          height: imageGenSize[1],
           workflow: workflowId || undefined,
         }),
       });
@@ -1173,6 +1190,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       if (activePreset.copyDraftMode) setCopyDraftMode(activePreset.copyDraftMode);
       if (activePreset.mediaWidth) setImageWidth(activePreset.mediaWidth);
       if (activePreset.mediaHeight) setImageHeight(activePreset.mediaHeight);
+      if (activePreset.videoFps) setVideoFps(activePreset.videoFps);
       if (activePreset.imageAspectRatio) setImageAspectRatio(activePreset.imageAspectRatio);
       addToast(`已成功应用预设: ${activePreset.name}`, "success");
     }
@@ -1537,6 +1555,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         mimoStyle: mimoStyle || undefined,
         mediaWidth: imageWidth,
         mediaHeight: imageHeight,
+        videoFps,
         bgm,
         bgmVolume: volume,
         promptPrefix,
@@ -1632,6 +1651,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       copyDraftMode,
       mediaWidth: imageWidth,
       mediaHeight: imageHeight,
+      videoFps,
       imageAspectRatio
   });
 
@@ -3024,7 +3044,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   测试出图提示词 / Test Prompt
                 </label>
                 <span className="text-[9px] text-zinc-600 font-mono truncate">
-                  使用图片运动生成比例 · {currentWorkflow?.name || "Default workflow"} · {imageWidth}x{imageHeight}
+                  成片 {imageWidth}×{imageHeight} · 生图 {imageGenSize[0]}×{imageGenSize[1]} · {currentWorkflow?.name || "Default workflow"}
                 </span>
               </div>
               <p className="text-[10px] text-amber-400/80">测试图仅供预览，不会复用到最终成片。</p>
@@ -3078,7 +3098,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
-                  图片/视频画布比例 / Output Size
+                  成片规格 / Video Canvas
                 </label>
                 <Select
                   value={imageAspectRatio}
@@ -3087,17 +3107,24 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 >
                   {IMAGE_SIZE_PRESETS.map((preset) => (
                     <option key={preset.id} value={preset.id}>
-                      {preset.label} · {preset.id === "custom" ? "手动输入" : `${preset.width}x${preset.height}`}
+                      {preset.label}
+                      {preset.id === "custom" ? "" : ` · ${preset.width}×${preset.height}`}
+                      {preset.tier === "advanced" ? " ⚠" : ""}
                     </option>
                   ))}
                 </Select>
                 <p className="mt-1 text-[10px] text-zinc-600 leading-relaxed">
-                  此尺寸会同时用于生成图片素材和最终视频画布
+                  成片画布默认 1080×1920@30。生图会映射到 API 白名单（当前约 {imageGenSize[0]}×{imageGenSize[1]}），导出再 cover 到成片尺寸。
                 </p>
+                {isAdvancedCanvas && (
+                  <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
+                    高级高分辨率：导出更慢、更容易卡在某一镜编码，建议日常用 1080p。
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
-                  宽度 / Width
+                  成片宽度
                 </label>
                 <input
                   type="number"
@@ -3107,14 +3134,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   value={imageWidth}
                   onChange={(e) => {
                     setImageAspectRatio("custom");
-                    setImageWidth(parseInt(e.target.value || "1024"));
+                    setImageWidth(parseInt(e.target.value || String(DEFAULT_VIDEO_WIDTH)));
                   }}
                   className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                 />
               </div>
               <div>
                 <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
-                  高度 / Height
+                  成片高度
                 </label>
                 <input
                   type="number"
@@ -3124,10 +3151,34 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   value={imageHeight}
                   onChange={(e) => {
                     setImageAspectRatio("custom");
-                    setImageHeight(parseInt(e.target.value || "1536"));
+                    setImageHeight(parseInt(e.target.value || String(DEFAULT_VIDEO_HEIGHT)));
                   }}
                   className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                 />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                  帧率 / FPS
+                </label>
+                <Select
+                  value={String(videoFps)}
+                  onChange={(e) => setVideoFps(parseInt(e.target.value || "30", 10))}
+                  className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="24">24</option>
+                  <option value="25">25</option>
+                  <option value="30">30（推荐）</option>
+                </Select>
+              </div>
+              <div className="sm:col-span-2 flex items-end">
+                <p className="text-[10px] text-zinc-600 leading-relaxed pb-1">
+                  生图请求尺寸（映射）：
+                  <span className="text-zinc-400 font-mono"> {imageGenSize[0]}×{imageGenSize[1]}</span>
+                  {" "}· 成片编码：
+                  <span className="text-zinc-400 font-mono"> {imageWidth}×{imageHeight}@{videoFps}</span>
+                </p>
               </div>
             </div>
 
@@ -3565,7 +3616,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             ["分镜总数", `${reviewSceneCount}`],
             ["配音", `${ttsMode} · ${voice}`],
             ["工作流", currentWorkflow?.name || workflowId || "未选择"],
-            ["画布", `${imageWidth} × ${imageHeight}`],
+            ["成片", `${imageWidth}×${imageHeight}@${videoFps}`],
+            ["生图映射", `${imageGenSize[0]}×${imageGenSize[1]}`],
             ["字幕", enableSubtitles ? `${subtitleStyle.fontSize}px · ${subtitleStyle.fontFamily || "自动中文字体"}` : "关闭"],
             ["背景音乐", selectedBgm?.name || "无背景音乐"],
             ["生成策略", effectiveReuseSourceTaskId ? `复用素材${reuseLabel ? ` · ${reuseLabel}` : ""}` : "完整生成"],

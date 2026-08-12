@@ -102,6 +102,8 @@ class ProjectGenerationService:
             try:
                 await self._run_locked(run_id)
             except asyncio.CancelledError:
+                # Hard cancel (task manager / shutdown) must terminalize DB state.
+                self._terminalize_run_cancelled(run_id, error="generation cancelled")
                 raise
             except Exception as exc:
                 run = self.repository.get_generation_run(run_id)
@@ -191,9 +193,80 @@ class ProjectGenerationService:
         for run in self.repository.list_active_generation_runs():
             if run.status == GenerationRunStatus.PAUSED and not run.cancel_requested:
                 continue
-            await self._ensure_task(run.run_id)
-            scheduled.append(run.run_id)
+            try:
+                await self._ensure_task(run.run_id)
+                scheduled.append(run.run_id)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to resume generation run {}; marking failed: {}",
+                    run.run_id,
+                    exc,
+                )
+                self.fail_active_run(
+                    run.run_id,
+                    error=f"Failed to resume after restart: {exc}",
+                )
         return scheduled
+
+    def fail_active_run(self, run_id: str, *, error: str) -> None:
+        """Force a non-terminal generation run into FAILED (startup / resume safety)."""
+        run = self.repository.get_generation_run(run_id)
+        if run is None or run.is_terminal:
+            return
+        self.repository.mark_remaining_run_items_cancelled(run_id)
+        # Re-mark remaining as failed message context via run error; items already cancelled.
+        self.repository.recompute_generation_run_counts(run_id)
+        self.repository.update_generation_run(
+            run_id,
+            status=GenerationRunStatus.FAILED,
+            current_scene_id=None,
+            error=error,
+        )
+
+    def fail_all_active_runs(self, *, error: str) -> int:
+        count = 0
+        for run in self.repository.list_active_generation_runs():
+            self.fail_active_run(run.run_id, error=error)
+            count += 1
+        return count
+
+    def _terminalize_run_cancelled(self, run_id: str, *, error: str) -> None:
+        run = self.repository.get_generation_run(run_id)
+        if run is None or run.is_terminal:
+            return
+        self.repository.mark_remaining_run_items_cancelled(run_id)
+        # Also force mid-flight items (RUNNING_*) to terminal cancelled.
+        for item in self.repository.list_generation_run_items(run_id):
+            if item.is_terminal:
+                continue
+            self.repository.update_generation_run_item(
+                item.item_id,
+                status=GenerationRunItemStatus.CANCELLED,
+                tts_status=(
+                    GenerationPhase.CANCELLED
+                    if item.tts_status in {GenerationPhase.PENDING, GenerationPhase.RUNNING}
+                    else item.tts_status
+                ),
+                image_status=(
+                    GenerationPhase.CANCELLED
+                    if item.image_status in {GenerationPhase.PENDING, GenerationPhase.RUNNING}
+                    else item.image_status
+                ),
+                error=error,
+            )
+            try:
+                self.repository.update_scene(item.scene_id, status="cancelled")
+            except Exception:
+                pass
+        self.repository.recompute_generation_run_counts(run_id)
+        self.repository.update_generation_run(
+            run_id,
+            status=GenerationRunStatus.CANCELLED,
+            current_scene_id=None,
+            cancel_requested=True,
+            error=error,
+        )
+        self._publish_progress(run_id, "generation cancelled")
 
     def assert_scene_editable(self, project_id: str, scene_id: str) -> None:
         run = self.repository.get_active_generation_run(project_id)
@@ -602,26 +675,40 @@ class ProjectGenerationService:
         draft_config = dict(project.config or {})
         draft_config["enableMotion"] = False
         draft_config["image_motion_enabled"] = False
-        revision = ExportRevision(run.project_id, {
-            "projectId": run.project_id,
-            "purpose": "initial",
-            "createdFromRunId": run.run_id,
-            "sceneOrder": [scene["sceneId"] for scene in snapshot_scenes],
-            "scenes": snapshot_scenes,
-            "config": draft_config,
-            "allowIncomplete": False,
-        })
-        self.repository.create_export_revision(revision)
+        # Avoid stacking auto-draft export on top of a manual export already running.
+        active = [
+            rev
+            for rev in self.repository.list_active_export_revisions()
+            if rev.project_id == run.project_id
+        ]
+        if active:
+            logger.info(
+                "Skip initial draft export for run {}; project already has active export {}",
+                run.run_id,
+                active[0].export_id,
+            )
+            return
+
         if self.workbench_jobs and hasattr(self.workbench_jobs, "run_export_job"):
             task = self.task_manager.create_task(
                 TaskType.WORKBENCH_EXPORT,
                 request_params={
                     "project_id": run.project_id,
-                    "export_id": revision.export_id,
                     "purpose": "initial",
                     "createdFromRunId": run.run_id,
                 },
             )
+            revision = ExportRevision(run.project_id, {
+                "projectId": run.project_id,
+                "purpose": "initial",
+                "createdFromRunId": run.run_id,
+                "sceneOrder": [scene["sceneId"] for scene in snapshot_scenes],
+                "scenes": snapshot_scenes,
+                "config": draft_config,
+                "allowIncomplete": False,
+                "taskId": task.task_id,
+            })
+            self.repository.create_export_revision(revision)
             # Fire-and-forget: generation run is already COMPLETED; do not make
             # the worker appear stuck on the last scene while FFmpeg runs.
             await self.task_manager.execute_task(
@@ -632,6 +719,17 @@ class ProjectGenerationService:
                 task.task_id,
             )
             self._publish_progress(run.run_id, "scenes ready; initial draft export started")
+        else:
+            revision = ExportRevision(run.project_id, {
+                "projectId": run.project_id,
+                "purpose": "initial",
+                "createdFromRunId": run.run_id,
+                "sceneOrder": [scene["sceneId"] for scene in snapshot_scenes],
+                "scenes": snapshot_scenes,
+                "config": draft_config,
+                "allowIncomplete": False,
+            })
+            self.repository.create_export_revision(revision)
 
     def _publish_progress(self, run_id: str, message: str) -> None:
         run = self.repository.get_generation_run(run_id)

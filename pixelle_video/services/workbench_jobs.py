@@ -20,7 +20,20 @@ from pixelle_video.services.workbench_generation import (
     build_parameter_snapshot,
     normalize_tts_inference_mode,
 )
+from pixelle_video.utils.bookend import normalize_bookend_config
+from pixelle_video.utils.project_config import normalize_project_config, pick_config
 from pixelle_video.utils.tts_audio_postprocess import postprocess_tts_clip, with_speaker_lock
+from pixelle_video.utils.video_canvas import (
+    DEFAULT_VIDEO_HEIGHT,
+    DEFAULT_VIDEO_WIDTH,
+    image_gen_size_from_config,
+    normalize_video_canvas,
+)
+
+_ORPHAN_JOB_ERROR = (
+    "Job abandoned after server restart or cancel (was still pending/running). "
+    "Retry the scene action if needed."
+)
 
 
 class WorkbenchJobService:
@@ -43,6 +56,9 @@ class WorkbenchJobService:
             scene = self._require_scene(scene_id, project_id)
             await self.run_image_job(project_id, scene_id, task_id, scene.visual_prompt)
             self._finish(scene_id, task_id)
+        except asyncio.CancelledError:
+            self._cancel(scene_id, task_id)
+            raise
         except Exception as exc:
             self._fail(scene_id, task_id, exc)
             raise
@@ -71,12 +87,14 @@ class WorkbenchJobService:
             or project_config.get("media_workflow")
             or self._workflow()
         )
+        # Image gen maps to API whitelist; mediaWidth/Height remain the video canvas.
+        gen_w, gen_h = image_gen_size_from_config(project_config)
         result = await self.core.media(
             prompt=full_prompt,
             media_type="image",
             workflow=workflow,
-            width=self._width(project_id),
-            height=self._height(project_id),
+            width=gen_w,
+            height=gen_h,
             scene_id=scene_id,
         )
         source_url = result.url if hasattr(result, "url") else result
@@ -103,7 +121,9 @@ class WorkbenchJobService:
             parameters=parameters,
         )
         self.repository.create_asset_version(version)
-        has_current_version = scene.current_version_id is not None
+        # Re-read after long media await — user may have selected/uploaded meanwhile.
+        fresh = self.repository.get_scene(scene_id)
+        has_current_version = bool(fresh and fresh.current_version_id)
         if not has_current_version:
             self.repository.select_asset_version(project_id, scene_id, version_id)
             if image_fingerprint:
@@ -129,6 +149,9 @@ class WorkbenchJobService:
                 prompt_snapshot,
             )
             self._finish(scene_id, task_id)
+        except asyncio.CancelledError:
+            self._cancel(scene_id, task_id)
+            raise
         except Exception as exc:
             self._fail(scene_id, task_id, exc)
             raise
@@ -404,6 +427,9 @@ class WorkbenchJobService:
             )
             self.repository.update_scene(scene_id, status="completed")
             self._job_update(task_id, status=GenerationStatus.COMPLETED, progress=100)
+        except asyncio.CancelledError:
+            self._cancel(scene_id, task_id)
+            raise
         except Exception as exc:
             self._fail(scene_id, task_id, exc)
             raise
@@ -413,11 +439,86 @@ class WorkbenchJobService:
         if revision is None or revision.project_id != project_id:
             raise ValueError("export revision not found")
         self.repository.update_export_revision(export_id, status=GenerationStatus.RUNNING)
+        scenes = revision.snapshot.get("scenes") or []
+        segment_rows = [
+            {
+                "sceneId": str(item.get("sceneId") or ""),
+                "position": int(item.get("position") if item.get("position") is not None else index),
+                "status": "queued",
+            }
+            for index, item in enumerate(scenes)
+        ]
+        progress_state: dict[str, Any] = {
+            "stage": "prepare",
+            "segmentCurrent": 0,
+            "segmentTotal": len(segment_rows),
+            "segments": segment_rows,
+            "updatedAt": None,
+        }
+
+        def publish_progress(*, stage: str | None = None, job_progress: float | None = None) -> None:
+            if stage:
+                progress_state["stage"] = stage
+            from datetime import datetime, timezone
+
+            progress_state["updatedAt"] = datetime.now(timezone.utc).isoformat()
+            if hasattr(self.repository, "update_export_progress"):
+                self.repository.update_export_progress(export_id, progress_state)
+            if job_progress is not None:
+                self._job_update(
+                    task_id,
+                    status=GenerationStatus.RUNNING,
+                    progress=max(0.0, min(100.0, float(job_progress))),
+                )
+
+        def on_pipeline_progress(event) -> None:
+            """Map standard pipeline ProgressEvent → per-scene segment status."""
+            try:
+                event_type = str(getattr(event, "event_type", "") or "")
+                frame_current = getattr(event, "frame_current", None)
+                frame_total = getattr(event, "frame_total", None) or len(segment_rows)
+                action = str(getattr(event, "action", "") or "")
+                raw_progress = float(getattr(event, "progress", 0) or 0)
+
+                if event_type in {"processing_frame", "frame_step"} and frame_current:
+                    idx = max(0, int(frame_current) - 1)
+                    for i, row in enumerate(segment_rows):
+                        if i < idx:
+                            row["status"] = "ready"
+                        elif i == idx:
+                            row["status"] = "running"
+                        elif row.get("status") not in {"ready", "failed"}:
+                            row["status"] = "queued"
+                    progress_state["segmentCurrent"] = int(frame_current)
+                    progress_state["segmentTotal"] = int(frame_total)
+                    # 10–85% reserved for segment encodes
+                    pct = 10.0 + (max(0, idx) / max(1, int(frame_total))) * 70.0
+                    if action == "video":
+                        pct = min(85.0, pct + 2.0)
+                    publish_progress(stage="segments", job_progress=pct)
+                elif event_type == "concatenating":
+                    for row in segment_rows:
+                        if row.get("status") != "failed":
+                            row["status"] = "ready"
+                    progress_state["segmentCurrent"] = len(segment_rows)
+                    publish_progress(stage="concat", job_progress=90.0)
+                elif event_type == "completed":
+                    for row in segment_rows:
+                        if row.get("status") != "failed":
+                            row["status"] = "ready"
+                    publish_progress(stage="done", job_progress=98.0)
+                else:
+                    # Keep heartbeat on other events so UI stall detection stays fresh.
+                    pct = 10.0 + max(0.0, min(1.0, raw_progress)) * 75.0
+                    publish_progress(job_progress=pct)
+            except Exception as exc:  # never break encode for progress UI
+                logger.debug("export progress callback ignored error: {}", exc)
+
         try:
             existing_assets = {}
-            scenes = revision.snapshot.get("scenes") or []
             if not scenes:
                 raise ValueError("export snapshot contains no complete scenes")
+            publish_progress(stage="prepare", job_progress=5.0)
             for item in scenes:
                 image_path = item.get("imagePath")
                 audio_path = item.get("audioPath")
@@ -442,29 +543,112 @@ class WorkbenchJobService:
             if not hasattr(self.core, "generate_video") or self.core.generate_video is None:
                 raise ValueError("video pipeline is unavailable")
             params = self._export_pipeline_params(project_id, task_id, revision.snapshot, existing_assets)
+            params["progress_callback"] = on_pipeline_progress
+            publish_progress(stage="segments", job_progress=10.0)
             result = await self.core.generate_video(**params)
             output_path = getattr(result, "video_path", None) or (result.get("video_path") if isinstance(result, dict) else None)
             if not output_path or not Path(output_path).is_file():
                 raise ValueError("video pipeline did not produce an output file")
+            publish_progress(stage="finalize", job_progress=95.0)
             output_relative = f"exports/{export_id}.mp4"
             destination = self.media_store.resolve(project_id, output_relative)
             destination.parent.mkdir(parents=True, exist_ok=True)
             if Path(output_path).resolve() != destination.resolve():
                 shutil.copyfile(output_path, destination)
+            for row in segment_rows:
+                if row.get("status") != "failed":
+                    row["status"] = "ready"
+            progress_state["segmentCurrent"] = len(segment_rows)
+            publish_progress(stage="done", job_progress=100.0)
             self.repository.update_export_revision(
                 export_id,
                 status=GenerationStatus.COMPLETED,
                 output_relative_path=output_relative,
             )
+            self._job_update(task_id, status=GenerationStatus.COMPLETED, progress=100)
+        except asyncio.CancelledError:
+            for row in segment_rows:
+                if row.get("status") == "running":
+                    row["status"] = "failed"
+            progress_state["error"] = "export cancelled"
+            try:
+                publish_progress(stage="failed", job_progress=None)
+            except Exception:
+                pass
+            self.repository.update_export_revision(
+                export_id,
+                status=GenerationStatus.CANCELLED,
+                error="export cancelled",
+            )
+            self._job_update(task_id, status=GenerationStatus.CANCELLED, error="export cancelled")
+            raise
         except Exception as exc:
+            # Mark current running segment failed when possible
+            for row in segment_rows:
+                if row.get("status") == "running":
+                    row["status"] = "failed"
+            progress_state["error"] = str(exc)
+            publish_progress(stage="failed", job_progress=None)
             self.repository.update_export_revision(export_id, status=GenerationStatus.FAILED, error=str(exc))
+            self._job_update(task_id, status=GenerationStatus.FAILED, error=str(exc))
             raise
 
+    def abandon_orphan_scene_jobs(self, *, error: str = _ORPHAN_JOB_ERROR) -> int:
+        """
+        Mark non-terminal image/tts/scene jobs (and stuck scenes) as failed.
+
+        Called on API startup — in-memory task manager does not resume these jobs.
+        """
+        abandoned = 0
+        for job in self.repository.list_active_generation_jobs():
+            self.repository.update_generation_job(
+                job.job_id,
+                status=GenerationStatus.FAILED,
+                error=error,
+            )
+            if job.scene_id:
+                scene = self.repository.get_scene(job.scene_id)
+                # Only clear mid-flight scene status; leave idle pending scenes alone.
+                if scene is not None and scene.status == "running":
+                    self.repository.update_scene(job.scene_id, status="failed")
+            abandoned += 1
+        for scene in self.repository.list_scenes_by_status("running"):
+            self.repository.update_scene(scene.scene_id, status="failed")
+            abandoned += 1
+        if abandoned:
+            logger.warning("Abandoned {} orphan workbench job/scene record(s) on startup", abandoned)
+        return abandoned
+
     async def resume_active_exports(self, task_manager) -> list[str]:
+        from datetime import datetime, timezone, timedelta
         from api.tasks.models import TaskType
 
         task_ids = []
+        # Exports stuck "running" across a crash/hang longer than this are abandoned
+        # rather than auto-resumed into another multi-minute block on startup.
+        stale_after = timedelta(minutes=20)
+        now = datetime.now(timezone.utc)
         for revision in self.repository.list_active_export_revisions():
+            updated = revision.updated_at
+            if updated is not None and updated.tzinfo is None:
+                updated = updated.replace(tzinfo=timezone.utc)
+            age = (now - updated) if updated is not None else timedelta(0)
+            if age > stale_after:
+                logger.warning(
+                    "Skipping stale export {} (age {}); marking failed for manual retry",
+                    revision.export_id,
+                    age,
+                )
+                self.repository.update_export_revision(
+                    revision.export_id,
+                    status=GenerationStatus.FAILED,
+                    error=(
+                        f"Export abandoned after server restart "
+                        f"(was active for {int(age.total_seconds() // 60)} min). "
+                        "Click retry export."
+                    ),
+                )
+                continue
             self.repository.update_export_revision(
                 revision.export_id,
                 status=GenerationStatus.PENDING,
@@ -496,9 +680,10 @@ class WorkbenchJobService:
         existing_assets: dict[str, dict[str, Any]],
     ) -> dict[str, Any]:
         """Translate a project snapshot into the existing standard pipeline contract."""
-        config = dict(snapshot.get("config") or {})
+        # Prefer camel (editor) when both casings exist — history imports leave snake keys.
+        config = normalize_project_config(dict(snapshot.get("config") or {}))
         scenes = list(snapshot.get("scenes") or [])
-        bgm = config.get("bgm_path", config.get("bgm"))
+        bgm = pick_config(config, "bgm", "bgm_path")
         if not bgm or str(bgm).strip() in {"none", "bgm-none"}:
             bgm = None
         else:
@@ -514,7 +699,7 @@ class WorkbenchJobService:
                 or Path(relative_bgm).suffix.lower() not in {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg"}
             ):
                 raise ValueError("unsupported BGM reference in export snapshot")
-        volume = config.get("bgm_volume", config.get("bgmVolume", 0.3))
+        volume = pick_config(config, "bgmVolume", "bgm_volume", default=0.3)
         try:
             volume = float(volume)
             if volume > 1:
@@ -532,14 +717,14 @@ class WorkbenchJobService:
         # Initial auto-draft prioritizes speed so users don't feel "last scene stuck"
         # while FFmpeg re-encodes every frame with motion. Manual export keeps full quality.
         purpose = str(snapshot.get("purpose") or "").strip().lower()
-        motion_enabled = bool(config.get("image_motion_enabled", config.get("enableMotion", True)))
+        motion_enabled = bool(
+            pick_config(config, "enableMotion", "image_motion_enabled", default=True)
+        )
         if purpose == "initial":
             motion_enabled = False
 
         tts_delivery = str(
-            config.get("ttsDelivery")
-            or config.get("tts_delivery")
-            or config.get("ttsDeliveryMode")
+            pick_config(config, "ttsDelivery", "tts_delivery", "ttsDeliveryMode", default="")
             or ""
         ).strip().lower().replace("-", "_")
         # continuous (default for workbench multi-scene): hold freezes picture only;
@@ -558,6 +743,10 @@ class WorkbenchJobService:
         if not continuous_av_hold_split and tts_delivery in {"continuous", "cont"}:
             continuous_av_hold_split = True
 
+        canvas = normalize_video_canvas(config)
+        subtitle_enabled = pick_config(config, "enableSubtitles", "subtitle_enabled", default=True)
+        subtitle_enabled = subtitle_enabled is not False
+
         return {
             "pipeline": "standard",
             "text": str(config.get("title") or project_id),
@@ -569,23 +758,25 @@ class WorkbenchJobService:
             "existing_scene_assets": existing_assets,
             "composition_mode": config.get("composition_mode", "plain_image"),
             "image_motion_enabled": motion_enabled,
-            "subtitle_enabled": config.get("subtitle_enabled", config.get("enableSubtitles", True)) is not False,
-            "subtitle_style": config.get("subtitle_style", config.get("subtitleStyle")),
+            "subtitle_enabled": subtitle_enabled,
+            "subtitle_style": pick_config(config, "subtitleStyle", "subtitle_style"),
             "tts_inference_mode": normalize_tts_inference_mode(
-                config.get("tts_inference_mode", config.get("ttsMode", "local"))
+                pick_config(config, "ttsMode", "tts_inference_mode", default="local")
             ),
-            "tts_voice": config.get("tts_voice", config.get("voice")),
-            "tts_speed": config.get("tts_speed", config.get("speed")),
-            "minimax_model": config.get("minimax_model", config.get("minimaxModel")),
-            "minimax_emotion": config.get("minimax_emotion", config.get("emotion")),
-            "media_workflow": config.get("media_workflow", config.get("workflowId")),
-            "media_width": config.get("media_width", config.get("mediaWidth")),
-            "media_height": config.get("media_height", config.get("mediaHeight")),
-            "prompt_prefix": config.get("prompt_prefix", config.get("promptPrefix")),
+            "tts_voice": pick_config(config, "voice", "tts_voice"),
+            "tts_speed": pick_config(config, "speed", "tts_speed"),
+            "minimax_model": pick_config(config, "minimaxModel", "minimax_model"),
+            "minimax_emotion": pick_config(config, "emotion", "minimax_emotion"),
+            "media_workflow": pick_config(config, "workflowId", "media_workflow", "workflow"),
+            "media_width": canvas["width"],
+            "media_height": canvas["height"],
+            "video_fps": canvas["fps"],
+            "prompt_prefix": pick_config(config, "promptPrefix", "prompt_prefix"),
             "bgm_path": bgm,
             "bgm_volume": max(0.0, min(1.0, volume)),
             "continuous_av_hold_split": continuous_av_hold_split,
             "tts_delivery": tts_delivery or "continuous",
+            "bookend": normalize_bookend_config(config),
         }
 
     def _require_scene(self, scene_id, project_id):
@@ -605,6 +796,10 @@ class WorkbenchJobService:
     def _fail(self, scene_id, task_id, exc):
         self.repository.update_scene(scene_id, status="failed")
         self._job_update(task_id, status=GenerationStatus.FAILED, error=str(exc))
+
+    def _cancel(self, scene_id, task_id):
+        self.repository.update_scene(scene_id, status="cancelled")
+        self._job_update(task_id, status=GenerationStatus.CANCELLED, error="cancelled")
 
     def _job_update(self, task_id, **changes):
         updater = getattr(self.repository, "update_generation_job_by_task_id", None)
@@ -639,10 +834,16 @@ class WorkbenchJobService:
         return int(value)
 
     def _width(self, project_id: str):
-        return self._project_media_dimension(project_id, "mediaWidth", "media_width", 1024)
+        """Video canvas width (export). Prefer mediaWidth; default 1080."""
+        return self._project_media_dimension(
+            project_id, "mediaWidth", "media_width", DEFAULT_VIDEO_WIDTH
+        )
 
     def _height(self, project_id: str):
-        return self._project_media_dimension(project_id, "mediaHeight", "media_height", 1536)
+        """Video canvas height (export). Prefer mediaHeight; default 1920."""
+        return self._project_media_dimension(
+            project_id, "mediaHeight", "media_height", DEFAULT_VIDEO_HEIGHT
+        )
 
     @staticmethod
     def _new_version_id():

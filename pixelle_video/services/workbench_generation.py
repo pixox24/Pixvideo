@@ -232,8 +232,16 @@ def build_parameter_snapshot(
         "prompt_prefix",
         ("comfyui", "image", "prompt_prefix"),
     ) or ""
-    width = _lookup(merged, "mediaWidth", "media_width", "imageWidth") or 1024
-    height = _lookup(merged, "mediaHeight", "media_height", "imageHeight") or 1536
+    # Snapshot uses mapped API whitelist size (not raw canvas), so fingerprints
+    # match the actual image-gen request dimensions.
+    from pixelle_video.utils.video_canvas import image_gen_size_from_config
+
+    gen_w, gen_h = image_gen_size_from_config(
+        {
+            "mediaWidth": _lookup(merged, "mediaWidth", "media_width", "imageWidth"),
+            "mediaHeight": _lookup(merged, "mediaHeight", "media_height", "imageHeight"),
+        }
+    )
 
     return {
         "config": _normalize_for_json(merged),
@@ -251,8 +259,8 @@ def build_parameter_snapshot(
             "provider": str(_lookup(merged, "imageProvider", "image_provider") or "comfyui"),
             "model": str(image_model).strip() if image_model is not None else None,
             "workflow": str(image_workflow).strip() if image_workflow is not None else None,
-            "width": int(_number(width, 1024)),
-            "height": int(_number(height, 1536)),
+            "width": int(gen_w),
+            "height": int(gen_h),
             "stylePrefix": str(prompt_prefix).strip(),
         },
     }

@@ -76,6 +76,12 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting Pixelle-Video API...")
     await task_manager.start()
     try:
+        from pixelle_video.utils.ffmpeg_scratch import cleanup_ffmpeg_scratch
+
+        cleanup_ffmpeg_scratch(max_age_hours=24.0)
+    except Exception as exc:
+        logger.warning(f"Failed to clean ffmpeg scratch: {exc}")
+    try:
         core = await get_pixelle_video()
     except Exception as exc:
         logger.warning(f"Failed to initialize persisted workbench jobs: {exc}")
@@ -85,7 +91,18 @@ async def lifespan(app: FastAPI):
                 await core.project_generation.resume_active_runs()
             except Exception as exc:
                 logger.warning(f"Failed to resume project generation runs: {exc}")
+                try:
+                    core.project_generation.fail_all_active_runs(
+                        error=f"Failed to resume after restart: {exc}"
+                    )
+                except Exception as fail_exc:
+                    logger.warning(f"Failed to abandon active generation runs: {fail_exc}")
         if core.workbench_jobs:
+            try:
+                # Scene image/tts jobs are in-memory only — abandon so UI stops polling.
+                core.workbench_jobs.abandon_orphan_scene_jobs()
+            except Exception as exc:
+                logger.warning(f"Failed to abandon orphan workbench jobs: {exc}")
             try:
                 await core.workbench_jobs.resume_active_exports(task_manager)
             except Exception as exc:

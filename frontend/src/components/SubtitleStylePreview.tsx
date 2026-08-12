@@ -95,11 +95,10 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
   const boxEnabled = style.preset === "caption-box" || style.boxEnabled === true;
   const boxColor = style.boxColor || style.backColor || "#000000";
   const boxOpacity = style.boxOpacity ?? style.backgroundOpacity ?? 72;
-  const boxPadding = Math.max(
-    boxEnabled ? 1 : 0,
-    style.boxPadding ?? (boxEnabled ? (style.outlineWidth || 10) : 0),
-  );
-  const boxRadius = style.boxRadius ?? 12;
+  // Scaled pads (export-space formula × canvas scale) — matches Pillow burn-in proportions.
+  const boxPadX = boxEnabled ? Math.max(1, scaledStyle.boxPadX ?? 0) : 0;
+  const boxPadY = boxEnabled ? Math.max(1, scaledStyle.boxPadY ?? 0) : 0;
+  const boxRadius = boxEnabled ? Math.max(0, scaledStyle.boxRadius ?? 0) : 0;
   const strokeWidth = boxEnabled ? 0 : scaledStyle.outlineWidth;
   const strokeColor = style.strokeColor || style.outlineColor;
   const subtitleBackground = boxEnabled ? colorWithOpacity(boxColor, boxOpacity) : "transparent";
@@ -112,8 +111,6 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
   const highlightScale = Math.min(Math.max(style.highlightScale || 125, 100), 180) / 100;
   const highlightAnimated = isPlaying && style.animation === "word-pop";
   const activeFontFamily = previewFontFamily || style.fontFamily || "system-ui, sans-serif";
-  const boxPadY = boxEnabled ? Math.max(4, Math.round(boxPadding * 0.55)) : 4;
-  const boxPadX = boxEnabled ? Math.max(6, Math.round(boxPadding * 0.9)) : 8;
 
   return (
     <section className="rounded-md border border-zinc-800 bg-[#101114] p-3 space-y-2.5" aria-label="字幕样式预览">

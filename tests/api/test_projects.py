@@ -106,18 +106,27 @@ async def test_update_project_merges_editor_config_and_preserves_server_config(t
 
 
 @pytest.mark.asyncio
-async def test_update_project_rejects_stale_version_and_unknown_config(tmp_path):
+async def test_update_project_config_only_allows_stale_occ_title_does_not(tmp_path):
     core = FakeCore(tmp_path)
     created = await create_project(CreateProjectRequest(title="项目", scenes=[{"narration": "旁白"}]), core, None)
 
-    with pytest.raises(HTTPException) as stale:
+    # Day3: config-only saves skip OCC (scene updates during generation bump updated_at).
+    updated = await update_project(
+        created.project_id,
+        ProjectUpdateRequest(config={"bgmVolume": 50}, expectedUpdatedAt="stale"),
+        core,
+        None,
+    )
+    assert updated.config["bgmVolume"] == 50
+
+    with pytest.raises(HTTPException) as stale_title:
         await update_project(
             created.project_id,
-            ProjectUpdateRequest(config={"bgmVolume": 50}, expectedUpdatedAt="stale"),
+            ProjectUpdateRequest(title="新标题", expectedUpdatedAt="stale"),
             core,
             None,
         )
-    assert stale.value.status_code == 409
+    assert stale_title.value.status_code == 409
 
     with pytest.raises(HTTPException) as unknown:
         await update_project(

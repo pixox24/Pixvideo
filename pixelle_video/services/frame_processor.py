@@ -20,6 +20,7 @@ Key Feature:
   to ensure perfect sync between audio and video (no padding, no trimming needed)
 """
 
+import asyncio
 from typing import Callable, Optional
 
 from loguru import logger
@@ -311,13 +312,19 @@ class FrameProcessor:
 
         logger.debug(f"  → Media type: {media_type} (workflow: {workflow_name})")
 
-        # Build media generation parameters
+        # Image gen maps to API whitelist; video segments still use media_width/height canvas.
+        from pixelle_video.utils.video_canvas import map_image_gen_size
+
+        gen_w, gen_h = map_image_gen_size(
+            int(config.media_width or 1080),
+            int(config.media_height or 1920),
+        )
         media_params = {
             "prompt": frame.image_prompt,
             "workflow": config.media_workflow,  # Pass workflow from config (None = use default)
             "media_type": media_type,
-            "width": config.media_width,
-            "height": config.media_height,
+            "width": gen_w if media_type == "image" else config.media_width,
+            "height": gen_h if media_type == "image" else config.media_height,
             "index": frame.index + 1,  # 1-based index for workflow
         }
 
@@ -438,14 +445,37 @@ class FrameProcessor:
         frame: StoryboardFrame,
         config: StoryboardConfig
     ):
-        """Step 4: Create video segment from media + audio"""
+        """Step 4: Create video segment from media + audio.
+
+        CPU-bound ffmpeg encode runs in a worker thread so the FastAPI event loop
+        stays responsive (polling / UI status) even during long segment encodes.
+        """
         logger.debug(f"  4/4: Creating video segment for frame {frame.index}...")
 
         # Generate output path using task_id
         from pixelle_video.utils.os_util import get_task_frame_path
         output_path = get_task_frame_path(config.task_id, frame.index, "segment")
 
+        segment_path = await asyncio.to_thread(
+            self._create_video_segment_sync,
+            frame,
+            config,
+            output_path,
+        )
+        frame.video_segment_path = segment_path
+        logger.debug(f"  ✓ Video segment created: {segment_path}")
+
+    def _create_video_segment_sync(
+        self,
+        frame: StoryboardFrame,
+        config: StoryboardConfig,
+        output_path: str,
+    ) -> str:
+        """Synchronous segment encode body (safe to run in a worker thread)."""
         from pixelle_video.services.video import VideoService
+        from pixelle_video.utils.os_util import get_task_frame_path
+        import os
+
         video_service = VideoService()
         plain_image_mode = self._is_plain_image_mode(config)
 
@@ -479,11 +509,11 @@ class FrameProcessor:
             )
 
             # Clean up temp file
-            import os
             if os.path.exists(temp_video_with_overlay):
                 os.unlink(temp_video_with_overlay)
+            return segment_path
 
-        elif frame.media_type == "image" or frame.media_type is None:
+        if frame.media_type == "image" or frame.media_type is None:
             # Image workflow: Use composed image directly
             # The asset_default.html template includes the image in the composition
             if plain_image_mode:
@@ -492,7 +522,7 @@ class FrameProcessor:
                 if not frame.image_path:
                     raise ValueError("Pure image mode requires frame.image_path before segment creation")
 
-                segment_path = video_service.create_video_from_image_with_motion(
+                return video_service.create_video_from_image_with_motion(
                     image=frame.image_path,
                     audio=frame.audio_path,
                     output=output_path,
@@ -510,23 +540,17 @@ class FrameProcessor:
                     subtitle_alignment=frame.subtitle_alignment,
                     duration=frame.duration or None,
                 )
-            else:
-                logger.debug("  → Using image-based composition")
 
-                segment_path = video_service.create_video_from_image(
-                    image=frame.composed_image_path,
-                    audio=frame.audio_path,
-                    output=output_path,
-                    fps=config.video_fps,
-                    duration=frame.duration or None,
-                )
+            logger.debug("  → Using image-based composition")
+            return video_service.create_video_from_image(
+                image=frame.composed_image_path,
+                audio=frame.audio_path,
+                output=output_path,
+                fps=config.video_fps,
+                duration=frame.duration or None,
+            )
 
-        else:
-            raise ValueError(f"Unknown media type: {frame.media_type}")
-
-        frame.video_segment_path = segment_path
-
-        logger.debug(f"  ✓ Video segment created: {segment_path}")
+        raise ValueError(f"Unknown media type: {frame.media_type}")
 
     async def _get_audio_duration(self, audio_path: str) -> float:
         """Get audio duration in seconds"""

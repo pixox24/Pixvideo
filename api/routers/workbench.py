@@ -105,6 +105,7 @@ PRESET_FIELDS = {
     "copyDraftMode",
     "mediaWidth",
     "mediaHeight",
+    "videoFps",
     "imageAspectRatio",
     "subtitleStyle",
 }
@@ -129,9 +130,11 @@ PRESET_DEFAULTS = {
     "copyCharCount": 100,
     "copyCharCountMode": "around",
     "copyDraftMode": "segmented",
-    "mediaWidth": 2560,
-    "mediaHeight": 1440,
-    "imageAspectRatio": "2560x1440",
+    # 成片规格默认竖屏 1080p@30；1440 仅作高级/慢选项
+    "mediaWidth": 1080,
+    "mediaHeight": 1920,
+    "videoFps": 30,
+    "imageAspectRatio": "1080x1920",
     "subtitleStyle": {
         **SUBTITLE_STYLE_DEFAULTS,
         "mode": "hyperframes",
@@ -324,8 +327,9 @@ def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = 
     normalized["bgmVolume"] = _coerce_int(normalized.get("bgmVolume"), 30, 0, 100)
     normalized["sceneCount"] = _coerce_int(normalized.get("sceneCount"), 5, 1, 100)
     normalized["copyCharCount"] = _coerce_int(normalized.get("copyCharCount"), 175, 50, 3000)
-    normalized["mediaWidth"] = _coerce_int(normalized.get("mediaWidth"), 1024, 512, 3840)
-    normalized["mediaHeight"] = _coerce_int(normalized.get("mediaHeight"), 1536, 512, 3840)
+    normalized["mediaWidth"] = _coerce_int(normalized.get("mediaWidth"), 1080, 512, 3840)
+    normalized["mediaHeight"] = _coerce_int(normalized.get("mediaHeight"), 1920, 512, 3840)
+    normalized["videoFps"] = _coerce_int(normalized.get("videoFps"), 30, 12, 60)
 
     normalized["enableMotion"] = bool(normalized.get("enableMotion", True))
     normalized["enableSubtitles"] = bool(normalized.get("enableSubtitles", True))

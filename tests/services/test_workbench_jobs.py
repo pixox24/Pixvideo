@@ -161,6 +161,7 @@ async def test_image_job_appends_candidate_without_replacing_current(tmp_path):
 async def test_image_job_uses_project_canvas_size_and_persists_workbench_asset(tmp_path):
     repository = WorkbenchRepository(tmp_path / "workbench.sqlite3")
     media_store = FakeMediaStore(tmp_path / "projects")
+    # Advanced canvas 2560×1440 → image gen maps to API whitelist (1920×1080)
     project = Project(title="landscape", config={"mediaWidth": 2560, "mediaHeight": 1440})
     scene = Scene(project.project_id, 0, "Narration", "Visual prompt")
     repository.create_project(project, [scene])
@@ -169,12 +170,30 @@ async def test_image_job_uses_project_canvas_size_and_persists_workbench_asset(t
 
     await service.run_image_job(project.project_id, scene.scene_id, "t1", scene.visual_prompt)
 
-    assert core.media_kwargs["width"] == 2560
-    assert core.media_kwargs["height"] == 1440
+    assert core.media_kwargs["width"] == 1920
+    assert core.media_kwargs["height"] == 1080
     saved = repository.get_scene(scene.scene_id)
     version = repository.get_asset_version(saved.current_version_id)
     assert media_store.resolve(project.project_id, version.relative_path).is_file()
     assert media_store.resolve(project.project_id, version.thumbnail_relative_path).is_file()
+    repository.close()
+
+
+@pytest.mark.asyncio
+async def test_image_job_default_canvas_maps_to_portrait_whitelist(tmp_path):
+    repository = WorkbenchRepository(tmp_path / "workbench.sqlite3")
+    media_store = FakeMediaStore(tmp_path / "projects")
+    project = Project(title="default-portrait", config={})
+    scene = Scene(project.project_id, 0, "Narration", "Visual prompt")
+    repository.create_project(project, [scene])
+    core = CapturingCore()
+    service = WorkbenchJobService(core, repository, media_store)
+
+    await service.run_image_job(project.project_id, scene.scene_id, "t1", scene.visual_prompt)
+
+    # Default 1080×1920 is itself on the whitelist
+    assert core.media_kwargs["width"] == 1080
+    assert core.media_kwargs["height"] == 1920
     repository.close()
 
 

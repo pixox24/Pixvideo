@@ -1,17 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, ExternalLink, List, Music, PanelRight, Pause, Play, RefreshCw, Save, Settings2, SkipBack, SkipForward, X } from "lucide-react";
-import { GenerationRun, Project, WorkbenchResources } from "../types";
-import { cancelGenerationRun, createExport, fetchActiveGenerationRun, fetchGenerationRun, fetchProject, patchProject, pauseGenerationRun, patchScene, regenerateImage, regenerateTts, retryExport, retryFailedGeneration, resumeGenerationRun, selectAssetVersion, startGenerationRun, submitBatchImageGeneration, updateTimeline, uploadSceneAsset } from "../lib/workbenchApi";
+import { GenerationRun, Project, SubtitleStyle, WorkbenchResources, WorkbenchScene } from "../types";
+import { cancelExport, cancelGenerationRun, createExport, fetchActiveGenerationRun, fetchGenerationRun, fetchProject, patchProject, pauseGenerationRun, patchScene, regenerateImage, regenerateTts, retryExport, retryFailedGeneration, resumeGenerationRun, selectAssetVersion, startGenerationRun, submitBatchImageGeneration, updateTimeline, uploadSceneAsset } from "../lib/workbenchApi";
 import { initialGenerationState, reduceRunActionFailed, reduceRunActionFinished, reduceRunFetched, reduceRunStarted, ProjectGenerationState, shouldRefreshProject } from "../lib/projectGenerationState";
-import { buildTimelineLayout, clampTimelineTime, findSceneAtTime, formatTimelineTime, getSceneLocalTime, getTimelineDuration, pushTimelineHistory, snapshotFromScenes, TimelineLayoutItem, TimelineSnapshot } from "../lib/workbenchState";
+import { buildTimelineLayout, clampTimelineTime, findSceneAtTime, formatTimelineTime, getSceneAudioDuration, getSceneLocalTime, getTimelineDuration, pushTimelineHistory, snapshotFromScenes, TimelineLayoutItem, TimelineSnapshot } from "../lib/workbenchState";
 import { SceneList } from "./SceneList";
 import { SceneInspector } from "./SceneInspector";
 import { GenerationQueue } from "./GenerationQueue";
 import { WorkbenchTimeline } from "./WorkbenchTimeline";
 import { ExportDialog } from "./ExportDialog";
-import { GenerationRunPanel } from "./GenerationRunPanel";
+import { ProgressObservatory } from "./ProgressObservatory";
 import { frameAspectFromConfig } from "../lib/sceneStatus";
 import { dismissWorkbenchKeysTip, isWorkbenchKeysTipDismissed } from "../lib/onboarding";
+import {
+  buildStageSubtitleModel,
+  resolveExportCanvasSize,
+  type StageSubtitleModel,
+} from "../lib/stageSubtitle";
+import { StageSubtitleOverlay } from "./StageSubtitleOverlay";
+import {
+  getBookendPlaybackState,
+  getPlaybackTotalDuration,
+  normalizeBookendConfig,
+  type BookendConfig,
+} from "../lib/bookend";
 
 const PLAYBACK_MAX_FRAME_DELTA = 0.25;
 const SEEK_STEP_SECONDS = 0.1;
@@ -63,7 +75,16 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   const [showKeysTip, setShowKeysTip] = useState(() => !isWorkbenchKeysTipDismissed());
   const [mobilePanel, setMobilePanel] = useState<"scenes" | "inspector" | null>(null);
   const [generation, setGeneration] = useState<ProjectGenerationState>(initialGenerationState);
-  const [settings, setSettings] = useState({ bgm: "bgm-none", bgmVolume: 30, enableSubtitles: true });
+  const [settings, setSettings] = useState({
+    bgm: "bgm-none",
+    bgmVolume: 30,
+    enableSubtitles: true,
+    bookendEnabled: true,
+    bookendIntroSeconds: 1.2,
+    bookendOutroSeconds: 2.0,
+    bookendIntroFadeSeconds: 0.6,
+    bookendOutroFadeSeconds: 1.0,
+  });
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -73,6 +94,9 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   const [timelineFuture, setTimelineFuture] = useState<TimelineSnapshot[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const bgmAudioRef = useRef<HTMLAudioElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const stageImageRef = useRef<HTMLImageElement | null>(null);
+  const [stageContentBox, setStageContentBox] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const currentTimeRef = useRef(0);
   const isPlayingRef = useRef(false);
   const layoutRef = useRef<TimelineLayoutItem[]>([]);
@@ -154,10 +178,18 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
     if (!project) return;
     const config = project.config || {};
     const rawVolume = Number(config.bgmVolume ?? config.bgm_volume ?? 30);
+    const bookend = normalizeBookendConfig(config as Record<string, unknown>);
+    const bookendExplicitOff =
+      config.bookendEnabled === false || config.bookend_enabled === false;
     setSettings({
       bgm: String(config.bgm ?? config.bgm_path ?? "bgm-none"),
       bgmVolume: Math.round(rawVolume <= 1 ? rawVolume * 100 : rawVolume),
       enableSubtitles: config.enableSubtitles !== false && config.subtitle_enabled !== false,
+      bookendEnabled: bookendExplicitOff ? false : true,
+      bookendIntroSeconds: Number(config.bookendIntroSeconds ?? bookend.introSeconds) || 1.2,
+      bookendOutroSeconds: Number(config.bookendOutroSeconds ?? bookend.outroSeconds) || 2.0,
+      bookendIntroFadeSeconds: Number(config.bookendIntroFadeSeconds ?? bookend.introFadeSeconds) || 0.6,
+      bookendOutroFadeSeconds: Number(config.bookendOutroFadeSeconds ?? bookend.outroFadeSeconds) || 1.0,
     });
   }, [project?.projectId]);
   useEffect(() => {
@@ -167,9 +199,58 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
     return () => window.removeEventListener("beforeunload", handler);
   }, [project?.dirty]);
 
-  const layout = useMemo(() => buildTimelineLayout(project?.scenes ?? []), [project?.scenes]);
-  const totalDuration = useMemo(() => getTimelineDuration(layout), [layout]);
-  const currentSceneItem = useMemo(() => findSceneAtTime(layout, currentTime), [layout, currentTime]);
+  const bookendConfig: BookendConfig = useMemo(
+    () =>
+      normalizeBookendConfig({
+        bookendEnabled: settings.bookendEnabled,
+        bookendIntroSeconds: settings.bookendIntroSeconds,
+        bookendOutroSeconds: settings.bookendOutroSeconds,
+        bookendIntroFadeSeconds: settings.bookendIntroFadeSeconds,
+        bookendOutroFadeSeconds: settings.bookendOutroFadeSeconds,
+      }),
+    [
+      settings.bookendEnabled,
+      settings.bookendIntroSeconds,
+      settings.bookendOutroSeconds,
+      settings.bookendIntroFadeSeconds,
+      settings.bookendOutroFadeSeconds,
+    ],
+  );
+
+  /** Content layout starts at 0; offset by intro so the playhead clock includes bookends. */
+  const layout = useMemo(() => {
+    const base = buildTimelineLayout(project?.scenes ?? []);
+    const intro = bookendConfig.enabled ? bookendConfig.introSeconds : 0;
+    if (intro <= 0) return base;
+    return base.map((item) => ({
+      ...item,
+      startSeconds: item.startSeconds + intro,
+      endSeconds: item.endSeconds + intro,
+    }));
+  }, [project?.scenes, bookendConfig.enabled, bookendConfig.introSeconds]);
+
+  const contentDuration = useMemo(() => {
+    const base = buildTimelineLayout(project?.scenes ?? []);
+    return getTimelineDuration(base);
+  }, [project?.scenes]);
+
+  const totalDuration = useMemo(
+    () => getPlaybackTotalDuration(contentDuration, bookendConfig),
+    [contentDuration, bookendConfig],
+  );
+
+  const bookendPlayback = useMemo(
+    () => getBookendPlaybackState(currentTime, contentDuration, bookendConfig),
+    [currentTime, contentDuration, bookendConfig],
+  );
+
+  const currentSceneItem = useMemo(() => {
+    if (layout.length === 0) return null;
+    if (bookendPlayback.phase === "intro") return layout[0]!;
+    if (bookendPlayback.phase === "outro") return layout[layout.length - 1]!;
+    return findSceneAtTime(layout, currentTime);
+  }, [layout, currentTime, bookendPlayback.phase]);
+
   useEffect(() => { layoutRef.current = layout; }, [layout]);
   useEffect(() => { currentSceneItemRef.current = currentSceneItem; }, [currentSceneItem]);
   useEffect(() => { totalDurationRef.current = totalDuration; }, [totalDuration]);
@@ -184,6 +265,100 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   }, [resources?.bgm, settings.bgm]);
   useEffect(() => { selectedBgmSrcRef.current = selectedBgm?.src || null; }, [selectedBgm?.src]);
   const selectedIndex = selected && project ? project.scenes.findIndex((scene) => scene.sceneId === selected.sceneId) : -1;
+
+  const exportCanvas = useMemo(
+    () => resolveExportCanvasSize(project?.config as Record<string, unknown> | undefined),
+    [project?.config],
+  );
+
+  const measureStageContent = useCallback(() => {
+    const stage = stageRef.current;
+    const image = stageImageRef.current;
+    if (!stage) return;
+    if (image && image.complete && image.naturalWidth > 0) {
+      const stageRect = stage.getBoundingClientRect();
+      const imageRect = image.getBoundingClientRect();
+      setStageContentBox({
+        left: imageRect.left - stageRect.left,
+        top: imageRect.top - stageRect.top,
+        width: Math.max(0, imageRect.width),
+        height: Math.max(0, imageRect.height),
+      });
+      return;
+    }
+    // No image yet: fall back to letterboxed estimate inside stage.
+    const stageRect = stage.getBoundingClientRect();
+    if (stageRect.width <= 0 || stageRect.height <= 0) return;
+    const mediaAspect = exportCanvas.width / Math.max(1, exportCanvas.height);
+    const stageAspect = stageRect.width / stageRect.height;
+    let width = stageRect.width;
+    let height = stageRect.height;
+    if (stageAspect > mediaAspect) {
+      width = stageRect.height * mediaAspect;
+    } else {
+      height = stageRect.width / mediaAspect;
+    }
+    setStageContentBox({
+      left: (stageRect.width - width) / 2,
+      top: (stageRect.height - height) / 2,
+      width,
+      height,
+    });
+  }, [exportCanvas.height, exportCanvas.width]);
+
+  useEffect(() => {
+    measureStageContent();
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measureStageContent);
+      return () => window.removeEventListener("resize", measureStageContent);
+    }
+    const observer = new ResizeObserver(() => measureStageContent());
+    observer.observe(stage);
+    if (stageImageRef.current) observer.observe(stageImageRef.current);
+    return () => observer.disconnect();
+  }, [measureStageContent, selected?.currentVersionId, selected?.sceneId]);
+
+  const stageSubtitleModel: StageSubtitleModel = useMemo(() => {
+    const config = (project?.config || {}) as Record<string, unknown>;
+    const enableSubtitles = settings.enableSubtitles;
+    const style = (config.subtitleStyle || config.subtitle_style) as Partial<SubtitleStyle> | undefined;
+    const narration = selected?.narration || "";
+    const audioDurationSeconds = selected ? getSceneAudioDuration(selected) : 0;
+    const onPlayhead = Boolean(
+      selected && currentSceneItem && currentSceneItem.sceneId === selected.sceneId,
+    );
+    const localTime =
+      onPlayhead && currentSceneItem && bookendPlayback.phase === "content"
+        ? getSceneLocalTime(currentSceneItem, currentTime)
+        : bookendPlayback.phase === "outro"
+          ? audioDurationSeconds + 1
+          : 0;
+    const contentWidth = stageContentBox.width > 0 ? stageContentBox.width : exportCanvas.width * 0.25;
+    const contentHeight = stageContentBox.height > 0 ? stageContentBox.height : exportCanvas.height * 0.25;
+    return buildStageSubtitleModel({
+      enableSubtitles: enableSubtitles && bookendPlayback.phase !== "intro",
+      narration,
+      localTime,
+      audioDurationSeconds,
+      style,
+      contentWidth,
+      contentHeight,
+      mediaWidth: exportCanvas.width,
+      mediaHeight: exportCanvas.height,
+    });
+  }, [
+    project?.config,
+    settings.enableSubtitles,
+    selected,
+    currentSceneItem,
+    currentTime,
+    bookendPlayback.phase,
+    stageContentBox.width,
+    stageContentBox.height,
+    exportCanvas.width,
+    exportCanvas.height,
+  ]);
   const act = async (action: () => Promise<unknown>, message: string) => { try { await action(); addToast(message, "success"); await load(); } catch (error) { addToast(error, "error"); throw error; } };
   useEffect(() => {
     if (!project) return;
@@ -251,7 +426,7 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
     const continuous = delivery === "continuous" || delivery === "cont";
     const terminal = /[。！？.!?…]$/;
     if (continuous && !useSelected && delta > 0) {
-      const byId = new Map(project.scenes.map((scene) => [scene.sceneId, scene]));
+      const byId = new Map<string, WorkbenchScene>(project.scenes.map((scene) => [scene.sceneId, scene]));
       const sentenceEnds = targetIds.filter((id) => terminal.test((byId.get(id)?.narration || "").trim()));
       if (sentenceEnds.length > 0) targetIds = sentenceEnds;
     }
@@ -316,22 +491,60 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
     return result;
   };
   const retryInitialExport = async () => {
-    if (!project.latestExport) return;
+    if (!project?.latestExport) return;
+    const status = project.latestExport.status;
     try {
+      if (status === "running" || status === "pending") {
+        addToast("正在强制结束卡住的导出并重新开始…", "info");
+      }
       const result = await retryExport(projectId, project.latestExport.exportId);
-      addToast("初稿导出已重新提交", "success");
+      addToast("导出已重新提交", "success");
       setProject((current) => current ? { ...current, jobs: [...current.jobs, { jobId: result.jobId, taskId: result.taskId, kind: "export", status: result.status, progress: 0 }] } : current);
       await load();
     } catch (error) { addToast(error, "error"); }
+  };
+  const cancelActiveExport = async () => {
+    if (!project?.latestExport) return;
+    const status = project.latestExport.status;
+    if (status !== "running" && status !== "pending") return;
+    try {
+      await cancelExport(projectId, project.latestExport.exportId);
+      addToast("导出已取消", "success");
+      await load();
+    } catch (error) {
+      addToast(error, "error");
+    }
   };
   const saveSettings = async () => {
     if (!project) return;
     setSettingsBusy(true);
     try {
-      const next = await patchProject(projectId, {
-        config: { bgm: settings.bgm, bgmVolume: settings.bgmVolume, enableSubtitles: settings.enableSubtitles },
+      const payload = {
+        config: {
+          bgm: settings.bgm,
+          bgmVolume: settings.bgmVolume,
+          enableSubtitles: settings.enableSubtitles,
+          bookendEnabled: settings.bookendEnabled,
+          bookendIntroSeconds: settings.bookendIntroSeconds,
+          bookendOutroSeconds: settings.bookendOutroSeconds,
+          bookendIntroFadeSeconds: settings.bookendIntroFadeSeconds,
+          bookendOutroFadeSeconds: settings.bookendOutroFadeSeconds,
+        },
         expectedUpdatedAt: project.updatedAt,
-      });
+      };
+      let next;
+      try {
+        next = await patchProject(projectId, payload);
+      } catch (error: any) {
+        // Backend allows config-only saves without OCC; still retry once if UI is stale.
+        const status = error?.status || error?.response?.status;
+        if (status === 409) {
+          const fresh = await fetchProject(projectId);
+          next = await patchProject(projectId, { ...payload, expectedUpdatedAt: fresh.updatedAt });
+        } else {
+          throw error;
+        }
+      }
       setProject(next);
       addToast("项目设置已保存", "success");
     } catch (error) { addToast(error, "error"); }
@@ -343,10 +556,27 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
    * Binding play/pause to every React tick races HTMLMediaElement.play() against pause()
    * (Chrome: "The play() request was interrupted by a call to pause()").
    */
+  const bookendConfigRef = useRef(bookendConfig);
+  const contentDurationRef = useRef(contentDuration);
+  useEffect(() => { bookendConfigRef.current = bookendConfig; }, [bookendConfig]);
+  useEffect(() => { contentDurationRef.current = contentDuration; }, [contentDuration]);
+
   const syncNarrationAudio = useCallback((opts?: { forceSeek?: boolean }) => {
     const audio = audioRef.current;
     const proj = projectRef.current;
     if (!audio || !proj) return;
+
+    // Intro/outro: no narration (delayed entry / post-speech pad)
+    const phase = getBookendPlaybackState(
+      currentTimeRef.current,
+      contentDurationRef.current,
+      bookendConfigRef.current,
+    ).phase;
+    if (phase === "intro" || phase === "outro") {
+      if (!audio.paused) audio.pause();
+      playPromiseBusyRef.current = false;
+      return;
+    }
 
     const item = findSceneAtTime(layoutRef.current, currentTimeRef.current);
     currentSceneItemRef.current = item;
@@ -424,6 +654,9 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
     }
   }, []);
 
+  const bgmVolumeRef = useRef(settings.bgmVolume);
+  useEffect(() => { bgmVolumeRef.current = settings.bgmVolume; }, [settings.bgmVolume]);
+
   const syncBgmAudio = useCallback((opts?: { forceSeek?: boolean }) => {
     const audio = bgmAudioRef.current;
     const src = selectedBgmSrcRef.current;
@@ -431,6 +664,15 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
       if (audio && !audio.paused) audio.pause();
       return;
     }
+    // Bookend edge fades approximate export BGM afade
+    const bookendState = getBookendPlaybackState(
+      currentTimeRef.current,
+      contentDurationRef.current,
+      bookendConfigRef.current,
+    );
+    const baseVol = Math.min(1, Math.max(0, bgmVolumeRef.current / 100));
+    audio.volume = Math.min(1, Math.max(0, baseVol * bookendState.bgmGain));
+
     if (Number.isFinite(audio.duration) && audio.duration > 0) {
       const target = currentTimeRef.current % audio.duration;
       if (opts?.forceSeek || Math.abs(audio.currentTime - target) > AUDIO_DRIFT_THRESHOLD) {
@@ -654,18 +896,19 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)]">
-      <GenerationRunPanel
+      <ProgressObservatory
+        project={project}
         run={generation.run}
         busy={generation.actionBusy}
         pendingCount={pendingCount}
-        exportStatus={project.latestExport?.status || null}
-        exportPurpose={project.latestExport?.purpose || null}
         onStart={startRun}
         onPause={() => generation.run && void runAction("pause", () => pauseGenerationRun(projectId, generation.run!.runId))}
         onResume={() => generation.run && void runAction("resume", () => resumeGenerationRun(projectId, generation.run!.runId))}
         onCancel={() => generation.run && void runAction("cancel", () => cancelGenerationRun(projectId, generation.run!.runId))}
-        onRetry={() => generation.run && void runAction("retry", () => retryFailedGeneration(projectId, generation.run!.runId))}
-        onLocateFailure={(sceneId) => { setSelectedSceneId(sceneId); setMobilePanel(null); }}
+        onRetryFailed={() => generation.run && void runAction("retry", () => retryFailedGeneration(projectId, generation.run!.runId))}
+        onRetryExport={() => void retryInitialExport()}
+        onCancelExport={() => void cancelActiveExport()}
+        onLocateScene={(sceneId) => { setSelectedSceneId(sceneId); setMobilePanel(null); }}
       />
 
       {/* TOPBAR — single row */}
@@ -689,9 +932,23 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
               补生成 ({staleOrMissingIds.length})
             </button>
           )}
-          {project.latestExport?.status === "failed" && (
-            <button type="button" onClick={() => void retryInitialExport()} className="ui-btn ui-btn-outline ui-btn-sm text-rose-300">
-              <RefreshCw className="h-3.5 w-3.5" />重试导出
+          {(project.latestExport?.status === "failed"
+            || project.latestExport?.status === "running"
+            || project.latestExport?.status === "pending") && (
+            <button
+              type="button"
+              onClick={() => void retryInitialExport()}
+              className="ui-btn ui-btn-outline ui-btn-sm text-rose-300"
+              title={
+                project.latestExport?.status === "running" || project.latestExport?.status === "pending"
+                  ? "强制结束卡住的导出并重新开始"
+                  : "重新导出成片"
+              }
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {project.latestExport?.status === "running" || project.latestExport?.status === "pending"
+                ? "强制重试导出"
+                : "重试导出"}
             </button>
           )}
           {exportCompleted && (
@@ -860,11 +1117,53 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
               </button>
             </div>
           </div>
-          <div className="ui-stage min-h-0 flex-1 text-xs text-zinc-600">
+          <div
+            ref={stageRef}
+            className="ui-stage relative min-h-0 flex-1 overflow-hidden text-xs text-zinc-600"
+          >
             {currentVersion ? (
-              <img src={currentVersion.imageUrl} alt="画面预览" className="max-h-full max-w-full object-contain" />
+              <img
+                ref={stageImageRef}
+                src={currentVersion.imageUrl}
+                alt="画面预览"
+                className="max-h-full max-w-full object-contain transition-opacity duration-75"
+                style={{ opacity: bookendPlayback.pictureOpacity }}
+                onLoad={() => measureStageContent()}
+              />
             ) : (
-              <>画面预览{selected ? ` · #${selectedIndex + 1}` : ""}</>
+              <span className="pointer-events-none">
+                画面预览{selected ? ` · #${selectedIndex + 1}` : ""}
+              </span>
+            )}
+            {bookendConfig.enabled && bookendPlayback.phase !== "content" && (
+              <div className="pointer-events-none absolute left-2 top-2 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-zinc-300">
+                {bookendPlayback.phase === "intro" ? "片头淡入" : "片尾延展"}
+              </div>
+            )}
+            {/* Subtitle layer: positioned over the letterboxed image box when measured */}
+            {stageSubtitleModel.visible && stageContentBox.width > 0 && stageContentBox.height > 0 && (
+              <div
+                className="pointer-events-none absolute"
+                style={{
+                  left: stageContentBox.left,
+                  top: stageContentBox.top,
+                  width: stageContentBox.width,
+                  height: stageContentBox.height,
+                }}
+              >
+                <StageSubtitleOverlay model={stageSubtitleModel} />
+              </div>
+            )}
+            {settings.enableSubtitles && (
+              <div className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-zinc-300">
+                {stageSubtitleModel.visible
+                  ? "字幕预览 · 近似"
+                  : stageSubtitleModel.reason === "no_audio_duration"
+                    ? "字幕预览 · 待配音时长"
+                    : stageSubtitleModel.reason === "empty"
+                      ? "字幕预览 · 无旁白"
+                      : "字幕预览"}
+              </div>
             )}
           </div>
           <audio
@@ -1041,6 +1340,96 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
                 />
                 启用字幕
               </label>
+
+              <div className="border-t border-[var(--color-border-subtle)] pt-3 space-y-3">
+                <div className="text-xs font-medium text-zinc-300">成片包装 · 片头/片尾</div>
+                <label className="flex items-center gap-2 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={settings.bookendEnabled}
+                    onChange={(event) =>
+                      setSettings((current) => ({ ...current, bookendEnabled: event.target.checked }))
+                    }
+                    className="accent-amber-500"
+                  />
+                  启用片头淡入 / 片尾延展淡出
+                </label>
+                <p className="text-[10px] leading-relaxed text-zinc-600">
+                  默认：片头约 1.2s 先画后声，片尾旁白结束后再续约 2s 后淡出（与镜间停留叠加）。
+                </p>
+                {settings.bookendEnabled && (
+                  <>
+                    <label className="block space-y-1.5">
+                      <span className="text-label">片头时长 · {settings.bookendIntroSeconds.toFixed(1)}s</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="3"
+                        step="0.1"
+                        value={settings.bookendIntroSeconds}
+                        onChange={(event) =>
+                          setSettings((current) => ({
+                            ...current,
+                            bookendIntroSeconds: Number(event.target.value),
+                          }))
+                        }
+                        className="w-full accent-amber-500"
+                      />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-label">片尾时长 · {settings.bookendOutroSeconds.toFixed(1)}s</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="4"
+                        step="0.1"
+                        value={settings.bookendOutroSeconds}
+                        onChange={(event) =>
+                          setSettings((current) => ({
+                            ...current,
+                            bookendOutroSeconds: Number(event.target.value),
+                          }))
+                        }
+                        className="w-full accent-amber-500"
+                      />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-label">淡入 · {settings.bookendIntroFadeSeconds.toFixed(1)}s</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={settings.bookendIntroFadeSeconds}
+                        onChange={(event) =>
+                          setSettings((current) => ({
+                            ...current,
+                            bookendIntroFadeSeconds: Number(event.target.value),
+                          }))
+                        }
+                        className="w-full accent-amber-500"
+                      />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-label">淡出 · {settings.bookendOutroFadeSeconds.toFixed(1)}s</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="3"
+                        step="0.1"
+                        value={settings.bookendOutroFadeSeconds}
+                        onChange={(event) =>
+                          setSettings((current) => ({
+                            ...current,
+                            bookendOutroFadeSeconds: Number(event.target.value),
+                          }))
+                        }
+                        className="w-full accent-amber-500"
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
             </div>
             <div className="mt-auto border-t border-[var(--color-border-subtle)] p-4">
               <button

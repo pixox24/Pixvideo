@@ -180,15 +180,25 @@ class TaskManager:
                 logger.info(f"Task {task_id} completed")
                 
             except asyncio.CancelledError:
-                task.status = TaskStatus.CANCELLED
-                task.completed_at = datetime.now()
-                logger.info(f"Task {task_id} cancelled during execution")
+                # Do not overwrite a race where work already finished successfully.
+                if task.status not in [
+                    TaskStatus.COMPLETED,
+                    TaskStatus.FAILED,
+                    TaskStatus.CANCELLED,
+                ]:
+                    task.status = TaskStatus.CANCELLED
+                    task.completed_at = datetime.now()
+                    logger.info(f"Task {task_id} cancelled during execution")
                 raise
             except Exception as e:
-                task.status = TaskStatus.FAILED
-                task.error = str(e)
-                task.completed_at = datetime.now()
-                logger.error(f"Task {task_id} failed: {e}")
+                if task.status not in [
+                    TaskStatus.COMPLETED,
+                    TaskStatus.CANCELLED,
+                ]:
+                    task.status = TaskStatus.FAILED
+                    task.error = str(e)
+                    task.completed_at = datetime.now()
+                    logger.error(f"Task {task_id} failed: {e}")
         
         # Start execution
         future = asyncio.create_task(_execute())
@@ -295,8 +305,11 @@ class TaskManager:
                 await future
             except asyncio.CancelledError:
                 pass
-        
-        # Update task status
+
+        # Re-check after await — work may have completed between cancel and settle.
+        if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+            return task.status == TaskStatus.CANCELLED
+
         task.status = TaskStatus.CANCELLED
         task.completed_at = datetime.now()
         logger.info(f"Cancelled task {task_id}")

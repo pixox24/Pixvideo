@@ -299,6 +299,7 @@ function buildVideoPayload(input: any) {
     mimo_style: input.mimoStyle || undefined,
     media_width: input.mediaWidth || undefined,
     media_height: input.mediaHeight || undefined,
+    video_fps: input.videoFps || undefined,
     bgm_path: bgmPath,
     bgm_volume: bgmVolume ?? 0.3,
   };

@@ -38,6 +38,8 @@ export interface Preset {
   copyDraftMode?: "full" | "segmented";
   mediaWidth?: number;
   mediaHeight?: number;
+  /** Final video fps (成片帧率), default 30 */
+  videoFps?: number;
   imageAspectRatio?: string;
   subtitleStyle?: SubtitleStyle;
 }
@@ -191,7 +193,87 @@ export interface GenerationRunItem { itemId: string; sceneId: string; position: 
 export interface GenerationRun { runId: string; projectId: string; taskId: string; status: GenerationRunStatus; currentSceneId?: string | null; totalCount: number; completedCount: number; skippedCount: number; failedCount: number; candidateReviewCount: number; pauseRequested: boolean; cancelRequested: boolean; error?: string | null; createdAt: string; updatedAt: string; allowedActions?: string[]; items: GenerationRunItem[]; }
 export interface GenerationRunError { status?: number; detail?: unknown; currentRunId?: string; blockingScenes?: string[]; }
 export interface GenerationJob { jobId: string; taskId: string; sceneId?: string; kind: "scene" | "image" | "tts" | "export"; status: WorkbenchJobStatus; progress: number; error?: string; }
-export interface LatestExport { exportId: string; purpose?: "initial" | "manual" | null; status: WorkbenchJobStatus; outputUrl?: string | null; createdAt: string; updatedAt: string; }
-export interface Project { projectId: string; title: string; source?: string; config: Record<string, unknown>; scenes: WorkbenchScene[]; jobs: GenerationJob[]; updatedAt: string; latestExport?: LatestExport | null; dirty?: boolean; }
+export interface LatestExport {
+  exportId: string;
+  purpose?: "initial" | "manual" | null;
+  status: WorkbenchJobStatus;
+  outputUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  progress?: ExportProgressDetail | null;
+  /** In-flight export task id (for cancel). */
+  taskId?: string | null;
+}
+export type PipelineCellStatus =
+  | "idle"
+  | "queued"
+  | "running"
+  | "ready"
+  | "failed"
+  | "skipped"
+  | "missing"
+  | "stale"
+  | "candidate";
+export interface ExportProgressDetail {
+  stage?: string;
+  segmentCurrent?: number;
+  segmentTotal?: number;
+  segments?: Array<{ sceneId: string; position: number; status: string }>;
+  updatedAt?: string;
+  error?: string;
+}
+export interface PipelineSceneCell {
+  sceneId: string;
+  position: number;
+  narration: string;
+  tts: PipelineCellStatus | string;
+  image: PipelineCellStatus | string;
+  segment: PipelineCellStatus | string;
+}
+export interface PipelineProgress {
+  phase: string;
+  summary: string;
+  updatedAt?: string | null;
+  assets?: {
+    runId?: string;
+    status?: string;
+    completed?: number;
+    total?: number;
+    failed?: number;
+    currentSceneId?: string | null;
+  } | null;
+  export?: {
+    exportId?: string;
+    status?: string;
+    purpose?: string | null;
+    stage?: string;
+    segmentCurrent?: number;
+    segmentTotal?: number;
+    segments?: Array<{ sceneId: string; position: number; status: string }>;
+    error?: string | null;
+    updatedAt?: string;
+  } | null;
+  scenes: PipelineSceneCell[];
+  focus?: {
+    phase?: string;
+    sceneId?: string | null;
+    sceneIndex?: number | null;
+    sceneTotal?: number | null;
+    cell?: string | null;
+    stage?: string;
+  } | null;
+}
+export interface Project {
+  projectId: string;
+  title: string;
+  source?: string;
+  config: Record<string, unknown>;
+  scenes: WorkbenchScene[];
+  jobs: GenerationJob[];
+  updatedAt: string;
+  latestExport?: LatestExport | null;
+  dirty?: boolean;
+  pipelineProgress?: PipelineProgress | null;
+}
 export interface QuickCreateInput { title: string; scenes: Array<{ id?: number; ttsText: string; visualPrompt: string }>; [key: string]: unknown; }
 export interface ExportSubmission { exportId: string; jobId: string; taskId: string; status: WorkbenchJobStatus; blockingScenes: string[]; candidateWarnings?: string[]; }

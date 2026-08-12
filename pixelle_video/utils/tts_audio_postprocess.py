@@ -79,9 +79,9 @@ def postprocess_tts_clip(
     fade_out_start = max(0.0, duration - fade_s)
     suffix = path.suffix.lower() or ".mp3"
     # Keep ffmpeg outputs in OS temp so AV does not flag project-folder writes.
-    scratch = Path(tempfile.gettempdir()) / "pixelle_video_ffmpeg"
-    scratch.mkdir(parents=True, exist_ok=True)
-    temporary = scratch / f"post-{uuid.uuid4().hex}{suffix}"
+    from pixelle_video.utils.ffmpeg_scratch import ffmpeg_scratch_dir
+
+    temporary = ffmpeg_scratch_dir() / f"post-{uuid.uuid4().hex}{suffix}"
     timeout = (
         float(timeout_seconds)
         if timeout_seconds is not None

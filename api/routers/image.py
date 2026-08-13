@@ -48,7 +48,8 @@ async def image_generate(
             prompt=request.prompt,
             width=request.width,
             height=request.height,
-            workflow=request.workflow
+            workflow=request.workflow,
+            use_api_image=bool(request.use_api_image),
         )
         
         # For backward compatibility, only support image results in /image endpoint

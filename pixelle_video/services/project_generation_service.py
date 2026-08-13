@@ -1,4 +1,9 @@
-"""Sequential, resumable orchestration for project generation runs."""
+"""Concurrent, resumable orchestration for project generation runs.
+
+Scene items run in parallel waves (default concurrency from
+``workbench.scene_concurrency``). Continuous TTS still runs once up front;
+image API calls for pending scenes are issued together up to that limit.
+"""
 
 from __future__ import annotations
 
@@ -269,8 +274,9 @@ class ProjectGenerationService:
         self._publish_progress(run_id, "generation cancelled")
 
     def assert_scene_editable(self, project_id: str, scene_id: str) -> None:
+        """Lock any scene that still has a non-terminal generation item (supports parallel waves)."""
         run = self.repository.get_active_generation_run(project_id)
-        if run is None or run.current_scene_id != scene_id:
+        if run is None:
             return
         item = next(
             (
@@ -282,6 +288,18 @@ class ProjectGenerationService:
         )
         if item and not item.is_terminal:
             raise ActiveSceneLockedError(run.run_id, scene_id)
+
+    def _scene_concurrency(self) -> int:
+        """Max scenes generating media at once (TTS+image item work)."""
+        cfg = getattr(self.core, "config", {}) or {}
+        workbench = cfg.get("workbench") if isinstance(cfg, dict) else {}
+        if not isinstance(workbench, dict):
+            workbench = {}
+        raw = workbench.get("scene_concurrency", 6)
+        try:
+            return max(1, min(16, int(raw)))
+        except (TypeError, ValueError):
+            return 6
 
     async def _ensure_task(self, run_id: str) -> None:
         run = self._require_run(run_id)
@@ -300,6 +318,12 @@ class ProjectGenerationService:
             return
         self.repository.recompute_generation_run_counts(run_id)
         continuous_tts_done = False
+        concurrency = self._scene_concurrency()
+        logger.info(
+            "Generation run {} concurrency={} (parallel scene waves)",
+            run_id,
+            concurrency,
+        )
         while True:
             run = self._require_run(run_id)
             if run.cancel_requested:
@@ -344,15 +368,58 @@ class ProjectGenerationService:
                     self._publish_progress(run_id, "continuous TTS failed; using per-scene")
                 items = self.repository.list_generation_run_items(run_id)
 
-            item = next((candidate for candidate in items if not candidate.is_terminal), None)
-            if item is None:
+            pending = [candidate for candidate in items if not candidate.is_terminal]
+            if not pending:
                 await self._finalize(run_id)
                 return
 
+            # Launch up to N non-terminal scenes together (images after continuous TTS).
+            wave = pending[:concurrency]
             self.repository.update_generation_run(
                 run_id,
-                current_scene_id=item.scene_id,
+                current_scene_id=wave[0].scene_id,
             )
+            self._publish_progress(
+                run_id,
+                f"processing {len(wave)} scene(s) in parallel"
+                if len(wave) > 1
+                else f"scene {wave[0].position + 1} started",
+            )
+            await self._process_item_wave(run_id, wave)
+
+    async def _process_item_wave(
+        self,
+        run_id: str,
+        wave: Sequence[GenerationRunItem],
+    ) -> None:
+        """Process one or many scene items; multiple items run concurrently."""
+
+        async def _one(item: GenerationRunItem) -> None:
+            run_now = self._require_run(run_id)
+            if run_now.cancel_requested:
+                self.repository.update_generation_run_item(
+                    item.item_id,
+                    status=GenerationRunItemStatus.CANCELLED,
+                    tts_status=(
+                        GenerationPhase.CANCELLED
+                        if item.tts_status
+                        in {GenerationPhase.PENDING, GenerationPhase.RUNNING}
+                        else item.tts_status
+                    ),
+                    image_status=(
+                        GenerationPhase.CANCELLED
+                        if item.image_status
+                        in {GenerationPhase.PENDING, GenerationPhase.RUNNING}
+                        else item.image_status
+                    ),
+                    error="cancelled",
+                )
+                try:
+                    self.repository.update_scene(item.scene_id, status="cancelled")
+                except Exception:
+                    pass
+                return
+
             self._recover_interrupted_item(item)
             try:
                 await self._process_item(run_id, item)
@@ -362,6 +429,22 @@ class ProjectGenerationService:
                 self._record_item_failure(item, exc)
             self.repository.recompute_generation_run_counts(run_id)
             self._publish_progress(run_id, f"scene {item.position + 1} finished")
+
+        if len(wave) == 1:
+            await _one(wave[0])
+            return
+
+        results = await asyncio.gather(
+            *(_one(item) for item in wave),
+            return_exceptions=True,
+        )
+        for result in results:
+            if isinstance(result, asyncio.CancelledError):
+                raise result
+            if isinstance(result, BaseException) and not isinstance(result, Exception):
+                raise result
+            # Per-item Exception already recorded inside _one; ignore here.
+            # Unexpected BaseException subclasses other than CancelledError re-raised above.
 
     async def _maybe_run_continuous_tts(
         self,

@@ -59,23 +59,31 @@ class HyperframesCaptionRenderer:
         fps: int,
         style: dict[str, Any] | None = None,
         alignment: list[Any] | None = None,
+        *,
+        hold_seconds: float = 0.0,
+        audio_path: str | Path | None = None,
     ) -> CaptionPlan:
         if duration <= 0:
             raise ValueError("Caption duration must be positive")
         if width <= 0 or height <= 0 or fps <= 0:
             raise ValueError("Caption canvas width, height, and fps must be positive")
 
+        hold = max(0.0, float(hold_seconds or 0.0))
         normalized_style = self.subtitle_renderer.normalize_style(style)
+        # Schedule cues on speech window only; hold freezes the last line.
         timed_segments = self.subtitle_renderer.plan_segments(
             text,
             duration,
             normalized_style,
             alignment=alignment,
+            hold_seconds=hold,
+            audio_path=audio_path,
         )
         if not timed_segments:
             raise ValueError("Caption text cannot be empty")
 
-        duration_ms = max(1, int(round(duration * 1000)))
+        total_seconds = float(duration) + hold
+        duration_ms = max(1, int(round(total_seconds * 1000)))
         captions: list[CaptionSegment] = []
         for index, timed in enumerate(timed_segments):
             start_ms = max(0, int(round(timed.start * 1000)))

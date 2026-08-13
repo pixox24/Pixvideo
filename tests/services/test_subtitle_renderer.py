@@ -116,11 +116,54 @@ def test_create_ass_file_uses_soft_blur_not_hard_shadow(tmp_path):
     assert "Dialogue:" in content
     assert r"\fad(120,120)" in content
     assert r"\blur" in content
+    # Blur must stay light (shadow=4 → ~0.8, never the old 2.4–6.0 mush).
+    import re
+
+    blur_vals = [float(m) for m in re.findall(r"\\blur([0-9.]+)", content)]
+    assert blur_vals and max(blur_vals) <= 1.5
     # Style Shadow column is 0 (hard offset disabled); blur provides soft glow.
     assert ",4,2,60,60,140,1" not in content or True
     assert "第一句旁白" in content
     assert "第二句旁白" in content
     assert "第一句旁白。" not in content
+
+
+def test_high_shadow_zero_outline_stays_readable(tmp_path):
+    """Reproduce export mush: cinema-soft + shadow=6 + outline 0 must not defocus."""
+    renderer = SubtitleRenderer()
+    assert renderer._blur_amount(6) <= 1.5
+    assert renderer._blur_amount(12) <= 1.5
+    assert renderer._blur_amount(0) == 0.0
+
+    ass_path = renderer.create_ass_file(
+        text="翻到七岁那年写的日记",
+        duration=3.0,
+        width=1440,
+        height=2560,
+        style={
+            "preset": "cinema-soft",
+            "mode": "ass",
+            "fontSize": 60,
+            "shadow": 6,
+            "outlineWidth": 0,
+            "strokeWidth": 0,
+            "animation": "fade",
+            "fadeInMs": 120,
+            "fadeOutMs": 120,
+        },
+        output_dir=tmp_path,
+    )
+    content = Path(ass_path).read_text(encoding="utf-8")
+    import re
+
+    blur_vals = [float(m) for m in re.findall(r"\\blur([0-9.]+)", content)]
+    assert blur_vals and max(blur_vals) <= 1.5
+    # Style line Outline column must be > 0 for a hard glyph edge.
+    style_line = next(line for line in content.splitlines() if line.startswith("Style: Default,"))
+    parts = style_line.split(",")
+    # ... BorderStyle, Outline, Shadow, Alignment ...
+    outline = int(parts[-5])
+    assert outline >= 1
 
 
 def test_ass_presets_have_distinct_rendered_styles(tmp_path):

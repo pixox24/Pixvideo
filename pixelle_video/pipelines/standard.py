@@ -512,6 +512,9 @@ class StandardPipeline(LinearVideoPipeline):
             image_motion_mode=ctx.params.get("image_motion_mode", "auto"),
             image_motion_strength=ctx.params.get("image_motion_strength", "subtle"),
             image_fit_mode=ctx.params.get("image_fit_mode", "cover"),
+            use_api_image=bool(
+                ctx.params.get("use_api_image", ctx.params.get("useApiImage", False))
+            ),
         )
         
         # Create storyboard

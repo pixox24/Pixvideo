@@ -210,9 +210,10 @@ class MediaService(ComfyBaseService):
                 comfyui_url="http://192.168.1.100:8188"
             )
         """
-        if media_type == "image" and os.getenv("PIXELLE_USE_REAL_IMAGE_API", "").strip().lower() not in {
-            "1", "true", "yes", "on",
-        }:
+        # Product default: material library (素材库). API/workflows only when
+        # use_api_image is true, or legacy env PIXELLE_USE_REAL_IMAGE_API is set
+        # (and the request did not explicitly disable API).
+        if media_type == "image" and not self._should_use_api_image(params):
             fixture = self._local_storyboard_image(prompt, width, height, params.get("scene_id"))
             if not fixture.is_file():
                 raise FileNotFoundError(f"Local test image does not exist: {fixture}")
@@ -334,6 +335,43 @@ class MediaService(ComfyBaseService):
     def _has_openai_image_generation_config(self) -> bool:
         config = self._get_openai_image_generation_config()
         return bool(config["api_key"] and config["base_url"] and config["model"])
+
+    @staticmethod
+    def _coerce_bool(value: Any, default: bool = False) -> bool:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        text = str(value).strip().lower()
+        if text in {"1", "true", "yes", "on", "api", "openai"}:
+            return True
+        if text in {"0", "false", "no", "off", "library", "material", "素材库"}:
+            return False
+        return default
+
+    @classmethod
+    def _should_use_api_image(cls, params: dict[str, Any] | None = None) -> bool:
+        """
+        Decide whether to call a real image API / workflow.
+
+        Priority:
+        1. Explicit request param ``use_api_image`` (also accepts useApiImage)
+        2. Legacy env ``PIXELLE_USE_REAL_IMAGE_API`` (tests / scripts)
+        3. Default False → material library (素材库)
+        """
+        payload = params or {}
+        if "use_api_image" in payload:
+            return cls._coerce_bool(payload.get("use_api_image"), default=False)
+        if "useApiImage" in payload:
+            return cls._coerce_bool(payload.get("useApiImage"), default=False)
+        return os.getenv("PIXELLE_USE_REAL_IMAGE_API", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
 
     async def _call_openai_image_generation(
         self,

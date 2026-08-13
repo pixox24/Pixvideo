@@ -59,6 +59,9 @@ class PillowCaptionRenderer:
         alignment: list[Any] | None = None,
         output_dir: str | Path | None = None,
         font_path: str | None = None,
+        *,
+        hold_seconds: float = 0.0,
+        audio_path: str | Path | None = None,
     ) -> list[PillowCaptionOverlay]:
         if duration <= 0:
             raise ValueError("Caption duration must be positive")
@@ -66,11 +69,14 @@ class PillowCaptionRenderer:
             raise ValueError("Caption canvas width and height must be positive")
 
         normalized = self.subtitle_renderer.normalize_style(style)
+        hold = max(0.0, float(hold_seconds or 0.0))
         timed = self.subtitle_renderer.plan_segments(
             text,
             duration,
             normalized,
             alignment=alignment,
+            hold_seconds=hold,
+            audio_path=audio_path,
         )
         if not timed:
             raise ValueError("Caption text cannot be empty")
@@ -81,11 +87,12 @@ class PillowCaptionRenderer:
         workspace.mkdir(parents=True, exist_ok=True)
 
         resolved_font = self._resolve_font_path(normalized, font_path)
+        total_duration = float(duration) + hold
         overlays: list[PillowCaptionOverlay] = []
         for index, segment in enumerate(timed):
             end = float(segment.end)
             if index == len(timed) - 1:
-                end = max(end, float(duration))
+                end = max(end, total_duration)
             path = workspace / f"caption-{index + 1:03d}.png"
             self._render_frame(
                 path=path,

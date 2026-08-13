@@ -36,6 +36,68 @@ async def test_media_service_uses_existing_local_image_by_default(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_use_api_image_false_overrides_env_and_uses_material_library(monkeypatch):
+    """Product toggle off must force 素材库 even when PIXELLE_USE_REAL_IMAGE_API is set."""
+    monkeypatch.setenv("PIXELLE_USE_REAL_IMAGE_API", "1")
+    monkeypatch.delenv("PIXELLE_TEST_IMAGE_PATH", raising=False)
+    monkeypatch.setattr(
+        "pixelle_video.services.media.config_manager.get_image_generation_config",
+        lambda: {"api_key": "must-not-run", "base_url": "https://api.example.com", "model": "test"},
+    )
+
+    service = MediaService({}, core=DummyCore())
+    result = await service(
+        prompt="offline library",
+        width=1080,
+        height=1920,
+        scene_id="scene-lib",
+        use_api_image=False,
+    )
+
+    parent = Path(result.url).parent
+    library = (Path(__file__).parents[2] / "素材库").resolve()
+    assert parent in {library / name for name in ("9x16", "9:16", "9-16")}
+    assert Path(result.url).is_file()
+
+
+@pytest.mark.asyncio
+async def test_use_api_image_true_calls_openai_compatible_api(monkeypatch):
+    captured = {}
+
+    async def fake_post(self, url, *, headers=None, json=None):
+        captured["url"] = url
+        captured["json"] = json
+        return httpx.Response(
+            200,
+            json={"data": [{"url": "https://cdn.example.com/api-on.png"}]},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.delenv("PIXELLE_USE_REAL_IMAGE_API", raising=False)
+    monkeypatch.setattr(
+        "pixelle_video.services.media.config_manager.get_image_generation_config",
+        lambda: {
+            "api_key": "img-key",
+            "base_url": "https://img-cn.65535.space/v1",
+            "model": "gpt-image-2",
+        },
+    )
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    service = MediaService({}, core=DummyCore())
+    result = await service(
+        prompt="api toggle on",
+        width=1280,
+        height=720,
+        use_api_image=True,
+    )
+
+    assert result.url == "https://cdn.example.com/api-on.png"
+    assert captured["url"] == "https://img-cn.65535.space/v1/images/generations"
+    assert captured["json"]["prompt"] == "api toggle on"
+
+
+@pytest.mark.asyncio
 async def test_media_service_selects_portrait_storyboard_material(monkeypatch):
     monkeypatch.delenv("PIXELLE_USE_REAL_IMAGE_API")
     monkeypatch.delenv("PIXELLE_TEST_IMAGE_PATH", raising=False)

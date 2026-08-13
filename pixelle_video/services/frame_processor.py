@@ -326,6 +326,8 @@ class FrameProcessor:
             "width": gen_w if media_type == "image" else config.media_width,
             "height": gen_h if media_type == "image" else config.media_height,
             "index": frame.index + 1,  # 1-based index for workflow
+            "use_api_image": bool(getattr(config, "use_api_image", False)),
+            "scene_id": f"frame-{frame.index}",
         }
 
         # For video workflows: pass audio duration as target video duration

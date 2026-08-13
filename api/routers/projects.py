@@ -35,6 +35,7 @@ from api.tasks.models import TaskType
 from pixelle_video.config import config_manager
 from pixelle_video.models.workbench import (
     AssetSource,
+    AssetVersion,
     GenerationJob,
     GenerationKind,
     GenerationRunStatus,
@@ -74,6 +75,7 @@ _PROJECT_CONFIG_KEYS = {
     "splitType", "frame_template", "template_params", "composition_mode", "image_motion_enabled",
     "image_motion_mode", "image_motion_strength", "image_fit_mode", "video_fps", "ttsWorkflow",
     "tts_workflow", "ref_audio", "scenes", "n_scenes", "mode", "split_mode",
+    "useApiImage", "use_api_image",
 }
 _BGM_EXTENSIONS = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg"}
 
@@ -568,15 +570,179 @@ async def _autofill_image_prompts(core, scenes: list[Scene]) -> None:
             scene.visual_prompt = scene.narration
 
 
+def _resolve_reuse_source_task_id(config: dict | None) -> str | None:
+    cfg = config or {}
+    for key in (
+        "reuseTaskId",
+        "reuse_task_id",
+        "reuse_assets_from_task_id",
+        "reuseSourceTaskId",
+    ):
+        value = cfg.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return None
+
+
+def _normalize_match_text(value: str | None) -> str:
+    return " ".join(str(value or "").split()).strip()
+
+
+async def _import_assets_from_history_task(
+    core,
+    project: Project,
+    scenes: list[Scene],
+    source_task_id: str,
+) -> dict[str, int]:
+    """
+    Copy audio/images from a completed history task into a new workbench project.
+
+    Used when Quick Create checks 「沿用历史素材」. Without this, reuseTaskId is only
+    stored in config and generation still regenerates every scene.
+    """
+    history = getattr(core, "history", None)
+    if history is None or not hasattr(history, "get_task_detail"):
+        logger.warning("History service unavailable; cannot reuse assets from {}", source_task_id)
+        return {"images": 0, "audio": 0, "frames": 0}
+
+    detail = await history.get_task_detail(source_task_id)
+    if not detail or not detail.get("storyboard"):
+        logger.warning(
+            "reuseTaskId={} has no storyboard detail; generation will re-create assets",
+            source_task_id,
+        )
+        return {"images": 0, "audio": 0, "frames": 0}
+
+    storyboard = detail["storyboard"]
+    frames = list(getattr(storyboard, "frames", None) or [])
+    if not frames:
+        return {"images": 0, "audio": 0, "frames": 0}
+
+    snapshot = build_parameter_snapshot(
+        project,
+        runtime_config=getattr(core, "config", {}) or {},
+    )
+    images = 0
+    audio = 0
+    for scene, frame in zip(scenes, frames):
+        image_path = getattr(frame, "image_path", None)
+        if image_path and Path(image_path).is_file():
+            relative = core.workbench_media.copy_upload(
+                project.project_id,
+                scene.scene_id,
+                Path(image_path),
+                Path(image_path).name,
+            )
+            image_fp = compute_image_fingerprint(scene.visual_prompt, snapshot)
+            version = AssetVersion(
+                project.project_id,
+                scene.scene_id,
+                AssetSource.UPLOAD,
+                relative,
+                prompt_snapshot=scene.visual_prompt or getattr(frame, "image_prompt", None),
+                parameters={"imageFingerprint": image_fp, "reusedFromTaskId": source_task_id},
+            )
+            core.workbench_repository.create_asset_version(version)
+            core.workbench_repository.select_asset_version(
+                project.project_id,
+                scene.scene_id,
+                version.version_id,
+            )
+            core.workbench_repository.update_scene(
+                scene.scene_id,
+                image_fingerprint=image_fp,
+                status="completed",
+            )
+            images += 1
+
+        # Audio only when narration still matches — avoids wrong lip-sync reuse.
+        frame_narration = _normalize_match_text(getattr(frame, "narration", None))
+        scene_narration = _normalize_match_text(scene.narration)
+        audio_path = getattr(frame, "audio_path", None)
+        if (
+            audio_path
+            and Path(audio_path).is_file()
+            and frame_narration
+            and frame_narration == scene_narration
+        ):
+            audio_relative = (
+                f"assets/scenes/{scene.scene_id}/audio/reused{Path(audio_path).suffix or '.mp3'}"
+            )
+            destination = core.workbench_media.resolve(project.project_id, audio_relative)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(audio_path, destination)
+            audio_fp = compute_narration_fingerprint(scene.narration, snapshot)
+            core.workbench_repository.update_scene(
+                scene.scene_id,
+                audio_relative_path=audio_relative,
+                audio_fingerprint=audio_fp,
+            )
+            audio += 1
+
+    logger.info(
+        "Reused history assets from task {}: images={} audio={} of {} frames into project {}",
+        source_task_id,
+        images,
+        audio,
+        min(len(scenes), len(frames)),
+        project.project_id,
+    )
+    return {"images": images, "audio": audio, "frames": min(len(scenes), len(frames))}
+
+
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(body: CreateProjectRequest, core: PixelleVideoDep, request: Request):
+    """
+    Create a new workbench project from Quick Create.
+
+    Note: ``reuseTaskId`` only means "import audio/images from that history task".
+    It must NOT set ``source_history_task_id`` — that column is UNIQUE and reserved for
+    「作品库 → 复制为项目」(from-history), which returns the same project on repeat.
+    """
     normalized_config = normalize_project_config(body.config)
     _validate_project_bgm(normalized_config)
-    project = Project(title=body.title, config=normalized_config, source=body.source)
+    reuse_task_id = _resolve_reuse_source_task_id(normalized_config)
+    # Keep reuse id in config for import; never bind UNIQUE source_history_task_id here.
+    project = Project(
+        title=body.title,
+        config=normalized_config,
+        source=body.source or ("history-reuse" if reuse_task_id else "quick-create"),
+        source_history_task_id=None,
+    )
     scenes = [Scene(project.project_id, position, item.narration, item.visual_prompt.strip())
               for position, item in enumerate(body.scenes)]
     await _autofill_image_prompts(core, scenes)
-    core.workbench_repository.create_project(project, scenes)
+    try:
+        core.workbench_repository.create_project(project, scenes)
+    except Exception as exc:
+        # Surface DB uniqueness etc. as readable API errors (not bare 500 / {}).
+        msg = str(exc)
+        if "UNIQUE constraint failed: projects.source_history_task_id" in msg:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "该历史任务已复制过为项目。请直接打开已有工作台项目，"
+                    "或取消「沿用历史素材」后新建（仅改风格可在原项目里「开始生成」）。"
+                ),
+            ) from exc
+        logger.exception("create_project failed: {}", exc)
+        raise HTTPException(status_code=500, detail=f"创建项目失败：{msg}") from exc
+    if reuse_task_id:
+        try:
+            stats = await _import_assets_from_history_task(core, project, scenes, reuse_task_id)
+            if stats.get("images", 0) == 0 and stats.get("audio", 0) == 0:
+                logger.warning(
+                    "reuseTaskId={} imported 0 assets; generation will re-create media",
+                    reuse_task_id,
+                )
+        except Exception as exc:
+            # Soft-fail: project is usable; generation will fall back to full regen.
+            logger.warning(
+                "Failed to import reusable assets from {}: {}",
+                reuse_task_id,
+                exc,
+            )
+    scenes = core.workbench_repository.list_project_scenes(project.project_id)
     return _response(project, scenes, core.workbench_repository, core.workbench_media, request, getattr(core, "config", {}))
 
 

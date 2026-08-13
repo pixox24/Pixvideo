@@ -453,6 +453,7 @@ def _preset_from_config(name: str = "当前保存配置") -> dict[str, Any]:
         "splitType": "line",
         "enableMotion": config_manager.get("template", {}).get("image_motion_enabled", True),
         "enableSubtitles": config_manager.get("template", {}).get("subtitle_enabled", True),
+        "useApiImage": bool(config_manager.get("template", {}).get("use_api_image", False)),
         "subtitleStyle": config_manager.get("subtitle", {}).get("default_style") or SUBTITLE_STYLE_DEFAULTS,
         "minimaxModel": tts.get("minimax", {}).get("model"),
         "emotion": tts.get("minimax", {}).get("emotion"),
@@ -487,6 +488,7 @@ def _quick_create_config_from_preset(preset: dict[str, Any]) -> dict[str, Any]:
         "composition_mode": "plain_image",
         "image_motion_enabled": preset.get("enableMotion", True),
         "subtitle_enabled": preset.get("enableSubtitles", True),
+        "use_api_image": bool(preset.get("useApiImage", preset.get("use_api_image", False))),
         "subtitle_style": preset.get("subtitleStyle") or SUBTITLE_STYLE_DEFAULTS,
     }
 

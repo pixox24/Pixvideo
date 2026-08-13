@@ -1051,6 +1051,10 @@ class VideoService:
                 renderer = SubtitleRenderer()
                 normalized_style = renderer.normalize_style(subtitle_style)
                 subtitle_burned = False
+                # Speech-only window for cue scheduling (matches workbench preview).
+                # Hold only freezes the last line — never re-proportions all cues.
+                speech_duration = max(0.05, float(audio_duration or 0.0))
+                hold_seconds = max(0.0, float(target_duration) - speech_duration)
 
                 # 1) Hyperframes dynamic path (rounded box + animations when available).
                 # High-res VP9 overlay has been observed to hang ffmpeg indefinitely
@@ -1085,12 +1089,14 @@ class VideoService:
                         )
                         caption_plan = dynamic_renderer.build_caption_plan(
                             text=subtitle_text,
-                            duration=target_duration,
+                            duration=speech_duration,
                             width=width,
                             height=height,
                             fps=fps,
                             style=normalized_style,
                             alignment=subtitle_alignment,
+                            hold_seconds=hold_seconds,
+                            audio_path=audio,
                         )
                         subtitle_overlay_path = dynamic_renderer.render_overlay(
                             caption_plan,
@@ -1133,13 +1139,15 @@ class VideoService:
                         pillow_renderer = PillowCaptionRenderer(subtitle_renderer=renderer)
                         pillow_overlays = pillow_renderer.render_overlays(
                             text=subtitle_text,
-                            duration=target_duration,
+                            duration=speech_duration,
                             width=width,
                             height=height,
                             style=normalized_style,
                             alignment=subtitle_alignment,
                             output_dir=subtitle_workspace,
                             font_path=custom_font_path or None,
+                            hold_seconds=hold_seconds,
+                            audio_path=audio,
                         )
                         for item in pillow_overlays:
                             # Still PNGs need loop+duration so enable=between can hold them on screen.
@@ -1198,11 +1206,13 @@ class VideoService:
                                 custom_font_path = ""
                         subtitle_overlay_path = renderer.create_ass_file(
                             text=subtitle_text,
-                            duration=target_duration,
+                            duration=speech_duration,
                             width=width,
                             height=height,
                             style=normalized_style,
                             alignment=subtitle_alignment,
+                            hold_seconds=hold_seconds,
+                            audio_path=audio,
                         )
                         subtitle_filter_kwargs = {
                             "filename": Path(subtitle_overlay_path).as_posix(),

@@ -42,9 +42,23 @@ def test_generated_copy_draft_autofills_preview_script_first_sentence_without_ov
 def test_quick_create_uses_real_minimax_defaults_and_models():
     component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
 
-    assert 'useState("male-qn-qingse")' in component
+    # Default TTS is Edge; MiniMax default voice is applied when MiniMax is ready.
+    assert 'setVoice("male-qn-qingse")' in component
     assert 'useState("speech-2.8-turbo")' in component
     assert 'value="speech-2.8-turbo"' in component
     assert 'value="speech-2.8-hd"' in component
     assert "speech-mimic-v1" not in component
     assert "minimax-emotion-db1" not in component
+
+
+def test_quick_create_supports_custom_minimax_voice_id():
+    component = Path("frontend/src/components/QuickCreate.tsx").read_text(encoding="utf-8")
+    data = Path("frontend/src/data.ts").read_text(encoding="utf-8")
+
+    assert "CUSTOM_VOICE_OPTION_VALUE" in component
+    assert "自定义 Voice ID" in component
+    assert "isKnownVoiceOption" in component
+    assert "例如复刻后的 my_brand_voice_01" in component
+    assert "male-qn-qingse" in data
+    # Free-form ID is stored in the existing `voice` field and sent as voice_id.
+    assert "voice_id: voice" in component

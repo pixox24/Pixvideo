@@ -14,6 +14,9 @@ import {
   snapshotFromScenes,
   snapshotsEqual,
   pushTimelineHistory,
+  isGaplessSpeechPreview,
+  realTimeToGaplessSpeechTime,
+  resolveGaplessSpeechPlayback,
 } from "./workbenchState";
 
 const project = { projectId: "p", title: "Project", config: {}, scenes: [
@@ -244,4 +247,32 @@ test("pushTimelineHistory respects the history limit", () => {
     smallPresent = result.present;
   }
   assert.equal(smallPast.length, 20);
+});
+
+test("isGaplessSpeechPreview defaults continuous true, per_scene false", () => {
+  assert.equal(isGaplessSpeechPreview({}), true);
+  assert.equal(isGaplessSpeechPreview({ ttsDelivery: "continuous" }), true);
+  assert.equal(isGaplessSpeechPreview({ ttsDelivery: "per_scene" }), false);
+  assert.equal(isGaplessSpeechPreview({ tts_delivery: "sequential" }), false);
+});
+
+test("gapless speech continues into next scene during hold", () => {
+  // scene0: audio 5 + hold 2 = 7; scene1: audio 4 + hold 0 = 4
+  const layout = buildTimelineLayout([
+    scene("s0", 7, 2),
+    scene("s1", 4, 0),
+  ]);
+  // At t=5.5 (in s0 hold): speech should already be into s1 at ~0.5s
+  const speechT = realTimeToGaplessSpeechTime(layout, 5.5);
+  assert.ok(Math.abs(speechT - 5.5) < 1e-6);
+  const play = resolveGaplessSpeechPlayback(layout, 5.5);
+  assert.ok(play);
+  assert.equal(play!.sceneId, "s1");
+  assert.ok(Math.abs(play!.localTime - 0.5) < 1e-6);
+  assert.equal(play!.playing, true);
+
+  // At t=3 (still s0 speech): play s0 at 3s
+  const mid = resolveGaplessSpeechPlayback(layout, 3);
+  assert.equal(mid!.sceneId, "s0");
+  assert.ok(Math.abs(mid!.localTime - 3) < 1e-6);
 });

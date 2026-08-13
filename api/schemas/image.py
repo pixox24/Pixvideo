@@ -25,6 +25,13 @@ class ImageGenerateRequest(BaseModel):
     width: int = Field(1024, ge=512, le=3840, description="Image width")
     height: int = Field(1024, ge=512, le=3840, description="Image height")
     workflow: Optional[str] = Field(None, description="Custom workflow filename")
+    use_api_image: bool = Field(
+        True,
+        description=(
+            "Test/preview endpoint defaults to API when configured. "
+            "Set false to sample from the local material library."
+        ),
+    )
     
     class Config:
         json_schema_extra = {

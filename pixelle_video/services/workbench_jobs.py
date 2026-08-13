@@ -41,12 +41,16 @@ class WorkbenchJobService:
         self.core = core
         self.repository = repository
         self.media_store = media_store
-        concurrency = int(core.config.get("workbench", {}).get("scene_concurrency", 3))
-        self._image_semaphore = asyncio.Semaphore(max(1, concurrency))
+        try:
+            concurrency = int(core.config.get("workbench", {}).get("scene_concurrency", 6))
+        except (TypeError, ValueError):
+            concurrency = 6
+        self._image_concurrency = max(1, min(16, concurrency))
+        self._image_semaphore = asyncio.Semaphore(self._image_concurrency)
 
     async def run_image_job_limited(self, project_id: str, scene_id: str, task_id: str, prompt_snapshot: str) -> None:
-        async with self._image_semaphore:
-            await self.run_image_job(project_id, scene_id, task_id, prompt_snapshot)
+        # Semaphore lives inside generate_image_asset so generation-run + batch share it.
+        await self.run_image_job(project_id, scene_id, task_id, prompt_snapshot)
 
     async def run_scene_job(self, project_id: str, scene_id: str, task_id: str) -> None:
         scene = self._require_scene(scene_id, project_id)
@@ -71,8 +75,31 @@ class WorkbenchJobService:
         prompt_snapshot: str,
         image_fingerprint: str | None = None,
     ) -> dict[str, Any]:
-        """Generate and persist one image without changing job status."""
+        """Generate and persist one image without changing job status.
+
+        Concurrent callers share ``_image_semaphore`` so generation runs and
+        batch regenerate do not stampede the image API.
+        """
+        async with self._image_semaphore:
+            return await self._generate_image_asset_unlocked(
+                project_id,
+                scene_id,
+                task_id,
+                prompt_snapshot,
+                image_fingerprint,
+            )
+
+    async def _generate_image_asset_unlocked(
+        self,
+        project_id: str,
+        scene_id: str,
+        task_id: str,
+        prompt_snapshot: str,
+        image_fingerprint: str | None = None,
+    ) -> dict[str, Any]:
+        del task_id  # reserved for cancel/tracking identity
         scene = self._require_scene(scene_id, project_id)
+        del scene
         project = self.repository.get_project(project_id)
         project_config = (project.config if project else {}) or {}
         prefix = str(
@@ -89,6 +116,11 @@ class WorkbenchJobService:
         )
         # Image gen maps to API whitelist; mediaWidth/Height remain the video canvas.
         gen_w, gen_h = image_gen_size_from_config(project_config)
+        use_api_raw = pick_config(project_config, "useApiImage", "use_api_image", default=False)
+        if isinstance(use_api_raw, str):
+            use_api_image = use_api_raw.strip().lower() in {"1", "true", "yes", "on", "api"}
+        else:
+            use_api_image = bool(use_api_raw)
         result = await self.core.media(
             prompt=full_prompt,
             media_type="image",
@@ -96,6 +128,7 @@ class WorkbenchJobService:
             width=gen_w,
             height=gen_h,
             scene_id=scene_id,
+            use_api_image=use_api_image,
         )
         source_url = result.url if hasattr(result, "url") else result
         version_id = self._new_version_id()
@@ -317,10 +350,36 @@ class WorkbenchJobService:
             lambda: extract_audio_segments(continuous_path, cut_specs, batch_size=16)
         )
 
+        # Slice full-track Edge/MiniMax alignment onto each scene clip (export burn).
+        from pixelle_video.services.subtitle_alignment import (
+            load_alignment,
+            write_sliced_alignment_sidecar,
+        )
+
+        full_cues = load_alignment(continuous_path)
+        aligned_sidecars = 0
+
         for scene_id, audio_path, start, end, audio_relative in cut_jobs:
             duration = await self._audio_duration(audio_path)
             if duration <= 0:
                 duration = max(0.05, float(end) - float(start))
+            if full_cues:
+                try:
+                    written = write_sliced_alignment_sidecar(
+                        continuous_path,
+                        audio_path,
+                        start,
+                        end,
+                        cues=full_cues,
+                    )
+                    if written:
+                        aligned_sidecars += 1
+                except Exception as align_exc:
+                    logger.debug(
+                        "Failed to slice continuous alignment for scene {}: {}",
+                        scene_id,
+                        align_exc,
+                    )
             changes = {
                 "narration": narration_by_scene.get(scene_id, ""),
                 "audio_relative_path": audio_relative,
@@ -342,10 +401,11 @@ class WorkbenchJobService:
             }
 
         logger.info(
-            "Continuous TTS split done: project={} method={} scenes={}",
+            "Continuous TTS split done: project={} method={} scenes={} alignment_sidecars={}",
             project_id,
             slices[0].method if slices else "n/a",
             len(results),
+            aligned_sidecars,
         )
         return results
 

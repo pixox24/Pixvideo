@@ -3,7 +3,7 @@ import { Download, ExternalLink, List, Music, PanelRight, Pause, Play, RefreshCw
 import { GenerationRun, Project, SubtitleStyle, WorkbenchResources, WorkbenchScene } from "../types";
 import { cancelExport, cancelGenerationRun, createExport, fetchActiveGenerationRun, fetchGenerationRun, fetchProject, patchProject, pauseGenerationRun, patchScene, regenerateImage, regenerateTts, retryExport, retryFailedGeneration, resumeGenerationRun, selectAssetVersion, startGenerationRun, submitBatchImageGeneration, updateTimeline, uploadSceneAsset } from "../lib/workbenchApi";
 import { initialGenerationState, reduceRunActionFailed, reduceRunActionFinished, reduceRunFetched, reduceRunStarted, ProjectGenerationState, shouldRefreshProject } from "../lib/projectGenerationState";
-import { buildTimelineLayout, clampTimelineTime, findSceneAtTime, formatTimelineTime, getSceneAudioDuration, getSceneLocalTime, getTimelineDuration, pushTimelineHistory, snapshotFromScenes, TimelineLayoutItem, TimelineSnapshot } from "../lib/workbenchState";
+import { buildTimelineLayout, clampTimelineTime, findSceneAtTime, formatTimelineTime, getSceneAudioDuration, getSceneLocalTime, getTimelineDuration, isGaplessSpeechPreview, pushTimelineHistory, resolveGaplessSpeechPlayback, snapshotFromScenes, TimelineLayoutItem, TimelineSnapshot } from "../lib/workbenchState";
 import { SceneList } from "./SceneList";
 import { SceneInspector } from "./SceneInspector";
 import { GenerationQueue } from "./GenerationQueue";
@@ -117,7 +117,18 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   const addToastRef = useRef(addToast);
   useEffect(() => { addToastRef.current = addToast; }, [addToast]);
 
-  const load = async () => { try { const next = await fetchProject(projectId); setProject(next); setSelectedSceneId((current) => current || next.scenes[0]?.sceneId || null); } catch (error) { addToast(error, "error"); } };
+  const load = async (): Promise<Project | null> => {
+    try {
+      const next = await fetchProject(projectId);
+      projectRef.current = next;
+      setProject(next);
+      setSelectedSceneId((current) => current || next.scenes[0]?.sceneId || null);
+      return next;
+    } catch (error) {
+      addToast(error, "error");
+      return null;
+    }
+  };
   useEffect(() => {
     activeProjectIdRef.current = projectId;
     timelineSaveChainRef.current = Promise.resolve();
@@ -484,6 +495,27 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
   const startRun = () => runAction("start", async () => { const next = await startGenerationRun(projectId); setGeneration((current) => reduceRunStarted(current, next)); return next; });
   const submitBatch = async () => { setBatchBusy(true); try { await act(() => submitBatchImageGeneration(projectId, [...selectedSceneIds], batchPrefix), "批量图片任务已提交"); } finally { setBatchBusy(false); } };
   const submitExport = async (allowIncomplete: boolean) => {
+    // Timeline hold/reorder is saved async — flush before snapshotting for export
+    // so the film uses the holds the user just edited, not the previous DB values.
+    try {
+      await timelineSaveChainRef.current;
+    } catch {
+      /* save errors already toasted in applyTimeline */
+    }
+    // One more load so snapshot holds match the just-saved DB row.
+    const fresh = await load();
+    const live = fresh || projectRef.current || project;
+    const totalHold = (live?.scenes || []).reduce(
+      (sum, scene) => sum + Math.max(0, Number(scene.manualHoldSeconds) || 0),
+      0,
+    );
+    const gapless = isGaplessSpeechPreview(live?.config || null);
+    if (totalHold > 0.05 && gapless) {
+      addToast(
+        "当前为整篇连续配音：clip 停留只会冻住画面，旁白不会在镜间插入静音（音画分离）。若需要镜间静音，请改用「逐镜合成」后重做配音再导出。",
+        "info",
+      );
+    }
     const result = await createExport(projectId, allowIncomplete);
     setProject((current) => current ? { ...current, jobs: [...current.jobs, { jobId: result.jobId, taskId: result.taskId, kind: "export", status: result.status, progress: 0 }] } : current);
     if (result.candidateWarnings?.length) addToast(`已提交导出，${result.candidateWarnings.length} 个场景仍使用当前版本`, "info");
@@ -578,26 +610,48 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
       return;
     }
 
-    const item = findSceneAtTime(layoutRef.current, currentTimeRef.current);
-    currentSceneItemRef.current = item;
-    const scene = item ? proj.scenes.find((candidate) => candidate.sceneId === item.sceneId) : null;
-    if (!item || !scene) {
+    const layout = layoutRef.current;
+    const visualItem = findSceneAtTime(layout, currentTimeRef.current);
+    currentSceneItemRef.current = visualItem;
+    if (!visualItem) {
       if (!audio.paused) audio.pause();
       return;
     }
 
-    const localTime = getSceneLocalTime(item, currentTimeRef.current);
-    const inAudioRegion = localTime < item.audioDurationSeconds && Boolean(scene.audioUrl);
-    const playing = isPlayingRef.current;
+    // Gapless (continuous export default): during hold, speech continues into the
+    // next scene — match continuous_av_hold_split. Subtitles still follow the
+    // visual scene (last cue held). Per-scene delivery: pause in hold.
+    const gapless = isGaplessSpeechPreview((proj.config || {}) as Record<string, unknown>);
+    let speechSceneId = visualItem.sceneId;
+    let speechLocalTime = getSceneLocalTime(visualItem, currentTimeRef.current);
+    let inAudioRegion = speechLocalTime < visualItem.audioDurationSeconds;
 
-    if (audio.dataset.scene !== item.sceneId) {
+    if (gapless) {
+      const gaplessPlay = resolveGaplessSpeechPlayback(layout, currentTimeRef.current);
+      if (gaplessPlay) {
+        speechSceneId = gaplessPlay.sceneId;
+        speechLocalTime = gaplessPlay.localTime;
+        inAudioRegion = gaplessPlay.playing;
+      }
+    }
+
+    const speechScene = proj.scenes.find((candidate) => candidate.sceneId === speechSceneId) || null;
+    if (!speechScene || !speechScene.audioUrl) {
+      if (!audio.paused) audio.pause();
+      return;
+    }
+    inAudioRegion = inAudioRegion && Boolean(speechScene.audioUrl);
+    const playing = isPlayingRef.current;
+    const localTime = speechLocalTime;
+
+    if (audio.dataset.scene !== speechSceneId) {
       if (!audio.paused) audio.pause();
       playPromiseBusyRef.current = false;
-      audio.dataset.scene = item.sceneId;
-      if (inAudioRegion && scene.audioUrl) {
-        lastSeekRef.current = { sceneId: item.sceneId, localTime };
+      audio.dataset.scene = speechSceneId;
+      if (inAudioRegion && speechScene.audioUrl) {
+        lastSeekRef.current = { sceneId: speechSceneId, localTime };
         audio.dataset.loaded = "0";
-        audio.src = scene.audioUrl;
+        audio.src = speechScene.audioUrl;
         // currentTime is applied in onLoadedMetadata once the new source is ready.
       } else {
         lastSeekRef.current = null;
@@ -610,9 +664,9 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
 
     if (audio.dataset.loaded !== "1") {
       // Wait for onLoadedMetadata; do not re-assign src every frame (restarts download).
-      if (inAudioRegion && scene.audioUrl && !audio.getAttribute("src")) {
-        lastSeekRef.current = { sceneId: item.sceneId, localTime };
-        audio.src = scene.audioUrl;
+      if (inAudioRegion && speechScene.audioUrl && !audio.getAttribute("src")) {
+        lastSeekRef.current = { sceneId: speechSceneId, localTime };
+        audio.src = speechScene.audioUrl;
       }
       if (!playing || !inAudioRegion) {
         if (!audio.paused) audio.pause();
@@ -623,7 +677,7 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
 
     // Apply seek even while paused so resume continues from the scrub position.
     if (inAudioRegion && (opts?.forceSeek || Math.abs((audio.currentTime || 0) - localTime) > AUDIO_DRIFT_THRESHOLD)) {
-      lastSeekRef.current = { sceneId: item.sceneId, localTime };
+      lastSeekRef.current = { sceneId: speechSceneId, localTime };
       try {
         audio.currentTime = localTime;
       } catch {

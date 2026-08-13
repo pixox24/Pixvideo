@@ -26,6 +26,8 @@ async def test_three_scene_failure_retry_and_candidate_flow(tmp_path):
         {"scene-1": FakeSceneBehavior(tts_error="temporary")},
         scene_count=3,
     )
+    # Per-scene TTS so scene-1's tts_error is hit (continuous would one-shot all narrations).
+    repository.update_project("project-1", config={"ttsDelivery": "per_scene"})
 
     first = await service.start("project-1")
     failed = await _wait_terminal(repository, first.run_id)

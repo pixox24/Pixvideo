@@ -28,6 +28,8 @@ export interface Preset {
   splitType: "paragraph" | "line" | "sentence";
   enableMotion?: boolean;
   enableSubtitles?: boolean;
+  /** When true, call image API / workflows; when false (default), use local 素材库. */
+  useApiImage?: boolean;
   minimaxModel?: string;
   emotion?: string;
   mimoModel?: string;

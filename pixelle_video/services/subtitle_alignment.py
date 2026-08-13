@@ -251,3 +251,58 @@ def edge_word_boundaries_to_cues(boundaries: list[dict[str, Any]]) -> list[Align
             end_ms = start_ms + 1
         cues.append(AlignmentCue(text=text, start_ms=start_ms, end_ms=end_ms))
     return cues
+
+
+def slice_alignment_cues(
+    cues: Iterable[AlignmentCue],
+    start: float,
+    end: float,
+) -> list[AlignmentCue]:
+    """
+    Take cues that overlap absolute window ``[start, end)`` seconds and re-zero
+    them to a local timeline starting at 0 (for continuous → per-scene sidecars).
+    """
+    start_s = max(0.0, float(start))
+    end_s = max(start_s + 0.01, float(end))
+    start_ms = int(round(start_s * 1000))
+    end_ms = int(round(end_s * 1000))
+    window = max(1, end_ms - start_ms)
+
+    sliced: list[AlignmentCue] = []
+    for cue in cues:
+        if cue.end_ms <= start_ms or cue.start_ms >= end_ms:
+            continue
+        local_start = max(0, cue.start_ms - start_ms)
+        local_end = min(window, cue.end_ms - start_ms)
+        if local_end <= local_start:
+            local_end = min(window, local_start + 1)
+        sliced.append(
+            AlignmentCue(
+                text=cue.text,
+                start_ms=local_start,
+                end_ms=local_end,
+            )
+        )
+    return sliced
+
+
+def write_sliced_alignment_sidecar(
+    continuous_audio_path: str | Path,
+    scene_audio_path: str | Path,
+    start: float,
+    end: float,
+    *,
+    cues: list[AlignmentCue] | None = None,
+) -> str | None:
+    """
+    Slice full-track alignment (if any) onto a scene audio file.
+
+    Returns sidecar path when written, else None when no cues overlap the window.
+    """
+    source_cues = list(cues) if cues is not None else load_alignment(continuous_audio_path)
+    if not source_cues:
+        return None
+    local = slice_alignment_cues(source_cues, start, end)
+    if not local:
+        return None
+    return save_alignment(scene_audio_path, local)

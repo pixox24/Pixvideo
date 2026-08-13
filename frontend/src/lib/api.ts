@@ -28,6 +28,13 @@ export const requestJson = fetchJson;
 export function formatApiErrorValue(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim()) return value;
 
+  // Error / DOMException / fetch failures often land here via addToast(error).
+  if (value instanceof Error) {
+    const msg = value.message?.trim();
+    if (msg && msg !== "{}" && msg !== "null" && msg !== "undefined") return msg;
+    return undefined;
+  }
+
   if (Array.isArray(value)) {
     const messages = value
       .map((item) => {
@@ -47,17 +54,23 @@ export function formatApiErrorValue(value: unknown): string | undefined {
   }
 
   if (value && typeof value === "object") {
-    const nested = value as { detail?: unknown; error?: unknown; message?: unknown };
+    const nested = value as { detail?: unknown; error?: unknown; message?: unknown; statusText?: unknown };
     const nestedMessage = (
       formatApiErrorValue(nested.detail) ||
       formatApiErrorValue(nested.error) ||
-      formatApiErrorValue(nested.message)
+      formatApiErrorValue(nested.message) ||
+      (typeof nested.statusText === "string" ? nested.statusText : undefined)
     );
     if (nestedMessage) return nestedMessage;
+    // Avoid toast showing bare "{}" for empty FastAPI/network bodies.
     try {
-      return JSON.stringify(value);
+      const keys = Object.keys(value as object);
+      if (keys.length === 0) return undefined;
+      const text = JSON.stringify(value);
+      if (!text || text === "{}" || text === "[]" || text === "null") return undefined;
+      return text;
     } catch {
-      return "未知错误";
+      return undefined;
     }
   }
 
@@ -290,6 +303,7 @@ function buildVideoPayload(input: any) {
     image_motion_enabled: Boolean(input.enableMotion),
     subtitle_enabled: input.enableSubtitles !== false,
     subtitle_style: subtitleStyle,
+    use_api_image: Boolean(input.useApiImage),
     tts_inference_mode: ttsMode,
     tts_voice: input.voice || undefined,
     tts_speed: input.speed,

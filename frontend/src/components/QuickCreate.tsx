@@ -89,6 +89,11 @@ type FieldErrors = Partial<Record<"title" | "content" | "review" | "tts", string
 
 const DEFAULT_PREVIEW_TTS_TEXT = "这是一段 TTS 试听文案，用来检查音色、语速和发音效果。";
 const QUICK_CREATE_DRAFT_KEY = "pixvideo.quick-create.draft.v1";
+/** Sentinel for MiniMax free-form voice_id (clone / design / unlisted system IDs). */
+const CUSTOM_VOICE_OPTION_VALUE = "__custom__";
+
+const isKnownVoiceOption = (mode: keyof typeof VOICE_OPTIONS, voiceId: string) =>
+  VOICE_OPTIONS[mode].some((item) => item.id === voiceId);
 
 type KeywordStatus = "idle" | "loading" | "ready" | "stale" | "error";
 type KeywordSuggestion = { word: string; color: string };
@@ -368,6 +373,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   // Image motion composition states
   const [enableMotion, setEnableMotion] = useState(true);
   const [enableSubtitles, setEnableSubtitles] = useState(true);
+  /** API 生图开关：关闭（默认）时使用本地素材库 */
+  const [useApiImage, setUseApiImage] = useState(false);
   const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(DEFAULT_SUBTITLE_STYLE);
   const [keywordPreferences, setKeywordPreferences] = useState<KeywordPreferences>(DEFAULT_KEYWORD_PREFERENCES);
   const [aiKeywordSuggestions, setAiKeywordSuggestions] = useState<KeywordSuggestion[]>([]);
@@ -553,6 +560,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           if (typeof draft.promptPrefix === "string") setPromptPrefix(draft.promptPrefix);
           if (typeof draft.enableMotion === "boolean") setEnableMotion(draft.enableMotion);
           if (typeof draft.enableSubtitles === "boolean") setEnableSubtitles(draft.enableSubtitles);
+          if (typeof draft.useApiImage === "boolean") setUseApiImage(draft.useApiImage);
           if (typeof draft.imageAspectRatio === "string") setImageAspectRatio(draft.imageAspectRatio);
           if (typeof draft.imageWidth === "number") setImageWidth(draft.imageWidth);
           if (typeof draft.imageHeight === "number") setImageHeight(draft.imageHeight);
@@ -618,6 +626,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         promptPrefix,
         enableMotion,
         enableSubtitles,
+        useApiImage,
         imageAspectRatio,
         imageWidth,
         imageHeight,
@@ -629,7 +638,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setDraftSavedAt(savedAt);
     }, 500);
     return () => window.clearTimeout(timeoutId);
-  }, [mode, title, aiTopic, aiSceneCount, aiSceneCountTouched, suggestedSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, reuseAssetsEnabled, keywordPreferences]);
+  }, [mode, title, aiTopic, aiSceneCount, aiSceneCountTouched, suggestedSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, useApiImage, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, reuseAssetsEnabled, keywordPreferences]);
 
   // Invalidate the review whenever a submitted production setting changes.
   React.useEffect(() => {
@@ -642,7 +651,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       return;
     }
     setReviewConfirmed(false);
-  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, imageWidth, imageHeight, subtitleStyle]);
+  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, useApiImage, imageWidth, imageHeight, subtitleStyle]);
 
   React.useEffect(() => {
     if (!copyCharCountTouched) {
@@ -989,6 +998,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           width: imageGenSize[0],
           height: imageGenSize[1],
           workflow: workflowId || undefined,
+          use_api_image: useApiImage,
         }),
       });
       const data = await response.json();
@@ -1173,6 +1183,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setSplitType(activePreset.splitType);
       if (activePreset.enableMotion !== undefined) setEnableMotion(activePreset.enableMotion);
       if (activePreset.enableSubtitles !== undefined) setEnableSubtitles(activePreset.enableSubtitles);
+      if (activePreset.useApiImage !== undefined) setUseApiImage(Boolean(activePreset.useApiImage));
       setSubtitleStyle(normalizeSubtitleStyle(activePreset.subtitleStyle));
       setMinimaxModel(activePreset.minimaxModel || "speech-2.8-turbo");
       setEmotion(activePreset.emotion || "");
@@ -1475,6 +1486,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     if (ttsMode === "mimo" && serviceReady && !serviceReady.mimo) {
       errors.tts = "MiMo 未配置，请前往设置填写 Key，或改用 Edge 配音";
     }
+    if (useApiImage && serviceReady && !serviceReady.image) {
+      errors.review = "已开启 API 生图但未配置图像服务，请前往设置填写，或关闭开关改用素材库";
+    }
     if (
       ttsMode === "mimo" &&
       String(mimoModel || "").includes("voicedesign") &&
@@ -1561,6 +1575,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         promptPrefix,
         enableMotion,
         enableSubtitles,
+        useApiImage,
         subtitleStyle,
         splitType,
         reuseTaskId: mode === "batch" ? undefined : effectiveReuseSourceTaskId,
@@ -1640,6 +1655,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       splitType,
       enableMotion,
       enableSubtitles,
+      useApiImage,
       subtitleStyle,
       minimaxModel,
       emotion: emotion || undefined,
@@ -1739,7 +1755,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const showReviewStep = expertMode || wizardStep === "review";
   const contentReady = Boolean(title.trim()) && buildScenesForRender().length > 0;
   const styleReady = Boolean(workflowId);
-  const voiceReady = Boolean(voice);
+  const voiceReady = Boolean(String(voice || "").trim());
   const goWizard = (step: WizardStepId) => {
     setWizardStep(step);
     window.requestAnimationFrame(() => {
@@ -2672,18 +2688,61 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
                 选择合成音色及风格 / Voice Model
               </label>
-              <Select
-                value={voice}
-                onChange={(e) => setVoice(e.target.value)}
-                className="w-full bg-[#17181c] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-              >
-                {VOICE_OPTIONS[ttsMode].map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </Select>
+              {(() => {
+                const knownVoice = isKnownVoiceOption(ttsMode, voice);
+                const selectValue =
+                  ttsMode === "minimax" && !knownVoice ? CUSTOM_VOICE_OPTION_VALUE : voice;
+                return (
+                  <Select
+                    value={selectValue}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (next === CUSTOM_VOICE_OPTION_VALUE) {
+                        // Keep existing free-form ID; clear only when leaving a preset.
+                        setVoice(knownVoice ? "" : voice);
+                        return;
+                      }
+                      setVoice(next);
+                    }}
+                    className="w-full bg-[#17181c] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  >
+                    {VOICE_OPTIONS[ttsMode].map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                    {ttsMode === "minimax" && (
+                      <option value={CUSTOM_VOICE_OPTION_VALUE}>
+                        自定义 Voice ID…
+                      </option>
+                    )}
+                  </Select>
+                );
+              })()}
             </div>
+
+            {/* MiniMax custom voice_id (clone / design / unlisted system IDs) */}
+            {ttsMode === "minimax" && !isKnownVoiceOption("minimax", voice) && (
+              <div className="space-y-1.5 rounded border border-amber-500/20 bg-amber-500/5 p-2">
+                <label className="block text-[9px] text-amber-400/90 font-mono uppercase tracking-wider">
+                  自定义 Voice ID
+                </label>
+                <input
+                  type="text"
+                  value={voice}
+                  onChange={(e) => setVoice(e.target.value.trimStart())}
+                  onBlur={() => setVoice(voice.trim())}
+                  placeholder="例如复刻后的 my_brand_voice_01"
+                  spellCheck={false}
+                  autoComplete="off"
+                  className="w-full bg-[#101114] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 font-mono placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
+                />
+                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  填入 MiniMax 账号下已存在的音色 ID（系统 / 复刻 / 文生）。需先在 MiniMax
+                  控制台或 API 完成音色复刻/设计；未注册的 ID 合成会失败。建议 8–256 字符、字母开头。
+                </p>
+              </div>
+            )}
 
             {/* Sub options if MiniMax */}
             {ttsMode === "minimax" && (
@@ -3010,8 +3069,53 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           </button>
         </div>
 
+        {/* Primary control: API image gen vs local material library — always visible at top of style card */}
+        <div
+          className={`rounded-md border p-3 transition-colors ${
+            useApiImage
+              ? "border-amber-500/40 bg-amber-500/10 ring-1 ring-amber-500/20"
+              : "border-zinc-700 bg-[#101114]"
+          }`}
+        >
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={useApiImage}
+              onChange={(e) => setUseApiImage(e.target.checked)}
+              className="mt-0.5 accent-amber-500 w-4 h-4 rounded shrink-0"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold text-zinc-100">
+                  使用 API 图片生成
+                </span>
+                <span
+                  className={`text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                    useApiImage
+                      ? "border-amber-500/50 text-amber-300 bg-amber-500/10"
+                      : "border-zinc-600 text-zinc-400"
+                  }`}
+                >
+                  {useApiImage ? "当前：API 生图" : "当前：素材库"}
+                </span>
+              </div>
+              <p className="mt-1.5 text-[11px] text-zinc-400 leading-relaxed">
+                {useApiImage
+                  ? "已开启：按分镜提示词调用图像 API / 工作流出图（需在「设置」中配置图像服务密钥）。"
+                  : "默认关闭：从本地「素材库」按成片画幅（横 16:9 / 竖 9:16）选静帧，不调用生图 API。勾选上方开关后才会走 API。"}
+              </p>
+            </div>
+          </label>
+        </div>
+
         {/* Always-visible essentials: aspect + motion/subtitle toggles appear below; advanced block holds prefix/test/subtitle detail */}
         <div className={showAdvancedProduction ? "space-y-3" : "hidden"}>
+          {!useApiImage && (
+            <div className="rounded border border-zinc-800 bg-[#101114] px-3 py-2 text-[10px] text-zinc-500 leading-relaxed">
+              当前为<strong className="text-zinc-400"> 素材库 </strong>模式：分镜画面从本地素材库选取。
+              画风前缀与测试出图主要用于开启「API 图片生成」后的调试；测试出图在关闭时也会采样素材库。
+            </div>
+          )}
           <div>
             <div className="flex items-center justify-between gap-3 mb-1">
               <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
@@ -3114,7 +3218,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   ))}
                 </Select>
                 <p className="mt-1 text-[10px] text-zinc-600 leading-relaxed">
-                  成片画布默认 1080×1920@30。生图会映射到 API 白名单（当前约 {imageGenSize[0]}×{imageGenSize[1]}），导出再 cover 到成片尺寸。
+                  {useApiImage
+                    ? `成片画布默认 1080×1920@30。生图会映射到 API 白名单（当前约 ${imageGenSize[0]}×${imageGenSize[1]}），导出再 cover 到成片尺寸。`
+                    : "成片画布默认 1080×1920@30。当前为素材库模式，将按横/竖画幅从本地素材库选图，无需 API 白名单映射。"}
                 </p>
                 {isAdvancedCanvas && (
                   <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
@@ -3174,9 +3280,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               </div>
               <div className="sm:col-span-2 flex items-end">
                 <p className="text-[10px] text-zinc-600 leading-relaxed pb-1">
-                  生图请求尺寸（映射）：
-                  <span className="text-zinc-400 font-mono"> {imageGenSize[0]}×{imageGenSize[1]}</span>
-                  {" "}· 成片编码：
+                  {useApiImage ? (
+                    <>
+                      生图请求尺寸（映射）：
+                      <span className="text-zinc-400 font-mono"> {imageGenSize[0]}×{imageGenSize[1]}</span>
+                      {" "}·{" "}
+                    </>
+                  ) : (
+                    <>画面来源：<span className="text-zinc-400">素材库</span> · </>
+                  )}
+                  成片编码：
                   <span className="text-zinc-400 font-mono"> {imageWidth}×{imageHeight}@{videoFps}</span>
                 </p>
               </div>
@@ -3545,11 +3658,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       </div>
 
       {/* ComfyUI Media Workflows selections */}
-      <div className="ui-card space-y-4 !p-4">
+      <div className={`ui-card space-y-4 !p-4 ${useApiImage ? "" : "opacity-60"}`}>
         <div className="flex items-center justify-between gap-3">
           <h3 className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
             <Workflow className="h-4 w-4 text-amber-500" />
             画面工作流
+            {!useApiImage && (
+              <span className="ml-1 text-[9px] font-normal text-zinc-600">（素材库模式下不调用）</span>
+            )}
           </h3>
           <button
             type="button"
@@ -3615,9 +3731,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             ["视频数量", `${reviewVideoCount}`],
             ["分镜总数", `${reviewSceneCount}`],
             ["配音", `${ttsMode} · ${voice}`],
-            ["工作流", currentWorkflow?.name || workflowId || "未选择"],
+            ["画面来源", useApiImage ? `API 生图 · ${currentWorkflow?.name || workflowId || "默认"}` : "本地素材库"],
             ["成片", `${imageWidth}×${imageHeight}@${videoFps}`],
-            ["生图映射", `${imageGenSize[0]}×${imageGenSize[1]}`],
+            ["生图映射", useApiImage ? `${imageGenSize[0]}×${imageGenSize[1]}` : "—（素材库）"],
             ["字幕", enableSubtitles ? `${subtitleStyle.fontSize}px · ${subtitleStyle.fontFamily || "自动中文字体"}` : "关闭"],
             ["背景音乐", selectedBgm?.name || "无背景音乐"],
             ["生成策略", effectiveReuseSourceTaskId ? `复用素材${reuseLabel ? ` · ${reuseLabel}` : ""}` : "完整生成"],
@@ -3645,6 +3761,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             />
             <span>
               沿用历史素材（配音/图片优先复用）
+              <span className="block text-[10px] text-zinc-500 mt-0.5 leading-relaxed">
+                新建项目时从所选历史任务拷贝配音/画面（可多次新建）。若已在作品库「复制为项目」，请直接打开该工作台改风格后点「开始生成」，无需再勾此项重复创建。
+              </span>
               {reuseLabel && (
                 <span className="block text-xs text-zinc-500 mt-0.5">来源：{reuseLabel}</span>
               )}

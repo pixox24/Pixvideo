@@ -65,6 +65,8 @@ class StoryboardConfig:
     image_motion_mode: str = "auto"            # Motion selection mode
     image_motion_strength: str = "subtle"      # Motion strength
     image_fit_mode: str = "cover"              # Image fit mode for plain image composition
+    # False (default): pick frames from local 素材库; True: OpenAI-compatible / Comfy workflow API
+    use_api_image: bool = False
 
 
 @dataclass

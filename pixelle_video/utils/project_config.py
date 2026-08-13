@@ -32,6 +32,7 @@ _CONFIG_KEY_PAIRS: tuple[tuple[str, str], ...] = (
     ("subtitleStyle", "subtitle_style"),
     ("workflowId", "media_workflow"),
     ("bookendEnabled", "bookend_enabled"),
+    ("useApiImage", "use_api_image"),
 )
 
 

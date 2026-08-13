@@ -87,3 +87,5 @@ examples/
 repositories/
 
 *.out
+fastapi.pid
+streamlit.pid

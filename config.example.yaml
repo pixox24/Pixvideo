@@ -7,6 +7,11 @@ project_name: Pixelle-Video
 # Optional local workbench data directory override
 # workbench_dir: data/workbench
 
+# Workbench generation concurrency (project run + batch image jobs)
+# scene_concurrency: how many scenes may hit the image API at once (1–16, default 6)
+workbench:
+  scene_concurrency: 6
+
 # ==================== LLM Configuration ====================
 # Supports any OpenAI SDK compatible API
 llm:

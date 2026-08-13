@@ -199,6 +199,13 @@ class VideoGenerateRequest(BaseModel):
     image_motion_mode: str = Field("auto", description="Image motion mode")
     image_motion_strength: str = Field("subtle", description="Image motion strength")
     image_fit_mode: str = Field("cover", description="Image fit mode")
+    use_api_image: bool = Field(
+        False,
+        description=(
+            "When true, generate images via configured image API / workflows. "
+            "When false (default), pick stills from the local material library (素材库)."
+        ),
+    )
     
     # === BGM ===
     bgm_path: Optional[str] = Field(None, description="Background music path")

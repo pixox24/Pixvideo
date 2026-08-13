@@ -144,6 +144,7 @@ def _build_video_params(request_body: VideoGenerateRequest, progress_callback=No
         "image_motion_mode": request_body.image_motion_mode,
         "image_motion_strength": request_body.image_motion_strength,
         "image_fit_mode": request_body.image_fit_mode,
+        "use_api_image": bool(request_body.use_api_image),
     }
 
     if request_body.tts_voice:

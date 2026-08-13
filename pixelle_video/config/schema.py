@@ -143,6 +143,16 @@ class SubtitleConfig(BaseModel):
     default_style: Dict[str, Any] = Field(default_factory=dict, description="Default subtitle style")
 
 
+class WorkbenchConfig(BaseModel):
+    """Workbench project generation settings"""
+    scene_concurrency: int = Field(
+        default=6,
+        ge=1,
+        le=16,
+        description="Max scenes generating media in parallel (1–16)",
+    )
+
+
 class PixelleVideoConfig(BaseModel):
     """Pixelle-Video main configuration"""
     project_name: str = Field(default="Pixelle-Video", description="Project name")
@@ -153,6 +163,7 @@ class PixelleVideoConfig(BaseModel):
     quick_create: QuickCreateConfig = Field(default_factory=QuickCreateConfig)
     subtitle: SubtitleConfig = Field(default_factory=SubtitleConfig)
     workbench_dir: Optional[str] = Field(default=None, description="Workbench data directory override")
+    workbench: WorkbenchConfig = Field(default_factory=WorkbenchConfig)
     
     def is_llm_configured(self) -> bool:
         """Check if LLM is properly configured"""

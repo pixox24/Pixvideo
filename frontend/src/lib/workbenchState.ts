@@ -162,6 +162,93 @@ export function getSceneLocalTime(item: TimelineLayoutItem, currentTime: number)
   return Math.max(0, clampNonNegative(currentTime) - item.startSeconds);
 }
 
+/**
+ * Whether workbench export uses gapless speech (音画分离): continuous TTS delivery
+ * (default) muxes narrations without inter-scene hold silence, while video freezes.
+ * Per-scene delivery keeps holds as silence in speech.
+ */
+export function isGaplessSpeechPreview(config?: Record<string, unknown> | null): boolean {
+  const raw = String(
+    config?.ttsDelivery ?? config?.tts_delivery ?? config?.ttsDeliveryMode ?? "continuous",
+  )
+    .toLowerCase()
+    .replace(/-/g, "_");
+  if (["per_scene", "perscene", "segment", "scene", "legacy", "sequential"].includes(raw)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Map real timeline time → gapless speech time.
+ * Holds do not insert silence into speech; during a hold, speech continues into
+ * the next scene (matches export continuous_av_hold_split).
+ */
+export function realTimeToGaplessSpeechTime(
+  layout: TimelineLayoutItem[],
+  realTime: number,
+): number {
+  const t = clampNonNegative(realTime);
+  let speechTime = 0;
+  for (const item of layout) {
+    if (t <= item.startSeconds) break;
+    const into = t - item.startSeconds;
+    const audio = clampNonNegative(item.audioDurationSeconds);
+    if (into <= audio) {
+      return speechTime + into;
+    }
+    // Finished this scene's speech; speech timeline advanced by full audio duration.
+    speechTime += audio;
+    if (t < item.endSeconds) {
+      // Inside hold: remaining time maps into subsequent speech.
+      return speechTime + (into - audio);
+    }
+  }
+  return speechTime;
+}
+
+export interface GaplessSpeechPlayback {
+  sceneId: string;
+  /** Offset within that scene's speech audio. */
+  localTime: number;
+  /** True when speech is active (not past end of all speech). */
+  playing: boolean;
+}
+
+/**
+ * Resolve which scene's speech file to play at real timeline time under gapless rules.
+ */
+export function resolveGaplessSpeechPlayback(
+  layout: TimelineLayoutItem[],
+  realTime: number,
+): GaplessSpeechPlayback | null {
+  if (layout.length === 0) return null;
+  const speechTime = realTimeToGaplessSpeechTime(layout, realTime);
+  let cursor = 0;
+  for (let index = 0; index < layout.length; index += 1) {
+    const item = layout[index]!;
+    const audio = clampNonNegative(item.audioDurationSeconds);
+    const next = cursor + audio;
+    const isLast = index === layout.length - 1;
+    if (speechTime < next || (isLast && audio > 0)) {
+      const local = Math.min(Math.max(0, speechTime - cursor), Math.max(0, audio - 1e-3));
+      const totalSpeech = layout.reduce((sum, row) => sum + clampNonNegative(row.audioDurationSeconds), 0);
+      return {
+        sceneId: item.sceneId,
+        localTime: local,
+        playing: totalSpeech > 0 && speechTime < totalSpeech - 1e-4,
+      };
+    }
+    cursor = next;
+  }
+  const last = layout[layout.length - 1]!;
+  return {
+    sceneId: last.sceneId,
+    localTime: Math.max(0, clampNonNegative(last.audioDurationSeconds) - 1e-3),
+    playing: false,
+  };
+}
+
 export function formatTimelineTime(seconds: number): string {
   const totalCentiseconds = Math.floor(clampNonNegative(seconds) * 100);
   const minutes = Math.floor(totalCentiseconds / 6000);

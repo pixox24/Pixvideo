@@ -89,7 +89,8 @@ SUBTITLE_PRESET_DEFAULTS: dict[str, dict[str, Any]] = {
         "accentColor": "#FBBF24",
         "outlineColor": "#3F2A1D",
         "outlineWidth": 2,
-        "shadow": 2,
+        # Keep glow light; higher values previously became heavy ASS \\blur.
+        "shadow": 1,
         "marginV": 140,
         "maxLines": 2,
         "animation": "fade",
@@ -617,17 +618,188 @@ class SubtitleRenderer:
             lines.append(current)
         return "\n".join(lines[:max_lines])
 
+    @staticmethod
+    def _alignment_is_coarse(cues: list[Any], segments: list[str]) -> bool:
+        """True when TTS cues lack phrase-level timing (e.g. one cue for whole scene)."""
+        if not cues:
+            return True
+        if len(segments) <= 1:
+            return False
+        # MiniMax continuous often stores one sentence-level cue per scene.
+        if len(cues) == 1 and len(segments) > 1:
+            return True
+        if len(cues) * 2 < len(segments):
+            return True
+        return False
+
+    def _proportional_timed(
+        self,
+        segments: list[str],
+        weights: list[int],
+        speech_duration: float,
+    ) -> list[TimedCaptionSegment]:
+        total_weight = sum(weights) or len(segments)
+        timed: list[TimedCaptionSegment] = []
+        cursor = 0.0
+        min_segment = min(0.3, speech_duration / max(len(segments), 1))
+        for index, (segment, weight) in enumerate(zip(segments, weights)):
+            if index == len(segments) - 1:
+                end = speech_duration
+            else:
+                share = speech_duration * (weight / total_weight)
+                end = min(speech_duration, cursor + max(min_segment, share))
+            start = cursor
+            if end <= start:
+                end = min(speech_duration, start + min_segment)
+            timed.append(
+                TimedCaptionSegment(
+                    text=segment,
+                    start=start,
+                    end=end,
+                    weight=weight,
+                )
+            )
+            cursor = end
+        if timed:
+            last = timed[-1]
+            timed[-1] = TimedCaptionSegment(
+                text=last.text,
+                start=last.start,
+                end=speech_duration,
+                weight=last.weight,
+            )
+        return timed
+
+    def _snap_timed_to_silence(
+        self,
+        timed: list[TimedCaptionSegment],
+        audio_path: str | Path,
+        speech_duration: float,
+    ) -> list[TimedCaptionSegment]:
+        """
+        Move internal cue boundaries onto nearby silence onsets.
+
+        Used when word-level alignment is missing/coarse so captions track real
+        breath pauses (e.g. after「…的人。」 before「原来权力的滋味」).
+        """
+        if len(timed) < 2:
+            return timed
+        try:
+            from pixelle_video.services.continuous_tts.split import detect_silence_islands
+        except Exception:
+            return timed
+
+        silences = detect_silence_islands(
+            audio_path,
+            total_duration=speech_duration,
+            min_silence=0.12,
+            noise_db=-28.0,
+        )
+        if not silences:
+            return timed
+
+        total = max(0.05, float(speech_duration))
+        min_span = min(0.25, total / max(len(timed) * 2, 1))
+
+        # Leading silence → first cue starts at speech onset.
+        leading_end = 0.0
+        for sil_start, sil_end in silences:
+            if sil_start <= 0.08:
+                leading_end = max(leading_end, float(sil_end))
+
+        # Trailing silence → last cue ends at last speech (optional trim).
+        trailing_start = total
+        for sil_start, sil_end in silences:
+            if sil_end >= total - 0.08:
+                trailing_start = min(trailing_start, float(sil_start))
+        if trailing_start < leading_end + min_span:
+            trailing_start = total
+
+        # Snap internal cuts (end of timed[0..-2]).
+        cuts = [float(item.end) for item in timed[:-1]]
+        snapped_cuts: list[float] = []
+        for index, cut in enumerate(cuts):
+            prev = leading_end if index == 0 else snapped_cuts[index - 1]
+            low = prev + min_span
+            scenes_after = len(timed) - index - 1
+            high = trailing_start - min_span * max(1, scenes_after)
+            if high <= low:
+                snapped_cuts.append(min(trailing_start - min_span, max(low, cut)))
+                continue
+
+            local_span = float(timed[index].end) - float(timed[index].start)
+            window = max(0.6, min(2.5, local_span * 0.35 + 0.5))
+
+            best_t = cut
+            best_score: tuple[float, float, int] | None = None
+            for sil_start, sil_end in silences:
+                if sil_end < low - 0.05 or sil_start > high + 0.05:
+                    continue
+                sil_len = max(0.0, sil_end - sil_start)
+                for raw_t, priority in (
+                    (sil_end, 0),  # end of silence = next phrase onset
+                    ((sil_start + sil_end) / 2.0, 1),
+                    (sil_start, 2),
+                ):
+                    t = min(high, max(low, float(raw_t)))
+                    dist = abs(t - cut)
+                    if dist > window:
+                        continue
+                    score = (dist, -sil_len, priority)
+                    if best_score is None or score < best_score:
+                        best_score = score
+                        best_t = t
+            snapped_cuts.append(best_t)
+
+        rebuilt: list[TimedCaptionSegment] = []
+        cursor = leading_end if leading_end < total * 0.25 else 0.0
+        for index, item in enumerate(timed):
+            if index < len(snapped_cuts):
+                end = max(cursor + min_span, min(trailing_start, snapped_cuts[index]))
+            else:
+                end = trailing_start if trailing_start < total else total
+            if end <= cursor:
+                end = min(total, cursor + min_span)
+            rebuilt.append(
+                TimedCaptionSegment(
+                    text=item.text,
+                    start=cursor,
+                    end=end if index < len(timed) - 1 else total,
+                    weight=item.weight,
+                )
+            )
+            cursor = rebuilt[-1].end
+        if rebuilt:
+            last = rebuilt[-1]
+            rebuilt[-1] = TimedCaptionSegment(
+                text=last.text,
+                start=last.start,
+                end=total,
+                weight=last.weight,
+            )
+        return rebuilt
+
     def plan_segments(
         self,
         text: str,
         duration: float,
         style: dict[str, Any] | None = None,
         alignment: list[Any] | None = None,
+        *,
+        hold_seconds: float = 0.0,
+        audio_path: str | Path | None = None,
     ) -> list[TimedCaptionSegment]:
         """Build timed segments.
 
-        Prefer TTS alignment cues when available; otherwise fall back to
-        proportional character-weight timing.
+        ``duration`` is the **speech/narration** window used to schedule cues
+        (same contract as workbench preview: audio only, no manual hold).
+
+        Prefer fine TTS alignment (word/phrase cues) when available; otherwise
+        proportional character-weight timing, then optional **silence snap** when
+        ``audio_path`` is provided (MiniMax whole-scene cues count as coarse).
+
+        ``hold_seconds`` keeps the last cue visible after speech ends (preview
+        1B) without stretching earlier cues across the hold.
         """
         from pixelle_video.services.subtitle_alignment import (
             AlignmentCue,
@@ -655,7 +827,8 @@ class SubtitleRenderer:
         if not segments:
             return []
 
-        total_duration = max(0.05, float(duration))
+        speech_duration = max(0.05, float(duration))
+        hold = max(0.0, float(hold_seconds or 0.0))
         weights = [self.effective_weight(segment) for segment in segments]
 
         cues: list[AlignmentCue] = []
@@ -665,46 +838,36 @@ class SubtitleRenderer:
             else:
                 cues = parse_alignment_payload(alignment)
 
-        aligned_times = map_segments_to_alignment(segments, cues, total_duration) if cues else None
-        if aligned_times and len(aligned_times) == len(segments):
-            return [
-                TimedCaptionSegment(
-                    text=segment,
-                    start=start,
-                    end=end,
-                    weight=weight,
-                )
-                for segment, (start, end), weight in zip(segments, aligned_times, weights)
-            ]
-
-        total_weight = sum(weights) or len(segments)
-        timed: list[TimedCaptionSegment] = []
-        cursor = 0.0
-        min_segment = min(0.3, total_duration / max(len(segments), 1))
-        for index, (segment, weight) in enumerate(zip(segments, weights)):
-            if index == len(segments) - 1:
-                end = total_duration
+        coarse = self._alignment_is_coarse(cues, segments)
+        timed: list[TimedCaptionSegment]
+        if cues and not coarse:
+            aligned_times = map_segments_to_alignment(segments, cues, speech_duration)
+            if aligned_times and len(aligned_times) == len(segments):
+                timed = [
+                    TimedCaptionSegment(
+                        text=segment,
+                        start=start,
+                        end=end,
+                        weight=weight,
+                    )
+                    for segment, (start, end), weight in zip(segments, aligned_times, weights)
+                ]
             else:
-                share = total_duration * (weight / total_weight)
-                end = min(total_duration, cursor + max(min_segment, share))
-            start = cursor
-            if end <= start:
-                end = min(total_duration, start + min_segment)
-            timed.append(
-                TimedCaptionSegment(
-                    text=segment,
-                    start=start,
-                    end=end,
-                    weight=weight,
-                )
-            )
-            cursor = end
-        if timed:
+                timed = self._proportional_timed(segments, weights, speech_duration)
+        else:
+            timed = self._proportional_timed(segments, weights, speech_duration)
+
+        # Silence snap when no fine alignment (or alignment was coarse).
+        if audio_path and (coarse or not cues) and len(timed) > 1:
+            timed = self._snap_timed_to_silence(timed, audio_path, speech_duration)
+
+        # Hold: freeze last line only — do not re-proportion earlier cues.
+        if timed and hold > 1e-9:
             last = timed[-1]
             timed[-1] = TimedCaptionSegment(
                 text=last.text,
                 start=last.start,
-                end=total_duration,
+                end=speech_duration + hold,
                 weight=last.weight,
             )
         return timed
@@ -718,21 +881,33 @@ class SubtitleRenderer:
         style: dict[str, Any] | None = None,
         output_dir: str | Path | None = None,
         alignment: list[Any] | None = None,
+        *,
+        hold_seconds: float = 0.0,
+        audio_path: str | Path | None = None,
     ) -> str:
         normalized = self.normalize_style(style)
         font_name = self._font_name(normalized)
-        timed_segments = self.plan_segments(text, duration, normalized, alignment=alignment)
+        timed_segments = self.plan_segments(
+            text,
+            duration,
+            normalized,
+            alignment=alignment,
+            hold_seconds=hold_seconds,
+            audio_path=audio_path,
+        )
         if not timed_segments:
+            total = max(0.05, float(duration) + max(0.0, float(hold_seconds or 0.0)))
             timed_segments = [
                 TimedCaptionSegment(
                     text=self.wrap_text(text, normalized["maxCharsPerLine"], normalized["maxLines"]),
                     start=0.0,
-                    end=max(0.05, float(duration)),
+                    end=total,
                     weight=1,
                 )
             ]
 
         # Soft glow via ASS blur; keep hard Shadow at 0 to avoid double-ghost offset.
+        # Cap blur tightly — high UI shadow used to map to blur≈3–6 and looked "out of focus".
         blur_amount = self._blur_amount(normalized.get("shadow", 0))
         style_shadow = 0
         events: list[str] = []
@@ -771,6 +946,10 @@ class SubtitleRenderer:
             back_colour = self.hex_to_ass_color(normalized.get("backColor") or "#000000", 0)
             border_style = 1
             outline_width = int(normalized.get("strokeWidth", normalized.get("outlineWidth", 0)) or 0)
+            # Zero outline + soft blur = mushy glyphs. Ensure a hard edge for readability.
+            shadow_val = int(normalized.get("shadow", 0) or 0)
+            if outline_width <= 0 and (shadow_val > 0 or blur_amount > 0):
+                outline_width = max(1, min(3, (shadow_val + 1) // 2 or 1))
 
         ass = "\n".join(
             [
@@ -888,15 +1067,19 @@ class SubtitleRenderer:
 
     @staticmethod
     def _blur_amount(shadow: int) -> float:
-        """Map UI shadow (0-12) to ASS \\blur for soft glow, not hard double-ghost."""
+        """Map UI shadow (0-12) to a *light* ASS \\blur (soft edge, not defocus).
+
+        Historical mapping (value*0.55, max 6) made shadow=6 look like out-of-focus
+        captions on 1080p/2K exports. Keep glow subtle; hard edge comes from Outline.
+        """
         try:
             value = int(shadow)
         except (TypeError, ValueError):
             value = 0
         if value <= 0:
             return 0.0
-        # Gentle curve: 1→0.8, 4→2.4, 12→6.0
-        return round(min(6.0, max(0.6, value * 0.55)), 2)
+        # Curve: 1→0.4, 4→0.9, 6→1.2, 12→1.5 (hard cap)
+        return round(min(1.5, max(0.35, value * 0.2)), 2)
 
     def _dialogue_prefix_tags(
         self,
@@ -986,10 +1169,17 @@ class SubtitleRenderer:
             return ""
         fade_in = int(style.get("fadeInMs", 120))
         fade_out = int(style.get("fadeOutMs", 120))
-        # Keep fades within segment length so short cues still appear fully.
-        max_total_ms = max(0, int(segment_duration * 1000) - 40)
-        if fade_in + fade_out > max_total_ms and max_total_ms > 0:
-            scale = max_total_ms / max(fade_in + fade_out, 1)
+        # Short cues: never let fade dominate (e.g. 1.4s cue with fad(400,400)).
+        # Cap each side to 15% of cue length and total fade to 30%.
+        duration_ms = max(0, int(float(segment_duration) * 1000))
+        max_each = max(0, int(duration_ms * 0.15))
+        max_total = max(0, int(duration_ms * 0.30))
+        # Also leave a readable solid middle (~40ms margin for very short clips).
+        max_total = min(max_total, max(0, duration_ms - 40))
+        fade_in = min(fade_in, max_each)
+        fade_out = min(fade_out, max_each)
+        if fade_in + fade_out > max_total and max_total > 0:
+            scale = max_total / max(fade_in + fade_out, 1)
             fade_in = int(fade_in * scale)
             fade_out = int(fade_out * scale)
         if fade_in <= 0 and fade_out <= 0:

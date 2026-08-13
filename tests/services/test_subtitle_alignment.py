@@ -6,6 +6,8 @@ from pixelle_video.services.subtitle_alignment import (
     map_segments_to_alignment,
     parse_alignment_payload,
     save_alignment,
+    slice_alignment_cues,
+    write_sliced_alignment_sidecar,
 )
 from pixelle_video.services.subtitle_renderer import SubtitleRenderer
 
@@ -64,3 +66,51 @@ def test_alignment_sidecar_roundtrip(tmp_path):
     loaded = load_alignment(audio)
     assert [cue.text for cue in loaded] == ["你好", "世界"]
     assert loaded[1].end_ms == 1200
+
+
+def test_slice_alignment_cues_rezeros_to_local_window():
+    cues = [
+        AlignmentCue("甲", 0, 1000),
+        AlignmentCue("乙", 1000, 2500),
+        AlignmentCue("丙", 2500, 4000),
+    ]
+    # Second scene window [1.0s, 2.5s)
+    sliced = slice_alignment_cues(cues, 1.0, 2.5)
+    assert len(sliced) == 1
+    assert sliced[0].text == "乙"
+    assert sliced[0].start_ms == 0
+    assert sliced[0].end_ms == 1500
+
+
+def test_slice_alignment_clips_partial_overlap_at_boundaries():
+    cues = [
+        AlignmentCue("跨界", 800, 1500),
+        AlignmentCue("镜内", 1500, 2200),
+    ]
+    sliced = slice_alignment_cues(cues, 1.0, 2.0)
+    assert len(sliced) == 2
+    assert sliced[0].start_ms == 0  # 800→1000 clipped
+    assert sliced[0].end_ms == 500  # 1500-1000
+    assert sliced[1].start_ms == 500
+    assert sliced[1].end_ms == 1000  # window is 1.0s
+
+
+def test_write_sliced_alignment_sidecar(tmp_path):
+    continuous = tmp_path / "continuous.mp3"
+    scene = tmp_path / "scene.mp3"
+    continuous.write_bytes(b"c")
+    scene.write_bytes(b"s")
+    save_alignment(
+        continuous,
+        [
+            AlignmentCue("一", 0, 1000),
+            AlignmentCue("二", 1000, 3000),
+            AlignmentCue("三", 3000, 4500),
+        ],
+    )
+    written = write_sliced_alignment_sidecar(continuous, scene, 1.0, 3.0)
+    assert written is not None
+    loaded = load_alignment(scene)
+    assert [c.text for c in loaded] == ["二"]
+    assert loaded[0].start_ms == 0
+    assert loaded[0].end_ms == 2000

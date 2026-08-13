@@ -1,6 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractHighlightKeywords, mapApiTask, mapHistoryTask, submitVideoTask } from "./api";
+import {
+  extractHighlightKeywords,
+  formatApiErrorValue,
+  mapApiTask,
+  mapHistoryTask,
+  submitVideoTask,
+} from "./api";
+
+test("formatApiErrorValue avoids bare empty-object toasts", () => {
+  assert.equal(formatApiErrorValue({}), undefined);
+  assert.equal(formatApiErrorValue(new Error("{}")), undefined);
+  assert.equal(formatApiErrorValue(new Error("创建项目失败：UNIQUE")), "创建项目失败：UNIQUE");
+  assert.equal(
+    formatApiErrorValue({ detail: "该历史任务已复制过为项目" }),
+    "该历史任务已复制过为项目",
+  );
+});
 
 test("extractHighlightKeywords forwards style, density and avoid words", async () => {
   const originalFetch = globalThis.fetch;

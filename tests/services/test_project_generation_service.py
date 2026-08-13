@@ -61,7 +61,7 @@ async def _wait_for_terminal(repository, run_id):
 
 @pytest.mark.asyncio
 async def test_serial_tts_then_image_and_duration(tmp_path):
-    """Default continuous delivery: one TTS pass, then per-scene images."""
+    """Default continuous delivery: one TTS pass, then per-scene images (fixture concurrency=1)."""
     provider, _, repository, _, service, scenes = _setup(tmp_path)
     run = await service.start("project-1")
     result = await _wait_for_terminal(repository, run.run_id)
@@ -73,6 +73,41 @@ async def test_serial_tts_then_image_and_duration(tmp_path):
         ("image", "scene-1"),
     ]
     assert repository.get_scene(scenes[0].scene_id).duration_seconds == 1.5
+
+
+@pytest.mark.asyncio
+async def test_parallel_images_after_continuous_tts(tmp_path):
+    """With scene_concurrency>1, image API calls for remaining scenes overlap."""
+    provider, _, repository, _, service, _ = _setup(
+        tmp_path,
+        {
+            "scene-0": FakeSceneBehavior(image_delay=0.05),
+            "scene-1": FakeSceneBehavior(image_delay=0.05),
+            "scene-2": FakeSceneBehavior(image_delay=0.05),
+        },
+        scene_count=3,
+    )
+    service.core.config["workbench"]["scene_concurrency"] = 3
+    # Rebuild jobs semaphore to pick up new concurrency (service already built jobs).
+    service.workbench_jobs._image_concurrency = 3
+    service.workbench_jobs._image_semaphore = asyncio.Semaphore(3)
+
+    run = await service.start("project-1")
+    # After continuous TTS, all three image starts should appear before any finishes.
+    for _ in range(200):
+        image_starts = [c for c in provider.calls if c.operation == "image"]
+        if len(image_starts) >= 3:
+            break
+        await asyncio.sleep(0.005)
+    image_starts = [c for c in provider.calls if c.operation == "image"]
+    assert {c.scene_id for c in image_starts} == {"scene-0", "scene-1", "scene-2"}
+    # Not yet all completed at first simultaneous start window
+    assert len(provider.completed_calls) < 1 + 3  # tts + 3 images eventually
+
+    result = await _wait_for_terminal(repository, run.run_id)
+    assert result.status == GenerationRunStatus.COMPLETED
+    image_done = {c.scene_id for c in provider.completed_calls if c.operation == "image"}
+    assert image_done == {"scene-0", "scene-1", "scene-2"}
 
 
 @pytest.mark.asyncio

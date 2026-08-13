@@ -363,6 +363,7 @@ class PersistenceService:
             "image_motion_mode": config.image_motion_mode,
             "image_motion_strength": config.image_motion_strength,
             "image_fit_mode": config.image_fit_mode,
+            "use_api_image": bool(getattr(config, "use_api_image", False)),
         }
     
     def _dict_to_config(self, data: Dict[str, Any]) -> StoryboardConfig:
@@ -394,6 +395,7 @@ class PersistenceService:
             image_motion_mode=data.get("image_motion_mode", "auto"),
             image_motion_strength=data.get("image_motion_strength", "subtle"),
             image_fit_mode=data.get("image_fit_mode", "cover"),
+            use_api_image=bool(data.get("use_api_image", data.get("useApiImage", False))),
         )
     
     def _frame_to_dict(self, frame: StoryboardFrame) -> Dict[str, Any]:

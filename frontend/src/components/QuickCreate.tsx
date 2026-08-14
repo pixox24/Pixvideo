@@ -1354,6 +1354,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           sceneCount: aiSceneCount,
           splitType,
           ttsDelivery,
+          promptPrefix,
         }),
       });
       const resData = await response.json();
@@ -1589,7 +1590,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             ...taskInput,
             scenes: renderScenes.map((scene) => ({
               ...scene,
-              visualPrompt: scene.visualPrompt.trim() || scene.ttsText,
+              visualPrompt: scene.visualPrompt.trim(),
             })),
           });
           setReviewConfirmed(false);

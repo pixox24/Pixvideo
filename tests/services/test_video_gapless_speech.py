@@ -1,9 +1,12 @@
-"""Tests for continuous A/V hold split (音画分离) export path."""
+"""Tests for continuous A/V hold-aligned export path (preview parity)."""
 
 from __future__ import annotations
 
+import math
 import shutil
+import struct
 import subprocess
+import wave
 from pathlib import Path
 
 import pytest
@@ -80,12 +83,40 @@ def _probe_has_audio(path: Path) -> bool:
     return any(s.get("codec_type") == "audio" for s in probe.get("streams", []))
 
 
+def _extract_mono_wav(video: Path, wav: Path) -> None:
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video),
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "8000",
+            str(wav),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+
+def _rms_at(samples: tuple[int, ...], framerate: int, t: float, win: float = 0.05) -> float:
+    start = int(t * framerate)
+    end = int((t + win) * framerate)
+    chunk = samples[start:end]
+    if not chunk:
+        return 0.0
+    return math.sqrt(sum(x * x for x in chunk) / len(chunk))
+
+
 @pytest.mark.skipif(not _ffmpeg_available(), reason="ffmpeg not installed")
-def test_concat_videos_gapless_speech_keeps_holds_without_mid_silence(tmp_path: Path):
+def test_concat_videos_gapless_speech_keeps_holds_with_mid_silence(tmp_path: Path):
     """
     Two scenes: speech 1.0s + hold 0.5s each.
-    Legacy concat speech track ≈ 3.0s with mid silence.
-    Gapless speech track ≈ 2.0s under 3.0s picture.
+    Export must match preview: silence during each hold window (≈1.0–1.5s),
+    not only trailing silence at the end.
     """
     speech1 = tmp_path / "s1.wav"
     speech2 = tmp_path / "s2.wav"
@@ -97,7 +128,7 @@ def test_concat_videos_gapless_speech_keeps_holds_without_mid_silence(tmp_path: 
     _make_color_video_with_padded_audio(seg1, "red", speech1, total_duration=1.5)
     _make_color_video_with_padded_audio(seg2, "blue", speech2, total_duration=1.5)
 
-    out = tmp_path / "gapless.mp4"
+    out = tmp_path / "aligned.mp4"
     service = VideoService()
     result = service.concat_videos_gapless_speech(
         video_segments=[str(seg1), str(seg2)],
@@ -113,13 +144,17 @@ def test_concat_videos_gapless_speech_keeps_holds_without_mid_silence(tmp_path: 
     # Visual timeline keeps both holds: ~3.0s
     assert 2.85 <= video_duration <= 3.25
 
-    # Extract audio and measure non-silent length roughly via duration of speech concat path
-    # by re-running speech concat helper expectation: pure speech ~2.0s < video ~3.0s
-    pure_speech = tmp_path / "pure.m4a"
-    service._concat_audio_files([str(speech1), str(speech2)], str(pure_speech))
-    speech_duration = _probe_duration(pure_speech)
-    assert 1.85 <= speech_duration <= 2.25
-    assert speech_duration < video_duration - 0.3
+    wav = tmp_path / "out.wav"
+    _extract_mono_wav(out, wav)
+    with wave.open(str(wav), "rb") as handle:
+        framerate = handle.getframerate()
+        raw = handle.readframes(handle.getnframes())
+        samples = struct.unpack("<" + "h" * (len(raw) // 2), raw)
+
+    # Narration playing early; hold silence around t=1.25; next speech after 1.5s
+    assert _rms_at(samples, framerate, 0.2) > 300
+    assert _rms_at(samples, framerate, 1.25) < 300
+    assert _rms_at(samples, framerate, 1.7) > 300
 
 
 @pytest.mark.skipif(not _ffmpeg_available(), reason="ffmpeg not installed")

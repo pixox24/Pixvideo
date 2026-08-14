@@ -283,18 +283,18 @@ class VideoService:
         bookend: Optional[dict] = None,
     ) -> str:
         """
-        Concatenate video segments with gapless speech mux (音画分离).
+        Concatenate video segments with timeline-aligned speech (preview parity).
 
         Visual tracks keep per-scene freeze holds (segments are already longer
-        than pure speech when manual hold is set). Speech is taken from the
-        original narration clips and concatenated without inter-scene silence,
-        then muxed under the full picture timeline.
+        than pure speech when manual hold is set). Pure narration clips are
+        padded with silence to each segment's visual duration, then concatenated
+        so hold regions stay silent between clips — matching workbench preview.
 
         Effect:
-            - Hold freezes the picture only
-            - Narration does not insert mid-sentence silence between scenes
-            - When holds exist, speech may continue over the freeze of the
-              previous scene (intentional A/V split for continuous delivery)
+            - Hold freezes the picture
+            - Hold inserts silence after that scene's narration (not only at end)
+            - Next scene's speech starts only after the previous hold ends
+            - Uses original speech files (not re-encoded segment audio)
 
         Args:
             video_segments: Ordered video segment paths (with embedded holds)
@@ -324,14 +324,14 @@ class VideoService:
                 raise FileNotFoundError(f"Speech audio not found: {path}")
 
         logger.info(
-            "Gapless speech mux (音画分离): {} segments, bgm={}",
+            "Timeline-aligned speech mux (preview hold parity): {} segments, bgm={}",
             len(video_segments),
             bool(bgm_path),
         )
 
         temp_paths: List[str] = []
         try:
-            # 1) Strip padded segment audio (holds pad silence into speech tracks)
+            # 1) Strip segment audio (we rebuild speech from pure narration + hold pads)
             silent_segments: List[str] = []
             for index, segment in enumerate(video_segments):
                 silent_path = self._get_unique_temp_path(
@@ -357,12 +357,37 @@ class VideoService:
                     )
                     self._concat_video_only_filter(silent_segments, video_only)
 
-            # 3) Concatenate pure speech without inter-scene silence
+            # 3) Pad each pure speech clip to its segment duration (hold = trailing silence)
+            #    so clip-to-clip holds match preview instead of stacking silence at the end.
+            aligned_speeches: List[str] = []
+            for index, (segment, speech) in enumerate(zip(video_segments, speech_audios)):
+                segment_duration = max(self._get_video_duration(segment), 0.1)
+                speech_duration = max(self._get_audio_duration(speech), 0.0)
+                # Segment should be audio+hold; never shorten speech below content length
+                # except tiny encoder drift (trim only when speech overshoots segment).
+                target_duration = max(segment_duration, speech_duration, 0.1)
+                padded = self._get_unique_temp_path(
+                    "aligned_speech",
+                    f"{index:02d}.m4a",
+                )
+                self._pad_or_trim_audio_to_duration(speech, target_duration, padded)
+                aligned_speeches.append(padded)
+                temp_paths.append(padded)
+                hold_pad = max(0.0, target_duration - speech_duration)
+                if hold_pad > 0.05:
+                    logger.debug(
+                        "Scene {} speech {:.2f}s + hold pad {:.2f}s → {:.2f}s",
+                        index + 1,
+                        speech_duration,
+                        hold_pad,
+                        target_duration,
+                    )
+
             speech_path = self._get_unique_temp_path("gapless_speech", "speech.m4a")
             temp_paths.append(speech_path)
-            self._concat_audio_files(speech_audios, speech_path)
+            self._concat_audio_files(aligned_speeches, speech_path)
 
-            # 4) Mux gapless speech under full visual timeline
+            # 4) Mux aligned speech under full visual timeline
             muxed = self._get_unique_temp_path("gapless_mux", Path(output).name)
             temp_paths.append(muxed)
 
@@ -404,7 +429,7 @@ class VideoService:
 
             if os.path.abspath(packed) != os.path.abspath(output):
                 shutil.copy(packed, output)
-            logger.success(f"Gapless speech video created: {output}")
+            logger.success(f"Timeline-aligned speech video created: {output}")
             return output
         finally:
             for path in temp_paths:
@@ -413,6 +438,34 @@ class VideoService:
                         os.unlink(path)
                 except OSError:
                     pass
+
+    def _pad_or_trim_audio_to_duration(self, audio: str, duration: float, output: str) -> str:
+        """
+        Force audio to exact duration: pad trailing silence if short, trim if long.
+
+        Used so each scene's pure speech fills its visual segment (audio + hold).
+        """
+        self._ensure_ffmpeg()
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        target = max(float(duration), 0.1)
+        timeout = post_mux_timeout_seconds(target, reencode=True)
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", audio,
+            "-vn",
+            "-af", f"apad=whole_dur={target:.6f}",
+            "-t", f"{target:.6f}",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            output,
+        ]
+        try:
+            run_ffmpeg_compiled(cmd, timeout=timeout, label="pad-trim-speech")
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to pad/trim speech to {target:.3f}s: {exc}"
+            ) from exc
+        return output
 
     def _strip_audio_copy(self, video: str, output: str) -> str:
         """Copy video stream only (drop audio, keep holds/visual length)."""
@@ -521,11 +574,11 @@ class VideoService:
         output: str,
     ) -> str:
         """
-        Mux gapless speech under a (possibly longer) visual timeline.
+        Mux a full speech track under a visual timeline of matching length.
 
-        When holds make video longer than speech, pad speech with trailing silence
-        so duration matches the picture (holds at end stay silent on the speech track).
-        Speech itself has no inter-scene gaps.
+        Callers should already align speech to the picture timeline (including
+        per-scene hold silence). A small trailing pad is applied only if speech
+        is slightly shorter than video due to encoder drift.
         """
         self._ensure_ffmpeg()
         Path(output).parent.mkdir(parents=True, exist_ok=True)
@@ -535,8 +588,7 @@ class VideoService:
         target_duration = max(video_duration, speech_duration, 0.1)
         timeout = post_mux_timeout_seconds(target_duration, reencode=True)
 
-        # Pad speech to video length when holds extend the picture timeline.
-        # Do not insert silence between scenes — only trailing pad if needed.
+        # Safety pad for tiny A/V length drift after per-scene hold alignment.
         cmd = [
             "ffmpeg", "-y",
             "-i", video,
@@ -558,10 +610,10 @@ class VideoService:
             output,
         ]
         try:
-            run_ffmpeg_compiled(cmd, timeout=timeout, label="gapless-mux")
+            run_ffmpeg_compiled(cmd, timeout=timeout, label="aligned-speech-mux")
         except Exception as primary_exc:
             # Stream-copy video when re-encode fails (geometry already compatible)
-            logger.warning("Gapless mux re-encode failed, trying copy video: {}", primary_exc)
+            logger.warning("Aligned speech mux re-encode failed, trying copy video: {}", primary_exc)
             cmd_copy = [
                 "ffmpeg", "-y",
                 "-i", video,
@@ -580,14 +632,14 @@ class VideoService:
                 run_ffmpeg_compiled(
                     cmd_copy,
                     timeout=post_mux_timeout_seconds(target_duration, reencode=False),
-                    label="gapless-mux-copy",
+                    label="aligned-speech-mux-copy",
                 )
             except Exception as secondary_exc:
                 raise RuntimeError(
-                    f"Failed to mux gapless speech onto video: {primary_exc}; {secondary_exc}"
+                    f"Failed to mux aligned speech onto video: {primary_exc}; {secondary_exc}"
                 ) from secondary_exc
         logger.success(
-            "Muxed gapless speech (video={:.2f}s speech={:.2f}s target={:.2f}s): {}",
+            "Muxed aligned speech (video={:.2f}s speech={:.2f}s target={:.2f}s): {}",
             video_duration,
             speech_duration,
             target_duration,

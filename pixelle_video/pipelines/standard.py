@@ -698,9 +698,10 @@ class StandardPipeline(LinearVideoPipeline):
             else:
                 bookend = normalize_bookend_config({**params, **bookend})
 
-            # Continuous TTS / workbench: visual holds must not insert speech silence
-            # between scenes (音画分离). Missing speech must fail hard — silent
-            # fallback reintroduces mid-sentence holds and looks like a "success" bug.
+            # Continuous TTS / workbench: rebuild speech from pure narration clips,
+            # padding each clip to its segment duration so manual holds become
+            # inter-clip silence (same as workbench preview). Missing speech must
+            # fail hard — silent fallback looks like a "success" bug.
             if use_gapless_speech:
                 missing = [
                     index
@@ -713,7 +714,7 @@ class StandardPipeline(LinearVideoPipeline):
                         f"missing or unreadable audio at frame index(es): {missing}"
                     )
                 logger.info(
-                    "Using gapless speech mux (continuous A/V hold split) for {} segments",
+                    "Using timeline-aligned speech mux (preview hold parity) for {} segments",
                     len(segment_paths),
                 )
                 return video_service.concat_videos_gapless_speech(

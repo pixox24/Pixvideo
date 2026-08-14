@@ -787,8 +787,9 @@ class WorkbenchJobService:
             pick_config(config, "ttsDelivery", "tts_delivery", "ttsDeliveryMode", default="")
             or ""
         ).strip().lower().replace("-", "_")
-        # continuous (default for workbench multi-scene): hold freezes picture only;
-        # speech is muxed gaplessly so mid-sentence pauses are not inserted.
+        # continuous (default for workbench multi-scene): rebuild speech from pure
+        # narration files, pad each clip to its segment length so manual holds
+        # become inter-clip silence (matches workbench preview).
         continuous_av_hold_split = tts_delivery in {
             "",
             "continuous",
@@ -796,10 +797,10 @@ class WorkbenchJobService:
             "1",
             "true",
         } or tts_delivery not in {"per_scene", "perscene", "segment", "scene", "legacy", "sequential"}
-        # Explicit per_scene disables gapless speech mux.
+        # Explicit per_scene uses segment-embedded audio via legacy concat.
         if tts_delivery in {"per_scene", "perscene", "segment", "scene", "legacy", "sequential"}:
             continuous_av_hold_split = False
-        # If any hold > 0 or multi-scene continuous, prefer gapless speech path.
+        # continuous always prefers the pure-speech re-mux path.
         if not continuous_av_hold_split and tts_delivery in {"continuous", "cont"}:
             continuous_av_hold_split = True
 

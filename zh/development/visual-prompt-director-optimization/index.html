@@ -1,0 +1,2527 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="AI Video Creator - Generate a short video in 3 minutes">
+      
+      
+        <meta name="author" content="Pixelle.AI">
+      
+      
+        <link rel="canonical" href="https://AIDC-AI.github.io/Pixelle-Video/zh/development/visual-prompt-director-optimization/">
+      
+      
+      
+      
+        
+          <link rel="alternate" href="/Pixelle-Video/" hreflang="en">
+        
+          <link rel="alternate" href="./" hreflang="zh">
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>视觉提示词导演系统优化归档 - Pixelle-Video</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#_1" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../../" title="Pixelle-Video" class="md-header__button md-logo" aria-label="Pixelle-Video" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pixelle-Video
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              视觉提示词导演系统优化归档
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="选择当前语言">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="/Pixelle-Video/" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="zh" class="md-select__link">
+              中文
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="分享" aria-label="分享" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/AIDC-AI/Pixelle-Video" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AIDC-AI/Pixelle-Video
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="标签" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../" class="md-tabs__link">
+        
+  
+  
+    
+  
+  首页
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  快速开始
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../user-guide/web-ui/" class="md-tabs__link">
+          
+  
+  
+  用户指南
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../gallery/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  示例库
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/your-first-video/" class="md-tabs__link">
+          
+  
+  
+  教程
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/api-overview/" class="md-tabs__link">
+          
+  
+  
+  参考
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture/" class="md-tabs__link">
+          
+  
+  
+  开发指南
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../faq/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  常见问题
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../troubleshooting/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  故障排查
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../" title="Pixelle-Video" class="md-nav__button md-logo" aria-label="Pixelle-Video" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Pixelle-Video
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/AIDC-AI/Pixelle-Video" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    AIDC-AI/Pixelle-Video
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速开始
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    快速开始
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    安装
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quick-start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速入门
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    配置
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    用户指南
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    用户指南
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/web-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web 界面
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API 使用
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    工作流定制
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    模板开发
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    示例库
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    教程
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    教程
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/your-first-video/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    生成你的第一个视频
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/custom-style/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    自定义视觉风格
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/voice-cloning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    声音克隆
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    参考
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    参考
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api-overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API 概览
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/config-schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    配置文件详解
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    开发指南
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    开发指南
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    架构设计
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    贡献指南
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    常见问题
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    故障排查
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. 本轮优化结论
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. 优化前的问题
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. 优化前的问题">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 规则没有进入真实请求
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 旧规则过于宽泛
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 旁白污染视觉提示词
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 旧项目会继续复用历史提示词
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. 新的视觉导演规则
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. 新的视觉导演规则">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 单一视觉主张
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 非普通构图
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 统一视觉世界
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 受控色彩
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.5 光影与材质
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#36" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.6 镜头序列节奏
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#37" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.7 文字和污染控制
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-user-prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. 系统提示词与 user prompt 的职责分离
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. 系统提示词与 user prompt 的职责分离">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-system-prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 system prompt 负责什么
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-user-prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 user prompt 负责什么
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 风格前缀的职责
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. 代码改动清单
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. 代码改动清单">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-pixelle_videopromptsimage_generationpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 pixelle_video/prompts/image_generation.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-pixelle_videoprompts__init__py" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 pixelle_video/prompts/__init__.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-pixelle_videoservicesllm_servicepy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 pixelle_video/services/llm_service.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-pixelle_videoutilscontent_generatorspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 pixelle_video/utils/content_generators.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#55-apiroutersworkbenchpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.5 api/routers/workbench.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#56-frontendsrccomponentsquickcreatetsx" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.6 frontend/src/components/QuickCreate.tsx
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#57-apiroutersprojectspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.7 api/routers/projects.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#58-pixelle_videopipelinesstandardpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.8 pixelle_video/pipelines/standard.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#59-pixelle_videoutilsprompt_helperpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.9 pixelle_video/utils/prompt_helper.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. 数据状态和兼容策略
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. 数据状态和兼容策略">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 场景字段定义
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 默认不覆盖用户编辑
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 旧项目如何使用新规则
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. 失败处理策略
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. 失败处理策略">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-llm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 LLM 未配置
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-llm-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 LLM 返回非法 JSON
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-llm-prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.3 LLM 返回旁白作为 prompt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#74" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.4 生成批次失败
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. 验证记录
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. 运维和排查步骤
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. 运维和排查步骤">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.1 修改提示词模板后
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#92" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.2 验证新系统提示词是否生效
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#93" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.3 仍然出现旧版母亲/钥匙提示词
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#94" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.4 仍然出现字幕或可读文字
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. 已知边界与后续建议
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. 已知边界与后续建议">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        当前边界
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        推荐后续迭代
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. 变更文件索引
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="_1">视觉提示词导演系统优化归档<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>归档目的：记录本轮“故事/旁白 → 自动分镜画面提示词 → 图像生成”链路的设计决策、代码改动、兼容边界和验证结果，便于后续追溯、回归和继续演进。</p>
+<p>适用范围：PixVideo 工作台自动分镜、标准视频管线、项目创建时的画面提示词补全，以及 LLM 调用层。</p>
+</blockquote>
+<hr />
+<h2 id="1">1. 本轮优化结论<a class="headerlink" href="#1" title="Permanent link">&para;</a></h2>
+<p>本轮优化解决了两个层面的问题：</p>
+<ol>
+<li><strong>创意质量问题</strong>：旧提示词只要求“场景 + 动作 + 情绪 + 象征元素”，模型容易生成普通的角色摆拍、温馨室内场景或泛化的影视截图。</li>
+<li><strong>工程链路问题</strong>：新的视觉规则曾经只存在于对话文本中，没有进入真实 LLM 请求；空提示词还会被旁白回填，导致自动补全失效；旧项目中的提示词会被持久化并继续复用。</li>
+</ol>
+<p>现在的处理方式是：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>用户旁白
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  ↓
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>视觉导演 system prompt
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  + 当前批次旁白 user prompt
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  ↓
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>严格 JSON image_prompts 数组
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  ↓
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>项目中的 visual_prompt（语义基础提示词）
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  ↓
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>图像 API 边界拼接 promptPrefix
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  ↓
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>最终图像生成提示词
+</span></code></pre></div>
+<p>核心原则：</p>
+<ul>
+<li><strong>系统规则和旁白内容分离</strong>；</li>
+<li><strong>模型负责画面语义，项目配置负责最终风格前缀</strong>；</li>
+<li><strong>空提示词保持为空，不再使用旁白冒充画面提示词</strong>；</li>
+<li><strong>用户手工编辑的非空提示词默认不被覆盖</strong>；</li>
+<li><strong>旧旁白污染值可以被识别并重新生成</strong>。</li>
+</ul>
+<hr />
+<h2 id="2">2. 优化前的问题<a class="headerlink" href="#2" title="Permanent link">&para;</a></h2>
+<h3 id="21">2.1 规则没有进入真实请求<a class="headerlink" href="#21" title="Permanent link">&para;</a></h3>
+<p>旧版代码将全部规则拼接到一个 user prompt 中。此前设计文档中虽然已经提出了“视觉导演规则集”，但它没有真正写入 <code>image_generation.py</code>，也没有通过 <code>system</code> 角色发送给模型。</p>
+<p><code>LLMService</code> 原先主要发送：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">prompt</span><span class="p">}]</span>
+</span></code></pre></div>
+<p>因此，“已经升级了系统提示词”并不等于运行中的模型真的收到了升级后的规则。</p>
+<h3 id="22">2.2 旧规则过于宽泛<a class="headerlink" href="#22" title="Permanent link">&para;</a></h3>
+<p>旧规则重点要求：</p>
+<ul>
+<li>scene；</li>
+<li>character action；</li>
+<li>emotion；</li>
+<li>symbolic elements；</li>
+<li>50–100 个英文单词。</li>
+</ul>
+<p>这类约束可以生成合格的英文图片描述，但无法稳定控制：</p>
+<ul>
+<li>构图是否有冲击力；</li>
+<li>镜头之间是否统一；</li>
+<li>是否出现普通人物摆拍；</li>
+<li>是否有明确光源和阴影；</li>
+<li>是否使用有限色彩；</li>
+<li>是否把抽象概念转成视觉隐喻；</li>
+<li>是否出现文字、字幕、Logo 或水印。</li>
+</ul>
+<p>因此类似下面的结果是旧规则下的合理产物，而不是模型“没有听新规则”：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>A mother gently placing a small key into the open palm of her young daughter...
+</span></code></pre></div>
+<h3 id="23">2.3 旁白污染视觉提示词<a class="headerlink" href="#23" title="Permanent link">&para;</a></h3>
+<p>前端曾经存在以下回退逻辑：</p>
+<div class="language-tsx highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">visualPrompt</span><span class="o">:</span><span class="w"> </span><span class="kt">scene.visualPrompt.trim</span><span class="p">()</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">scene</span><span class="p">.</span><span class="nx">ttsText</span>
+</span></code></pre></div>
+<p>当用户没有手动填写画面提示词时，旁白会被写入 <code>visualPrompt</code>。后端随后认为该场景已经拥有提示词，自动 LLM 补全不会执行。</p>
+<h3 id="24">2.4 旧项目会继续复用历史提示词<a class="headerlink" href="#24" title="Permanent link">&para;</a></h3>
+<p>项目、任务和生成运行都会持久化 <code>visual_prompt</code>。普通重新生成图片只会使用已经保存的提示词，不会重新调用 LLM 设计分镜。</p>
+<p>因此：</p>
+<ul>
+<li>重启服务不会改变已经保存的字符串；</li>
+<li>重新生成图片不会自动重新生成画面提示词；</li>
+<li>旧项目中的 <code>A mother...</code> 仍然可能继续被使用；</li>
+<li>必须新建项目、清空提示词，或增加显式的“重新设计画面提示词”动作。</li>
+</ul>
+<hr />
+<h2 id="3">3. 新的视觉导演规则<a class="headerlink" href="#3" title="Permanent link">&para;</a></h2>
+<p>实际规则位于：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixelle_video/prompts/image_generation.py
+</span></code></pre></div>
+<p>常量：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">IMAGE_PROMPT_GENERATION_SYSTEM_PROMPT</span>
+</span></code></pre></div>
+<h3 id="31">3.1 单一视觉主张<a class="headerlink" href="#31" title="Permanent link">&para;</a></h3>
+<p>每个镜头必须先确定一个主导视觉主张：</p>
+<ul>
+<li>一个视觉隐喻；</li>
+<li>一个关键道具；</li>
+<li>一个空间关系；</li>
+<li>一个光影关系；</li>
+<li>或一个决定情绪的动作瞬间。</li>
+</ul>
+<p>禁止把多个无关象征物堆在同一个镜头里。</p>
+<p>错误方向：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>母亲、钥匙、书架、花园、高跟鞋、束腰、门、很多钥匙全部同时出现。
+</span></code></pre></div>
+<p>正确方向：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>让“选择权”由一个巨大的、被光切开的门缝表达；人物只作为门缝边缘的微小剪影存在。
+</span></code></pre></div>
+<h3 id="32">3.2 非普通构图<a class="headerlink" href="#32" title="Permanent link">&para;</a></h3>
+<p>每个镜头至少使用一种明确构图策略：</p>
+<ul>
+<li>主体边置；</li>
+<li>大面积负空间；</li>
+<li>前景遮挡；</li>
+<li>对角线透视；</li>
+<li>极端俯视或仰视；</li>
+<li>局部特写；</li>
+<li>镜面或倒影；</li>
+<li>门框、窗框、栏杆、树影切割画面；</li>
+<li>尺度失衡；</li>
+<li>超长投影替代人物本体。</li>
+</ul>
+<p>默认禁止：</p>
+<ul>
+<li>人物居中站立；</li>
+<li>面向镜头的证件式构图；</li>
+<li>普通“人物在房间里做动作”；</li>
+<li>平均布光；</li>
+<li>无主次的背景素材堆积。</li>
+</ul>
+<h3 id="33">3.3 统一视觉世界<a class="headerlink" href="#33" title="Permanent link">&para;</a></h3>
+<p>同一组分镜必须共享：</p>
+<ul>
+<li>统一的绘画媒介或材质；</li>
+<li>相近的光影逻辑；</li>
+<li>受控的色彩体系；</li>
+<li>一致的空间气质；</li>
+<li>一致的叙事密度。</li>
+</ul>
+<p>镜头可以轮换景别和构图，但不能每一镜换一种完全不同的画风。</p>
+<h3 id="34">3.4 受控色彩<a class="headerlink" href="#34" title="Permanent link">&para;</a></h3>
+<p>每个镜头必须使用 2–4 个主色，并明确主色关系。</p>
+<p>可用方向包括：</p>
+<ul>
+<li>孤独/夜晚：深靛蓝、青蓝、黑色、少量暖窗光；</li>
+<li>冲突/危险：珊瑚红、酒红、青绿、黑色；</li>
+<li>梦境/异化：紫色、薰衣草色、黑色、少量亮粉；</li>
+<li>警觉/焦虑：酸性黄绿、黑色、锈红；</li>
+<li>温柔/怀旧：奶油黄、灰蓝、珊瑚粉、深墨蓝；</li>
+<li>黑色电影：黑色、白色高光、单一强调色。</li>
+</ul>
+<p>禁止彩虹霓虹、平均照明和无主色画面。</p>
+<h3 id="35">3.5 光影与材质<a class="headerlink" href="#35" title="Permanent link">&para;</a></h3>
+<p>每条 prompt 必须具体写出：</p>
+<ul>
+<li>光源来自哪里；</li>
+<li>光线如何切割空间；</li>
+<li>阴影是否硬边；</li>
+<li>哪一个区域被隐藏；</li>
+<li>使用什么统一材质。</li>
+</ul>
+<p>允许的材质语言：</p>
+<ul>
+<li>纸张颗粒；</li>
+<li>丝网印刷颗粒；</li>
+<li>墨线；</li>
+<li>干刷纹理；</li>
+<li>网点；</li>
+<li>平面色块；</li>
+<li>硬边海报印刷质感。</li>
+</ul>
+<h3 id="36">3.6 镜头序列节奏<a class="headerlink" href="#36" title="Permanent link">&para;</a></h3>
+<p>相邻镜头不应连续使用相同景别或同一种构图。</p>
+<p>优先使用以下节奏：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>环境建立远景
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>→ 人物被空间吞没的中远景
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>→ 道具/肢体局部特写
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>→ 非直译的心理过场
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>→ 具有张力的低角度、顶视或窥视镜头
+</span></code></pre></div>
+<p>每 4–6 个镜头至少有一个非直译镜头，例如：</p>
+<ul>
+<li>空椅子；</li>
+<li>破碎倒影；</li>
+<li>门缝；</li>
+<li>雨水中的倒影；</li>
+<li>植物投影；</li>
+<li>远处的影子；</li>
+<li>被光切断的物件；</li>
+<li>没有角色但能表达心理状态的房间。</li>
+</ul>
+<h3 id="37">3.7 文字和污染控制<a class="headerlink" href="#37" title="Permanent link">&para;</a></h3>
+<p>图像模型提示词明确禁止：</p>
+<ul>
+<li>subtitles；</li>
+<li>captions；</li>
+<li>readable text；</li>
+<li>letters；</li>
+<li>numbers；</li>
+<li>signage；</li>
+<li>UI；</li>
+<li>logos；</li>
+<li>brand marks；</li>
+<li>watermarks。</li>
+</ul>
+<p>旁白仍然用于 TTS 和后期字幕，不得作为画面中的文字内容传给图像模型。</p>
+<hr />
+<h2 id="4-user-prompt">4. 系统提示词与 user prompt 的职责分离<a class="headerlink" href="#4-user-prompt" title="Permanent link">&para;</a></h2>
+<h3 id="41-system-prompt">4.1 system prompt 负责什么<a class="headerlink" href="#41-system-prompt" title="Permanent link">&para;</a></h3>
+<p><code>IMAGE_PROMPT_GENERATION_SYSTEM_PROMPT</code> 负责不可被旁白改变的规则：</p>
+<ul>
+<li>角色定位；</li>
+<li>视觉媒介；</li>
+<li>构图要求；</li>
+<li>色彩要求；</li>
+<li>光影要求；</li>
+<li>风格统一；</li>
+<li>禁止项；</li>
+<li>JSON 输出契约。</li>
+</ul>
+<h3 id="42-user-prompt">4.2 user prompt 负责什么<a class="headerlink" href="#42-user-prompt" title="Permanent link">&para;</a></h3>
+<p><code>build_image_prompt_prompt()</code> 只负责当前请求的数据：</p>
+<ul>
+<li>当前批次的旁白；</li>
+<li>当前批次序号；</li>
+<li>总批次数；</li>
+<li>已完成数量；</li>
+<li>输出数量；</li>
+<li>英文单词数范围；</li>
+<li>JSON 形状。</li>
+</ul>
+<p>user prompt 不再重复整套视觉导演规则，也不注入上一批已经生成的 prompt，避免跨批次提示词泄漏。</p>
+<h3 id="43">4.3 风格前缀的职责<a class="headerlink" href="#43" title="Permanent link">&para;</a></h3>
+<p>前端的 <code>promptPrefix</code> 是用户选择的风格参考，不是场景主体。</p>
+<p>它会被绑定到 system prompt 中，告诉模型：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>这是视觉媒介、调色和时代感约束，不是需要画进画面的物件，也不是可读文字。
+</span></code></pre></div>
+<p>在实际图像 API 边界，已有的 <code>build_image_prompt()</code> 仍负责最终拼接：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>promptPrefix + &quot;, &quot; + visual_prompt
+</span></code></pre></div>
+<p>这样避免：</p>
+<ul>
+<li>LLM 输出中重复加入风格前缀；</li>
+<li>图像 API 再次重复加入风格前缀；</li>
+<li>用户自定义风格与模型默认风格发生无规则竞争。</li>
+</ul>
+<hr />
+<h2 id="5">5. 代码改动清单<a class="headerlink" href="#5" title="Permanent link">&para;</a></h2>
+<h3 id="51-pixelle_videopromptsimage_generationpy">5.1 <code>pixelle_video/prompts/image_generation.py</code><a class="headerlink" href="#51-pixelle_videopromptsimage_generationpy" title="Permanent link">&para;</a></h3>
+<p>改动：</p>
+<ul>
+<li>新增 <code>IMAGE_PROMPT_GENERATION_SYSTEM_PROMPT</code>；</li>
+<li>将原始长模板缩减为 user-side 输入和输出契约；</li>
+<li>新增 <code>build_image_prompt_system_prompt(style_prefix)</code>；</li>
+<li>保留 <code>build_image_prompt_prompt()</code> 和 <code>image_prompts</code> 数组格式，保证兼容已有调用方；</li>
+<li>加入批次元数据，但不传递上一批实际 prompt 内容。</li>
+</ul>
+<h3 id="52-pixelle_videoprompts__init__py">5.2 <code>pixelle_video/prompts/__init__.py</code><a class="headerlink" href="#52-pixelle_videoprompts__init__py" title="Permanent link">&para;</a></h3>
+<p>导出：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">IMAGE_PROMPT_GENERATION_SYSTEM_PROMPT</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">build_image_prompt_system_prompt</span>
+</span></code></pre></div>
+<p>确保生成器只从统一 prompts 包获取规则，避免出现多个隐藏版本。</p>
+<h3 id="53-pixelle_videoservicesllm_servicepy">5.3 <code>pixelle_video/services/llm_service.py</code><a class="headerlink" href="#53-pixelle_videoservicesllm_servicepy" title="Permanent link">&para;</a></h3>
+<p>新增：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">system_prompt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+</span></code></pre></div>
+<p>标准输出和结构化输出都会构造：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">messages</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">system_prompt</span><span class="p">},</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">prompt</span><span class="p">},</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>如果没有传 system prompt，则保留历史单 user message 行为。</p>
+<h3 id="54-pixelle_videoutilscontent_generatorspy">5.4 <code>pixelle_video/utils/content_generators.py</code><a class="headerlink" href="#54-pixelle_videoutilscontent_generatorspy" title="Permanent link">&para;</a></h3>
+<p>改动：</p>
+<ul>
+<li><code>generate_image_prompts()</code> 使用真实 system message；</li>
+<li>支持 <code>style_prefix</code>；</li>
+<li>保留批量生成和重试机制；</li>
+<li>严格校验 <code>image_prompts</code> 是非空字符串数组；</li>
+<li>数量不匹配、空响应、非法 JSON 会触发重试或抛出明确错误；</li>
+<li>不接受字典、空值或混合类型作为有效结果。</li>
+</ul>
+<h3 id="55-apiroutersworkbenchpy">5.5 <code>api/routers/workbench.py</code><a class="headerlink" href="#55-apiroutersworkbenchpy" title="Permanent link">&para;</a></h3>
+<p><code>GenerateScriptRequest</code> 新增可选：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">promptPrefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span></code></pre></div>
+<p><code>/api/generate-script</code> 将前端风格前缀传递给图像提示词生成器。</p>
+<h3 id="56-frontendsrccomponentsquickcreatetsx">5.6 <code>frontend/src/components/QuickCreate.tsx</code><a class="headerlink" href="#56-frontendsrccomponentsquickcreatetsx" title="Permanent link">&para;</a></h3>
+<p>改动：</p>
+<div class="language-tsx highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nx">visualPrompt</span><span class="o">:</span><span class="w"> </span><span class="kt">scene.visualPrompt.trim</span><span class="p">()</span>
+</span></code></pre></div>
+<p>删除旁白回退，确保空视觉提示词仍然为空。</p>
+<p>自动分镜请求也会传递当前 <code>promptPrefix</code>。</p>
+<h3 id="57-apiroutersprojectspy">5.7 <code>api/routers/projects.py</code><a class="headerlink" href="#57-apiroutersprojectspy" title="Permanent link">&para;</a></h3>
+<p>改动：</p>
+<ul>
+<li>新项目创建时识别 <code>visual_prompt == narration</code> 的历史污染值；</li>
+<li>清除污染后触发 LLM 自动生成；</li>
+<li>LLM 未配置或失败时保留空值；</li>
+<li>不再把旁白写入 <code>visual_prompt</code>；</li>
+<li>自动补全支持当前项目的风格前缀；</li>
+<li>保留用户真实编辑过的非空 prompt。</li>
+</ul>
+<h3 id="58-pixelle_videopipelinesstandardpy">5.8 <code>pixelle_video/pipelines/standard.py</code><a class="headerlink" href="#58-pixelle_videopipelinesstandardpy" title="Permanent link">&para;</a></h3>
+<p>改动：</p>
+<ul>
+<li>标准管线识别旁白污染值；</li>
+<li>对真正缺失的提示词调用新视觉导演生成器；</li>
+<li>将风格前缀传入 system prompt；</li>
+<li>普通生成仍然复用真实用户提示词，不做无条件覆盖；</li>
+<li>最终 provider prompt 仍通过既有前缀拼接逻辑生成。</li>
+</ul>
+<h3 id="59-pixelle_videoutilsprompt_helperpy">5.9 <code>pixelle_video/utils/prompt_helper.py</code><a class="headerlink" href="#59-pixelle_videoutilsprompt_helperpy" title="Permanent link">&para;</a></h3>
+<p>新增通用工具：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">normalize_prompt_text</span><span class="p">()</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">is_visual_prompt_same_as_narration</span><span class="p">()</span>
+</span></code></pre></div>
+<p>其中 <code>is_visual_prompt_same_as_narration()</code> 用于识别旧版 <code>visualPrompt || ttsText</code> 造成的污染。</p>
+<hr />
+<h2 id="6">6. 数据状态和兼容策略<a class="headerlink" href="#6" title="Permanent link">&para;</a></h2>
+<h3 id="61">6.1 场景字段定义<a class="headerlink" href="#61" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>narration</code></td>
+<td>TTS 和字幕使用的旁白文本</td>
+</tr>
+<tr>
+<td><code>visual_prompt</code></td>
+<td>LLM 生成或用户编辑的语义画面提示词</td>
+</tr>
+<tr>
+<td><code>promptPrefix</code></td>
+<td>用户选择的统一风格前缀</td>
+</tr>
+<tr>
+<td>provider prompt</td>
+<td>发送图像 API 前拼接完成的最终提示词</td>
+</tr>
+</tbody>
+</table>
+<h3 id="62">6.2 默认不覆盖用户编辑<a class="headerlink" href="#62" title="Permanent link">&para;</a></h3>
+<p>以下情况不会被普通生成流程覆盖：</p>
+<ul>
+<li><code>visual_prompt</code> 非空；</li>
+<li><code>visual_prompt</code> 与旁白不同；</li>
+<li>用户在工作台里手工修改过画面提示词。</li>
+</ul>
+<h3 id="63">6.3 旧项目如何使用新规则<a class="headerlink" href="#63" title="Permanent link">&para;</a></h3>
+<p>已有项目中的旧 prompt 不会因为重启自动改变，这是有意设计，用于保护用户编辑结果。</p>
+<p>重新使用新规则的方法：</p>
+<ol>
+<li>新建项目并重新生成自动分镜；</li>
+<li>在工作台清空需要更新的画面提示词；</li>
+<li>重新执行画面提示词生成动作；</li>
+<li>如果后续扩展“全部重新设计提示词”按钮，应使用显式 force 参数，不改变默认复用语义。</li>
+</ol>
+<p>注意：点击“重新生成图片”只会重新使用当前 prompt，不等同于重新调用 LLM。</p>
+<hr />
+<h2 id="7">7. 失败处理策略<a class="headerlink" href="#7" title="Permanent link">&para;</a></h2>
+<h3 id="71-llm">7.1 LLM 未配置<a class="headerlink" href="#71-llm" title="Permanent link">&para;</a></h3>
+<p>行为：</p>
+<ul>
+<li>记录 warning；</li>
+<li><code>visual_prompt</code> 保持空值；</li>
+<li>不将旁白写入提示词；</li>
+<li>后续生成运行仍可识别该场景为待补全状态。</li>
+</ul>
+<h3 id="72-llm-json">7.2 LLM 返回非法 JSON<a class="headerlink" href="#72-llm-json" title="Permanent link">&para;</a></h3>
+<p>行为：</p>
+<ul>
+<li>清理完整 JSON Markdown fence；</li>
+<li>校验对象、数组、字符串和数量；</li>
+<li>失败时按照重试次数重试；</li>
+<li>最终失败抛出明确异常，避免静默保存错误数据。</li>
+</ul>
+<h3 id="73-llm-prompt">7.3 LLM 返回旁白作为 prompt<a class="headerlink" href="#73-llm-prompt" title="Permanent link">&para;</a></h3>
+<p>如果生成结果与对应旁白完全相同，则该结果不会写入 <code>visual_prompt</code>，场景保持为空并记录失败原因。</p>
+<h3 id="74">7.4 生成批次失败<a class="headerlink" href="#74" title="Permanent link">&para;</a></h3>
+<p>每个批次独立重试。批次上下文只包含：</p>
+<ul>
+<li>批次序号；</li>
+<li>总批次数；</li>
+<li>已完成数量；</li>
+<li>当前批次旁白。</li>
+</ul>
+<p>不把之前生成的 prompt 放进后续 user prompt，避免出现“上一镜的母亲、钥匙、书架”污染下一镜。</p>
+<hr />
+<h2 id="8">8. 验证记录<a class="headerlink" href="#8" title="Permanent link">&para;</a></h2>
+<p>本轮已执行：</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>python<span class="w"> </span>-m<span class="w"> </span>compileall<span class="w"> </span>-q<span class="w"> </span>api<span class="w"> </span>pixelle_video<span class="w"> </span>tests/utils/test_image_prompt_generation.py
+</span></code></pre></div>
+<p>结果：通过。</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/utils/test_image_prompt_generation.py<span class="w"> </span>tests/api/test_projects.py<span class="w"> </span>tests/pipelines/test_standard_composition_config.py
+</span></code></pre></div>
+<p>结果：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>20 passed
+</span></code></pre></div>
+<p>另外已执行：</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/utils/test_image_prompt_generation.py<span class="w"> </span>tests/utils/test_narration_batching.py
+</span></code></pre></div>
+<p>结果：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>13 passed
+</span></code></pre></div>
+<p>项目与生成规划相关测试结果：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>28 passed
+</span></code></pre></div>
+<p>前端检查：</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nb">cd</span><span class="w"> </span>frontend
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>npm<span class="w"> </span>run<span class="w"> </span>lint
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>npm<span class="w"> </span>run<span class="w"> </span>build
+</span></code></pre></div>
+<p>结果：</p>
+<ul>
+<li>TypeScript 检查通过；</li>
+<li>Vite 构建通过；</li>
+<li>仅存在已有的 bundle 体积提示，没有新增构建错误。</li>
+</ul>
+<p>测试文件：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>tests/utils/test_image_prompt_generation.py
+</span></code></pre></div>
+<p>覆盖内容：</p>
+<ul>
+<li>system/user prompt 分离；</li>
+<li>system message 角色验证；</li>
+<li>标准和结构化 LLM 调用；</li>
+<li>严格 JSON 响应验证；</li>
+<li>风格前缀作为 style lock；</li>
+<li>旁白污染识别；</li>
+<li>自动补全失败时保持空值；</li>
+<li>批次之间不泄漏上一批 prompt。</li>
+</ul>
+<hr />
+<h2 id="9">9. 运维和排查步骤<a class="headerlink" href="#9" title="Permanent link">&para;</a></h2>
+<h3 id="91">9.1 修改提示词模板后<a class="headerlink" href="#91" title="Permanent link">&para;</a></h3>
+<p>必须重启后端进程，因为 Python 模块中的提示词常量在进程启动时加载。</p>
+<h3 id="92">9.2 验证新系统提示词是否生效<a class="headerlink" href="#92" title="Permanent link">&para;</a></h3>
+<p>建议检查日志中是否进入：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>Generating image prompts
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>Processing image prompt batch
+</span></code></pre></div>
+<p>并确认实际 LLM 请求同时包含：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>role=system
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>role=user
+</span></code></pre></div>
+<h3 id="93">9.3 仍然出现旧版母亲/钥匙提示词<a class="headerlink" href="#93" title="Permanent link">&para;</a></h3>
+<p>按以下顺序排查：</p>
+<ol>
+<li>是否正在打开旧项目；</li>
+<li>当前场景的 <code>visual_prompt</code> 是否已经持久化；</li>
+<li>是否只是点击了“重新生成图片”，而不是重新生成画面提示词；</li>
+<li>是否前端仍然运行旧 bundle；</li>
+<li>后端服务是否已经重启；</li>
+<li>是否将旁白复制到了视觉提示词输入框。</li>
+</ol>
+<h3 id="94">9.4 仍然出现字幕或可读文字<a class="headerlink" href="#94" title="Permanent link">&para;</a></h3>
+<p>这属于图像模型执行层问题，不是 TTS 字幕层问题。确认：</p>
+<ul>
+<li>图像 prompt 中包含 <code>no readable text, no captions, no watermark</code>；</li>
+<li>旁白没有被拼接进 <code>visual_prompt</code>；</li>
+<li>后期字幕是否由独立字幕渲染器生成；</li>
+<li>当前图像是否是旧版本缓存或旧资产。</li>
+</ul>
+<hr />
+<h2 id="10">10. 已知边界与后续建议<a class="headerlink" href="#10" title="Permanent link">&para;</a></h2>
+<h3 id="_2">当前边界<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<ol>
+<li><code>image_prompts</code> 仍是字符串数组，暂未把 <code>visual_metaphor</code>、<code>composition</code>、<code>lighting_and_palette</code> 作为独立数据库字段保存。</li>
+<li>普通生成流程不会自动覆盖旧项目提示词。</li>
+<li>工作台中的 <code>visual_prompt</code> 是语义基础提示词；最终 provider prompt 还会在图像生成边界拼接 <code>promptPrefix</code>。</li>
+<li>新规则可以显著提高风格一致性，但图像模型本身仍可能偶尔违反文字禁用或构图要求，需要通过结果审核和重新生成处理。</li>
+</ol>
+<h3 id="_3">推荐后续迭代<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<ol>
+<li>增加“重新设计全部画面提示词”按钮；</li>
+<li>增加显式 <code>forceVisualPromptRefresh</code> 参数；</li>
+<li>将结构化导演中间结果保存为版本快照：</li>
+</ol>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="p">{</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="nt">&quot;visualMetaphor&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">  </span><span class="nt">&quot;composition&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">  </span><span class="nt">&quot;lightingAndPalette&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="w">  </span><span class="nt">&quot;imagePrompt&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="w">  </span><span class="nt">&quot;negativePrompt&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="p">}</span>
+</span></code></pre></div>
+<ol>
+<li>在工作台同时显示：</li>
+<li>语义基础提示词；</li>
+<li>风格前缀；</li>
+<li>最终发送给图像 API 的完整 prompt；</li>
+<li>增加 prompt 质量检查器，自动检测：</li>
+<li>是否包含字幕/文字词汇；</li>
+<li>是否缺少光源；</li>
+<li>是否缺少调色盘；</li>
+<li>是否出现居中人物摆拍；</li>
+<li>是否与旁白完全相同；</li>
+<li>为不同项目保存视觉 Bible，避免同一项目在多次补生成时发生材质漂移。</li>
+</ol>
+<hr />
+<h2 id="11">11. 变更文件索引<a class="headerlink" href="#11" title="Permanent link">&para;</a></h2>
+<p>本轮相关文件：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>api/routers/projects.py
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>api/routers/workbench.py
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>frontend/src/components/QuickCreate.tsx
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>pixelle_video/pipelines/standard.py
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>pixelle_video/prompts/__init__.py
+</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>pixelle_video/prompts/image_generation.py
+</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a>pixelle_video/services/llm_service.py
+</span><span id="__span-28-8"><a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>pixelle_video/utils/content_generators.py
+</span><span id="__span-28-9"><a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>pixelle_video/utils/prompt_helper.py
+</span><span id="__span-28-10"><a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>tests/utils/test_image_prompt_generation.py
+</span></code></pre></div>
+<p>本归档文档只记录设计、实现和验证事实，不代表已经创建 Git commit。</p>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="最后更新">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="2026年8月14日 10:31:39 UTC">2026年8月14日 10:31:39</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="创建日期">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="2026年8月14日 10:31:39 UTC">2026年8月14日 10:31:39</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 Pixelle.AI
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/AIDC-AI/Pixelle-Video" target="_blank" rel="noopener" title="GitHub Repository" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

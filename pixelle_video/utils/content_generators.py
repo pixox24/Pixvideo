@@ -588,6 +588,8 @@ async def segment_narration_semantically(
         raise ValueError("Semantic segmentation changed, omitted, or duplicated source narration")
     if len(segments) > max(1, int(target_count)):
         raise ValueError("Semantic segmentation returned more segments than requested")
+    if any(len(re.sub(r"\s+", "", item["text"])) > max_chars for item in segments):
+        raise ValueError("Semantic segmentation left an overlong narration segment")
     return segments
 
 
@@ -772,8 +774,8 @@ async def generate_image_prompts(
     narration batch and count constraints are sent as user content.
     """
     from pixelle_video.prompts import (
-        build_image_prompt_system_prompt,
         build_image_prompt_prompt,
+        build_image_prompt_system_prompt,
     )
 
     if not narrations:

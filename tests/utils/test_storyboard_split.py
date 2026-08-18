@@ -1,12 +1,15 @@
+import pytest
+
+from pixelle_video.utils.content_generators import segment_narration_semantically
 from pixelle_video.utils.storyboard_split import (
+    auto_split_draft,
     build_storyboard_narrations,
     heal_mid_cuts,
     pack_semantic_units,
+    rebalance_long_units,
     soft_expand_by_pause,
     split_draft_by_rule,
 )
-from pixelle_video.utils.content_generators import segment_narration_semantically
-import pytest
 
 
 def test_soft_expand_keeps_pause_on_left():
@@ -67,6 +70,19 @@ def test_auto_split_long_sentence_uses_pause_boundaries_without_char_cutting():
     assert len(scenes) >= 2
     assert "".join(scenes) == text
     assert all(len(scene.replace(" ", "")) >= 12 for scene in scenes)
+
+
+def test_auto_split_unpunctuated_long_copy_uses_rhythm_boundary():
+    text = "今天我们从日历开始规划发布会倒计时并把每一个任务安排到准确的时间线上同时检查人员物料场地和最终确认清单确保发布当天万无一失"
+    scenes = auto_split_draft(text)
+    assert len(scenes) == 2
+    assert max(len(scene.replace(" ", "")) for scene in scenes) <= 52
+    assert "".join(scenes) == text
+
+
+def test_rebalance_packed_unit_does_not_restore_long_scene():
+    text = "甲" * 60
+    assert all(len(scene) <= 52 for scene in rebalance_long_units([text]))
 
 
 def test_sentence_split_keeps_decimal_dates_and_versions_intact():

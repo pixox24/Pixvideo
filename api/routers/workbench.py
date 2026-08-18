@@ -32,14 +32,13 @@ from pixelle_video.services.subtitle_renderer import SUBTITLE_STYLE_DEFAULTS
 from pixelle_video.utils.content_generators import (
     clean_narration_text,
     generate_image_prompts,
-    generate_narrations_from_content,
     generate_narrations_from_topic,
-    split_narration_script,
     segment_narration_semantically,
 )
 from pixelle_video.utils.os_util import resource_exists
 from pixelle_video.utils.storyboard_split import (
     AUTO_MAX_CHARS_PER_SEGMENT,
+    rebalance_long_units,
     soft_expand_by_pause,
     split_draft_by_rule,
 )
@@ -323,12 +322,15 @@ async def _narrations_and_visual_focus_from_confirmed_copy(
     if director_mode == "custom":
         from pixelle_video.utils.storyboard_split import pack_semantic_units
         narrations = pack_semantic_units(source_units, int(target_count or request.sceneCount))
+        narrations = rebalance_long_units(narrations)
     else:
         narrations = source_units or [confirmed_text]
     segmentation_mode = _normalize_segmentation_mode(getattr(request, "segmentationMode", "auto"))
     visual_focuses = [""] * len(narrations)
     text_anchor_hints: list[list[str]] = [[] for _ in narrations]
-    overlong = any(len(re.sub(r"\s+", "", narration)) > 52 for narration in narrations)
+    # Keep the semantic pass available for long source copy even after the
+    # deterministic rhythm fallback has made bounded units.
+    overlong = len(re.sub(r"\s+", "", confirmed_text)) > AUTO_MAX_CHARS_PER_SEGMENT
     if segmentation_mode in {"auto", "llm"} and overlong:
         try:
             semantic_segments = await segment_narration_semantically(
@@ -416,7 +418,7 @@ def _storyboard_analysis_units(
             boundary_reason = "停顿边界"
             visual_focus = ""
         else:
-            boundary_reason = "换行或段落边界"
+            boundary_reason = "语义节拍边界" if len(units) > 1 else "换行或段落边界"
             visual_focus = ""
             text_anchors = []
         if not text_anchors:
@@ -465,7 +467,7 @@ def _storyboard_analysis_warnings(units: list[dict[str, Any]]) -> list[str]:
     warnings: list[str] = []
     if longest_chars > AUTO_MAX_CHARS_PER_SEGMENT:
         warnings.append(f"仍有 {longest_chars} 字的旁白无法在现有边界处安全拆分")
-    if longest_seconds > 10:
+    if longest_seconds > AUTO_MAX_CHARS_PER_SEGMENT * 60 / 260:
         warnings.append(
             f"最长分镜预计 {longest_seconds:.1f} 秒，建议补充停顿标点或启用视觉节拍"
         )
@@ -939,7 +941,7 @@ async def analyze_storyboard(request: StoryboardAnalyzeRequest, pixelle_video: P
 
     used_llm = False
     semantic_metadata: list[dict[str, Any]] = []
-    overlong = any(len(re.sub(r"\s+", "", unit)) > AUTO_MAX_CHARS_PER_SEGMENT for unit in units)
+    overlong = len(re.sub(r"\s+", "", source)) > AUTO_MAX_CHARS_PER_SEGMENT
     if overlong and segmentation_mode in {"auto", "llm"}:
         llm_service = getattr(pixelle_video, "llm", None)
         if llm_service is not None:
@@ -968,6 +970,7 @@ async def analyze_storyboard(request: StoryboardAnalyzeRequest, pixelle_video: P
     if director_mode == "custom":
         from pixelle_video.utils.storyboard_split import pack_semantic_units
         units = pack_semantic_units(units, int(target_count or request.scene_count))
+        units = rebalance_long_units(units)
 
     analyzed_units = _storyboard_analysis_units(units, semantic_metadata=semantic_metadata)
     warnings = _storyboard_analysis_warnings(analyzed_units)

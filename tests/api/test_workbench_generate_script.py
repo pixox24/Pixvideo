@@ -91,3 +91,14 @@ async def test_storyboard_analysis_uses_validated_llm_boundaries_for_long_unit()
     assert result["units"][0]["visualFocus"] == "日历和倒计时标记"
     assert "并把每一个任务安排到准确的时间线上" in "".join(unit["text"] for unit in result["units"])
     assert llm.calls
+
+
+@pytest.mark.asyncio
+async def test_storyboard_analysis_has_no_unbreakable_warning_for_unpunctuated_copy():
+    source = "今天我们从日历开始规划发布会倒计时并把每一个任务安排到准确的时间线上同时检查人员物料场地和最终确认清单确保发布当天万无一失"
+    result = await workbench.analyze_storyboard(
+        workbench.StoryboardAnalyzeRequest(text=source, splitType="auto", segmentationMode="deterministic"),
+        pixelle_video=object(),
+    )
+    assert max(unit["chars"] for unit in result["units"]) <= 52
+    assert not any("无法在现有边界处安全拆分" in warning for warning in result["warnings"])

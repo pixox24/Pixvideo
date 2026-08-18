@@ -15,6 +15,8 @@ export const STORYBOARD_SCENE_MAX = 30;
 const SOFT_EXPAND_MIN_PART = 4;
 export const AUTO_MAX_CHARS_PER_SEGMENT = 52;
 export const AUTO_MIN_CHARS_PER_SEGMENT = 12;
+const RHYTHM_TARGET_CHARS = 36;
+const RHYTHM_MAX_CHARS = 42;
 
 export const DENSITY_CHARS_PER_SCENE: Record<StoryboardDensity, number> = {
   sparse: 60,
@@ -58,6 +60,7 @@ export function splitDraftByRule(text: string, splitType: DraftSplitType): strin
 }
 
 const meaningfulLength = (value: string) => value.replace(/\s+/g, "").length;
+const semanticBreak = /(?:与此同时|这意味着|从而|并且|同时|而且|但是|不过|因此|所以|如果|虽然|随后|后来|其实|最终|此时|此后|只要|因为|不仅|以及|还是|并|而|但|却|让|把|将|进入|开始|最后|其中)/gu;
 
 function splitSentenceUnits(text: string): string[] {
   const units: string[] = [];
@@ -88,7 +91,7 @@ function splitSentenceUnits(text: string): string[] {
 }
 
 function splitLongSentence(sentence: string): string[] {
-  if (meaningfulLength(sentence) <= AUTO_MAX_CHARS_PER_SEGMENT) return [sentence.trim()];
+  if (meaningfulLength(sentence) <= RHYTHM_MAX_CHARS) return [sentence.trim()];
 
   const tokens = sentence.split(/([，,；;：:]+)/).filter(Boolean);
   const parts: string[] = [];
@@ -102,18 +105,13 @@ function splitLongSentence(sentence: string): string[] {
   }
   if (buffer) parts.push(buffer);
 
-  if (
-    parts.length <= 1 ||
-    parts.some((part) => meaningfulLength(part) > AUTO_MAX_CHARS_PER_SEGMENT)
-  ) {
-    return [sentence.trim()];
-  }
+  if (parts.length <= 1) return splitByRhythm(sentence);
 
   const groups: string[] = [];
   buffer = "";
   for (const part of parts) {
     const candidate = `${buffer}${part}`.trim();
-    if (buffer && meaningfulLength(candidate) > AUTO_MAX_CHARS_PER_SEGMENT) {
+    if (buffer && meaningfulLength(candidate) > RHYTHM_MAX_CHARS) {
       groups.push(buffer);
       buffer = part;
     } else {
@@ -126,7 +124,61 @@ function splitLongSentence(sentence: string): string[] {
     groups[groups.length - 2] = `${groups[groups.length - 2]}${groups[groups.length - 1]}`;
     groups.pop();
   }
-  return groups.length ? groups : [sentence.trim()];
+  return groups.some((group) => meaningfulLength(group) > RHYTHM_MAX_CHARS)
+    ? splitByRhythm(sentence)
+    : (groups.length ? groups : [sentence.trim()]);
+}
+
+function splitByRhythm(text: string): string[] {
+  const source = String(text || "").trim();
+  if (meaningfulLength(source) <= RHYTHM_MAX_CHARS) return source ? [source] : [];
+
+  const result: string[] = [];
+  let cursor = 0;
+  while (meaningfulLength(source.slice(cursor)) > RHYTHM_MAX_CHARS) {
+    const limit = Math.min(source.length, cursor + RHYTHM_MAX_CHARS);
+    const candidates: number[] = [];
+    for (let index = cursor; index < limit; index += 1) {
+      if (/[，,；;：:。！？!?…]/.test(source[index] || "") && source.length - index - 1 >= AUTO_MIN_CHARS_PER_SEGMENT) {
+        candidates.push(index + 1);
+      }
+    }
+    semanticBreak.lastIndex = cursor + AUTO_MIN_CHARS_PER_SEGMENT;
+    let match: RegExpExecArray | null;
+    while ((match = semanticBreak.exec(source))) {
+      const position = match.index;
+      if (position > limit) break;
+      if (position >= limit || source.length - position < AUTO_MIN_CHARS_PER_SEGMENT) continue;
+      const previous = source[position - 1] || "";
+      const first = source[position] || "";
+      if (/[A-Za-z0-9]/.test(previous) && /[A-Za-z0-9]/.test(first)) continue;
+      candidates.push(position);
+    }
+
+    let cut = candidates.length
+      ? candidates.reduce((best, position) =>
+        Math.abs(position - cursor - RHYTHM_TARGET_CHARS) < Math.abs(best - cursor - RHYTHM_TARGET_CHARS)
+          ? position
+          : best,
+      candidates[0]!)
+      // ponytail: fixed-width CJK fallback; replace with a tokenizer only if cut quality is measured as a problem.
+      : Math.min(cursor + RHYTHM_TARGET_CHARS, source.length - Math.max(AUTO_MIN_CHARS_PER_SEGMENT, source.length - cursor - RHYTHM_TARGET_CHARS));
+    cut = Math.max(cursor + AUTO_MIN_CHARS_PER_SEGMENT, Math.min(cut, limit));
+    if (cut > 0 && cut < source.length && /[A-Za-z0-9]/.test(source[cut - 1] || "") && /[A-Za-z0-9]/.test(source[cut] || "")) {
+      for (let candidate = cut - 1; candidate >= cursor + AUTO_MIN_CHARS_PER_SEGMENT; candidate -= 1) {
+        if (!(/[A-Za-z0-9]/.test(source[candidate - 1] || "") && /[A-Za-z0-9]/.test(source[candidate] || ""))) {
+          cut = candidate;
+          break;
+        }
+      }
+    }
+    if (cut <= cursor) cut = Math.min(limit, cursor + RHYTHM_TARGET_CHARS);
+    result.push(source.slice(cursor, cut).trim());
+    cursor = cut;
+  }
+  const tail = source.slice(cursor).trim();
+  if (tail) result.push(tail);
+  return result.length ? result : [source];
 }
 
 /** Split only at sentence or explicit pause boundaries; never character-slice. */
@@ -140,6 +192,14 @@ export function autoSplitDraft(text: string): string[] {
     if (clean) units.push(...splitLongSentence(clean));
   }
   return units.length ? units : [trimmed];
+}
+
+/** Keep custom targets soft without allowing a packed unit over the rhythm ceiling. */
+export function rebalanceLongUnits(units: string[]): string[] {
+  return units.flatMap((unit) => {
+    const clean = unit.trim();
+    return meaningfulLength(clean) > RHYTHM_MAX_CHARS ? splitLongSentence(clean) : (clean ? [clean] : []);
+  });
 }
 
 /**
@@ -254,19 +314,22 @@ export function analyzeStoryboardRecommendation(
   });
   let units = splitDraftByRule(text, splitType);
   if (options?.softExpand !== false) units = softExpandByPause(units);
+  units = rebalanceLongUnits(units);
   const longestChars = Math.max(0, ...units.map((unit) => meaningfulLength(unit)));
   const longestSeconds = (longestChars / 260) * 60;
   const warnings: string[] = [];
   if (longestChars > AUTO_MAX_CHARS_PER_SEGMENT) {
     warnings.push(`仍有 ${longestChars} 字的旁白无法在现有标点处安全拆分`);
   }
-  if (longestSeconds > 10) {
+  if (longestSeconds > (AUTO_MAX_CHARS_PER_SEGMENT * 60) / 260) {
     warnings.push(`最长分镜预计 ${longestSeconds.toFixed(1)} 秒，建议启用视觉节拍或补充停顿标点`);
   }
   const targetSceneCount = options?.targetSceneCount == null
     ? null
     : clampSceneCount(options.targetSceneCount, options?.min, options?.max);
-  const actualUnits = targetSceneCount == null ? units : packSemanticUnits(units, targetSceneCount);
+  const actualUnits = rebalanceLongUnits(
+    targetSceneCount == null ? units : packSemanticUnits(units, targetSceneCount),
+  );
   const actualSceneCount = actualUnits.length || 1;
   if (targetSceneCount != null && actualSceneCount !== targetSceneCount) {
     warnings.push(`目标 ${targetSceneCount} 镜，实际采用 ${actualSceneCount} 个自然语义镜头`);
@@ -365,6 +428,7 @@ export function buildStoryboardNarrations(
   let units = splitDraftByRule(text, splitType);
   if (softExpand) units = softExpandByPause(units);
   let packed = packSemanticUnits(units, targetCount);
+  packed = rebalanceLongUnits(packed);
   if (heal) packed = healMidCuts(packed);
   return packed;
 }

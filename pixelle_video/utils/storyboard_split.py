@@ -19,10 +19,15 @@ STORYBOARD_SCENE_MAX = 100
 SOFT_EXPAND_MIN_PART = 4
 AUTO_MAX_CHARS_PER_SEGMENT = 52
 AUTO_MIN_CHARS_PER_SEGMENT = 12
+RHYTHM_TARGET_CHARS = 36
+RHYTHM_MAX_CHARS = 42
 
 _TERMINAL = re.compile(r"[。！？.!?…]+$")
 _PAUSE = re.compile(r"[，,；;]+$")
 _ASCII_LETTER = re.compile(r"[A-Za-z]")
+_SEMANTIC_BREAK = re.compile(
+    r"(?:与此同时|这意味着|从而|并且|同时|而且|但是|不过|因此|所以|如果|虽然|随后|后来|其实|最终|此时|此后|只要|因为|不仅|以及|还是|并|而|但|却|让|把|将|进入|开始|最后|其中)"
+)
 
 
 def clamp_scene_count(value: int, minimum: int = STORYBOARD_SCENE_MIN, maximum: int = STORYBOARD_SCENE_MAX) -> int:
@@ -86,8 +91,8 @@ def _split_sentence_units(text: str) -> list[str]:
 
 
 def _split_long_sentence(sentence: str) -> list[str]:
-    """Split a long sentence only at explicit pause boundaries."""
-    if _meaningful_length(sentence) <= AUTO_MAX_CHARS_PER_SEGMENT:
+    """Split long narration at pauses, semantic joins, then a bounded beat."""
+    if _meaningful_length(sentence) <= RHYTHM_MAX_CHARS:
         return [sentence.strip()]
 
     pieces = [piece for piece in re.split(r"([，,；;：:]+)", sentence) if piece]
@@ -101,14 +106,14 @@ def _split_long_sentence(sentence: str) -> list[str]:
     if buffer:
         parts.append(buffer)
 
-    if len(parts) <= 1 or any(_meaningful_length(part) > AUTO_MAX_CHARS_PER_SEGMENT for part in parts):
-        return [sentence.strip()]
+    if len(parts) <= 1:
+        return _split_by_rhythm(sentence)
 
     groups: list[str] = []
     buffer = ""
     for part in parts:
         candidate = f"{buffer}{part}".strip()
-        if buffer and _meaningful_length(candidate) > AUTO_MAX_CHARS_PER_SEGMENT:
+        if buffer and _meaningful_length(candidate) > RHYTHM_MAX_CHARS:
             groups.append(buffer)
             buffer = part
         else:
@@ -120,7 +125,79 @@ def _split_long_sentence(sentence: str) -> list[str]:
     if len(groups) > 1 and _meaningful_length(groups[-1]) < AUTO_MIN_CHARS_PER_SEGMENT:
         groups[-2] = f"{groups[-2]}{groups[-1]}"
         groups.pop()
+    if any(_meaningful_length(group) > RHYTHM_MAX_CHARS for group in groups):
+        return _split_by_rhythm(sentence)
     return groups or [sentence.strip()]
+
+
+def _split_by_rhythm(text: str) -> list[str]:
+    """Guarantee bounded units when copy omitted punctuation.
+
+    Connector boundaries preserve source text and usually match a natural
+    visual change. The final fixed-width fallback is deliberately bounded so
+    a 60-character unpunctuated sentence cannot become a 14-second scene.
+    """
+    source = str(text or "").strip()
+    if _meaningful_length(source) <= RHYTHM_MAX_CHARS:
+        return [source] if source else []
+
+    result: list[str] = []
+    cursor = 0
+    while _meaningful_length(source[cursor:]) > RHYTHM_MAX_CHARS:
+        limit = min(len(source), cursor + RHYTHM_MAX_CHARS)
+        candidates: list[int] = []
+        for match in re.finditer(r"[，,；;：:。！？!?…]+", source[cursor:limit]):
+            position = cursor + match.end()
+            if position < limit and len(source) - position >= AUTO_MIN_CHARS_PER_SEGMENT:
+                candidates.append(position)
+        for match in _SEMANTIC_BREAK.finditer(source, cursor + AUTO_MIN_CHARS_PER_SEGMENT, limit + 1):
+            position = match.start()
+            if position >= limit or len(source) - position < AUTO_MIN_CHARS_PER_SEGMENT:
+                continue
+            previous = source[position - 1] if position else ""
+            first = source[position] if position < len(source) else ""
+            if previous.isascii() and previous.isalnum() and first.isascii() and first.isalnum():
+                continue
+            candidates.append(position)
+
+        if candidates:
+            cut = min(candidates, key=lambda position: abs((position - cursor) - RHYTHM_TARGET_CHARS))
+        else:
+            # Keep a meaningful tail while staying below the 10-second rhythm
+            # threshold used by the analysis warning.
+            # ponytail: fixed-width CJK fallback; replace with a tokenizer only if cut quality is measured as a problem.
+            cut = min(cursor + RHYTHM_TARGET_CHARS, len(source) - _minimum_tail_length(source, cursor))
+            cut = max(cursor + AUTO_MIN_CHARS_PER_SEGMENT, min(cut, limit))
+            cut = _move_off_ascii_word(source, cut, cursor + AUTO_MIN_CHARS_PER_SEGMENT, limit)
+
+        if cut <= cursor:
+            cut = min(limit, cursor + RHYTHM_TARGET_CHARS)
+        result.append(source[cursor:cut].strip())
+        cursor = cut
+
+    tail = source[cursor:].strip()
+    if tail:
+        result.append(tail)
+    return result or [source]
+
+
+def _minimum_tail_length(source: str, cursor: int) -> int:
+    """Return a tail size without adding another public tuning parameter."""
+    return max(AUTO_MIN_CHARS_PER_SEGMENT, len(source) - cursor - RHYTHM_TARGET_CHARS)
+
+
+def _move_off_ascii_word(source: str, cut: int, minimum: int, maximum: int) -> int:
+    if cut <= 0 or cut >= len(source):
+        return cut
+    if not (source[cut - 1].isascii() and source[cut - 1].isalnum() and source[cut].isascii() and source[cut].isalnum()):
+        return cut
+    for candidate in range(cut - 1, minimum - 1, -1):
+        if not (source[candidate - 1].isascii() and source[candidate - 1].isalnum() and source[candidate].isascii() and source[candidate].isalnum()):
+            return candidate
+    for candidate in range(cut + 1, maximum + 1):
+        if not (source[candidate - 1].isascii() and source[candidate - 1].isalnum() and source[candidate].isascii() and source[candidate].isalnum()):
+            return candidate
+    return cut
 
 
 def auto_split_draft(text: str) -> list[str]:
@@ -136,6 +213,17 @@ def auto_split_draft(text: str) -> list[str]:
         if clean:
             units.extend(_split_long_sentence(clean))
     return units or [trimmed]
+
+
+def rebalance_long_units(units: list[str]) -> list[str]:
+    """Re-split packed custom units without allowing a long tail to return."""
+    result: list[str] = []
+    for unit in units:
+        clean = str(unit or "").strip()
+        if not clean:
+            continue
+        result.extend(_split_long_sentence(clean) if _meaningful_length(clean) > RHYTHM_MAX_CHARS else [clean])
+    return result
 
 
 def soft_expand_by_pause(units: list[str]) -> list[str]:
@@ -244,7 +332,6 @@ def _should_merge_mid_cut(left: str, right: str) -> bool:
         return False
     # Avoid merging two full independent sentences that merely lack periods
     # (both long and right looks like a new sentence start with known openers).
-    sentence_openers = "神心他她你我其其其其这那其其其其"  # weak; use length heuristic
     if len(left) >= 24 and len(right) >= 24 and right_start in "这那其他她你我神心其其":
         # Ambiguous — do not force merge long pairs
         return False
@@ -269,6 +356,7 @@ def build_storyboard_narrations(
     if soft_expand:
         units = soft_expand_by_pause(units)
     packed = pack_semantic_units(units, target_count)
+    packed = rebalance_long_units(packed)
     if heal:
         packed = heal_mid_cuts(packed)
     return packed

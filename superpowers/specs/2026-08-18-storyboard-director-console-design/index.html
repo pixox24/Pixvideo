@@ -12,7 +12,7 @@
         <meta name="author" content="Pixelle.AI">
       
       
-        <link rel="canonical" href="https://AIDC-AI.github.io/Pixelle-Video/superpowers/specs/2026-06-20-bizyair-image-generation-design/">
+        <link rel="canonical" href="https://AIDC-AI.github.io/Pixelle-Video/superpowers/specs/2026-08-18-storyboard-director-console-design/">
       
       
       
@@ -20,7 +20,7 @@
         
           <link rel="alternate" href="./" hreflang="en">
         
-          <link rel="alternate" href="../../../zh/superpowers/specs/2026-06-20-bizyair-image-generation-design/" hreflang="zh">
+          <link rel="alternate" href="../../../zh/superpowers/specs/2026-08-18-storyboard-director-console-design/" hreflang="zh">
         
       
       
@@ -29,7 +29,7 @@
     
     
       
-        <title>BizyAir Image Generation Workflow Design - Pixelle-Video</title>
+        <title>引导式分镜导演台设计 - Pixelle-Video</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#bizyair-image-generation-workflow-design" class="md-skip">
+        <a href="#_1" class="md-skip">
           Skip to content
         </a>
       
@@ -118,7 +118,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              BizyAir Image Generation Workflow Design
+              引导式分镜导演台设计
             
           </span>
         </div>
@@ -171,7 +171,7 @@
           </li>
         
           <li class="md-select__item">
-            <a href="../../../zh/superpowers/specs/2026-06-20-bizyair-image-generation-design/" hreflang="zh" class="md-select__link">
+            <a href="../../../zh/superpowers/specs/2026-08-18-storyboard-director-console-design/" hreflang="zh" class="md-select__link">
               中文
             </a>
           </li>
@@ -1309,10 +1309,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#context" class="md-nav__link">
+  <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Context
+        目标
       
     </span>
   </a>
@@ -1320,10 +1320,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#goal" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Goal
+        非目标
       
     </span>
   </a>
@@ -1331,10 +1331,121 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#non-goals" class="md-nav__link">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Non-Goals
+        用户体验
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="用户体验">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        默认入口
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        生成后状态
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        分镜卡片
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        重新生成动作
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        状态与数据契约
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="状态与数据契约">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        导演配置
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        分析结果
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        镜头编辑状态
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        生成流程
       
     </span>
   </a>
@@ -1342,10 +1453,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#user-experience" class="md-nav__link">
+  <a href="#_14" class="md-nav__link">
     <span class="md-ellipsis">
       
-        User Experience
+        后端接口
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="后端接口">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        分析请求
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        分析响应
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#llm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLM 约束
       
     </span>
   </a>
@@ -1353,10 +1503,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#workflow-definition" class="md-nav__link">
+  <a href="#_17" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Workflow Definition
+        错误与降级
       
     </span>
   </a>
@@ -1364,10 +1514,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
+  <a href="#_18" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Configuration
+        实现边界
       
     </span>
   </a>
@@ -1375,87 +1525,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#bizyair-api-contract" class="md-nav__link">
+  <a href="#_19" class="md-nav__link">
     <span class="md-ellipsis">
       
-        BizyAir API Contract
+        验收与测试
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="验收与测试">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_20" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        前端
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#dimension-validation" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#_21" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Dimension Validation
+        后端与提示词
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#service-design" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#_22" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Service Design
+        回归
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#error-handling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Error Handling
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#concurrency" class="md-nav__link">
+  <a href="#_23" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Concurrency
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#testing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Testing
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#implementation-notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Implementation Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#open-questions-resolved" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Open Questions Resolved
+        分阶段交付
       
     </span>
   </a>
@@ -1482,251 +1605,184 @@
   
 
 
-<h1 id="bizyair-image-generation-workflow-design">BizyAir Image Generation Workflow Design<a class="headerlink" href="#bizyair-image-generation-workflow-design" title="Permanent link">&para;</a></h1>
-<p>Date: 2026-06-20</p>
-<h2 id="context">Context<a class="headerlink" href="#context" title="Permanent link">&para;</a></h2>
-<p>Pixelle-Video currently routes generated illustrations through <code>pixelle_video.media(...)</code>.
-The Web UI discovers image generation options by scanning <code>workflows/&lt;source&gt;/image_*.json</code>
-and showing them in the existing workflow selector. Existing sources include local
-ComfyUI workflows under <code>selfhost/</code> and RunningHub workflows under <code>runninghub/</code>.</p>
-<p>The target BizyAir model is the standard model API documented at:</p>
+<h1 id="_1">引导式分镜导演台设计<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<h2 id="_2">目标<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
+<p>让分镜数量默认由系统根据旁白语义、信息密度和口播节奏自动决定，同时保留用户对节奏和固定数量的控制。生成结果必须让旁白、画面、必要文字锚点和视觉风格保持一致，并且不能覆盖用户已经确认或修改的内容。</p>
+<p>本期采用“引导式导演台”方案：自动导演、节奏倾向、软目标数量、语义分析、分镜列表、字段级锁定和分离的重新生成动作集中在现有内容步骤中完成。</p>
+<h2 id="_3">非目标<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>https://bizyair.cn/modelzoo/bza-image-o2-official/text-to-image?tab=docs</code></li>
-<li><code>https://bizyair.cn/llms/modelzoo/bza-image-o2-official/text-to-image?lang=python</code></li>
+<li>本期不引入可拖拽的多轨时间线。</li>
+<li>本期不建立复杂的镜头语言模板库或镜头运动编辑器。</li>
+<li>本期不替用户强制指定画风；画风前缀仍由用户填写。</li>
+<li>本期不改变已有手工分镜的默认边界。</li>
 </ul>
-<p>This API is a standard Model Zoo task API, not a BizyAir WebApp API. It uses:</p>
+<h2 id="_4">用户体验<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h2>
+<h3 id="_5">默认入口<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<p>导演台默认状态为：</p>
+<div class="language-ts highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nx">directorMode</span><span class="o">:</span><span class="w"> </span><span class="s2">"auto"</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nx">density</span><span class="o">:</span><span class="w"> </span><span class="s2">"standard"</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nx">targetSceneCount</span><span class="o">:</span><span class="w"> </span><span class="kt">null</span>
+</span></code></pre></div>
+<p>界面保留四种互斥选择：</p>
+<ol>
+<li>自动导演 · 稀疏</li>
+<li>自动导演 · 标准（默认）</li>
+<li>自动导演 · 密集</li>
+<li>自定义固定数量</li>
+</ol>
+<p>自动模式由 LLM 决定实际镜头数。稀疏、标准、密集只表达节奏倾向，不把镜头数硬编码为固定值。自定义模式显示数量输入框，数量是软目标而不是字符切分命令。</p>
+<h3 id="_6">生成后状态<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
+<p>点击“生成分镜旁白”后，系统自动完成语义分析、旁白单元生成、视觉锚点提取和画面提示词生成，然后直接进入分镜列表，不因数量偏差阻断流程。</p>
+<p>列表顶部显示：</p>
 <ul>
-<li>Submit task: <code>POST https://api.bizyair.cn/x/v1/modelzoo/tasks/openapi/bza-image-o2-official/text-to-image</code></li>
-<li>Query task: <code>GET https://api.bizyair.cn/x/v1/modelzoo/tasks/openapi/{request_id}</code></li>
+<li>当前节奏模式。</li>
+<li>实际镜头数和预计总时长。</li>
+<li>自定义模式下的目标数量（如果有）。</li>
+<li>数量差异提醒及原因。</li>
 </ul>
-<p>The local working tree already contains partial BizyAir-related code, but that code is shaped around
-the WebApp API (<code>/w/v1/webapp/...</code>, <code>web_app_id</code>, and <code>field_mapping</code>). This design intentionally
-targets the standard Model Zoo API from the supplied documentation.</p>
-<h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
-<p>Add BizyAir as a selectable image generation workflow source.</p>
-<p>Users should be able to select a BizyAir image workflow from the existing "Image Generation"
-workflow dropdown. When selected, Pixelle-Video should generate storyboard illustrations with
-BizyAir while preserving the rest of the video pipeline:</p>
-<ol>
-<li>Generate or split narration.</li>
-<li>Generate image prompts.</li>
-<li>Apply the prompt prefix.</li>
-<li>Generate each illustration with BizyAir.</li>
-<li>Download the returned image URL.</li>
-<li>Compose HTML frames.</li>
-<li>Build video segments and concatenate the final video.</li>
-</ol>
-<h2 id="non-goals">Non-Goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
-<p>The first implementation will not include:</p>
+<p>示例：<code>目标 6 个，实际采用 4 个自然语义镜头；文案只有 4 个独立语义段，已避免生硬切分。</code></p>
+<h3 id="_7">分镜卡片<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h3>
+<p>每个镜头显示并可编辑：</p>
 <ul>
-<li>BizyAir WebApp API support.</li>
-<li>Webhook mode.</li>
-<li>File upload APIs.</li>
-<li>Image-to-image support.</li>
-<li>Video generation through BizyAir.</li>
-<li>Multi-image selection when an endpoint returns more than one image.</li>
-<li>A UI control for <code>quality</code>.</li>
-<li>BizyAir-specific parallel execution.</li>
-<li>A broad provider abstraction for all media backends.</li>
+<li>旁白原文。</li>
+<li>预计口播时长。</li>
+<li>语义焦点 <code>visualFocus</code>。</li>
+<li>必须体现的文字或数字 <code>textAnchors</code>。</li>
+<li>画面提示词。</li>
+<li>锁定状态和人工编辑标记。</li>
 </ul>
-<h2 id="user-experience">User Experience<a class="headerlink" href="#user-experience" title="Permanent link">&para;</a></h2>
-<p>BizyAir appears in the existing workflow selector as a normal workflow option, for example:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>image_o2.json - Bizyair
+<p>用户修改某个字段后，该字段自动标记为人工编辑；后续重新生成不得覆盖该字段。用户也可以显式锁定整镜头。</p>
+<h3 id="_8">重新生成动作<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>重新生成分镜旁白</strong>：重新计算语义边界、镜头数、时长和旁白单元；保留用户编辑或锁定的字段。</li>
+<li><strong>仅重新生成画面</strong>：保留旁白、镜头边界和时长，只更新视觉提示词；保留锁定的画面字段。</li>
+<li><strong>生成未锁定镜头</strong>：跳过锁定镜头，并跳过已人工编辑的字段。</li>
+<li><strong>重新分析</strong>：只更新数量建议、语义焦点、文字锚点和警告，不直接改变用户已经编辑的旁白。</li>
+</ul>
+<h2 id="_9">状态与数据契约<a class="headerlink" href="#_9" title="Permanent link">&para;</a></h2>
+<h3 id="_10">导演配置<a class="headerlink" href="#_10" title="Permanent link">&para;</a></h3>
+<div class="language-ts highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kr">type</span><span class="w"> </span><span class="nx">DirectorMode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"auto"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="s2">"custom"</span><span class="p">;</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kr">type</span><span class="w"> </span><span class="nx">StoryboardDensity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"sparse"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="s2">"standard"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="s2">"dense"</span><span class="p">;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kd">interface</span><span class="w"> </span><span class="nx">StoryboardDirectorConfig</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nx">directorMode</span><span class="o">:</span><span class="w"> </span><span class="kt">DirectorMode</span><span class="p">;</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nx">density</span><span class="o">:</span><span class="w"> </span><span class="kt">StoryboardDensity</span><span class="p">;</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nx">targetSceneCount</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>The user flow is:</p>
+<p>兼容层继续接受已有的 <code>splitType</code>、<code>sceneCount</code> 和手工 <code>scenes</code>。没有新字段的旧项目映射为 <code>auto + standard</code>；明确的旧固定数量映射到 <code>custom</code>，但仍使用自然边界和接近数量提醒规则。</p>
+<h3 id="_11">分析结果<a class="headerlink" href="#_11" title="Permanent link">&para;</a></h3>
+<div class="language-ts highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">interface</span><span class="w"> </span><span class="nx">StoryboardAnalysis</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nx">recommendedSceneCount</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nx">actualSceneCount</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nx">targetSceneCount</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nx">density</span><span class="o">:</span><span class="w"> </span><span class="kt">StoryboardDensity</span><span class="p">;</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nx">estimatedDurationSeconds</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">;</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nx">semanticUnits</span><span class="o">:</span><span class="w"> </span><span class="kt">Array</span><span class="o">&lt;</span><span class="p">{</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nx">narration</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nx">reason</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nx">visualFocus</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">    </span><span class="nx">textAnchors</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">[];</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nx">estimatedDurationSeconds</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">;</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span><span class="p">}</span><span class="o">&gt;</span><span class="p">;</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span><span class="nx">warnings</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">[];</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="p">}</span>
+</span></code></pre></div>
+<h3 id="_12">镜头编辑状态<a class="headerlink" href="#_12" title="Permanent link">&para;</a></h3>
+<div class="language-ts highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">interface</span><span class="w"> </span><span class="nx">StoryboardFieldState</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nx">lockedFields</span><span class="o">:</span><span class="w"> </span><span class="kt">Array</span><span class="o">&lt;</span><span class="s2">"narration"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="s2">"visualPrompt"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="s2">"visualFocus"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="s2">"textAnchors"</span><span class="o">&gt;</span><span class="p">;</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nx">editedFields</span><span class="o">:</span><span class="w"> </span><span class="kt">Array</span><span class="o">&lt;</span><span class="s2">"narration"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="s2">"visualPrompt"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="s2">"visualFocus"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="s2">"textAnchors"</span><span class="o">&gt;</span><span class="p">;</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nx">locked</span><span class="o">:</span><span class="w"> </span><span class="kt">boolean</span><span class="p">;</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">}</span>
+</span></code></pre></div>
+<h2 id="_13">生成流程<a class="headerlink" href="#_13" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Open the Web UI.</li>
-<li>Configure LLM settings as usual.</li>
-<li>Enter a BizyAir API key in system configuration.</li>
-<li>Select an image template.</li>
-<li>Select the BizyAir image workflow from the existing image workflow dropdown.</li>
-<li>Generate a style preview or a full video.</li>
+<li>前端提交旁白、导演模式、节奏倾向和可选目标数量。</li>
+<li>后端调用 <code>POST /api/storyboard/analyze</code> 完成语义分析。</li>
+<li>自动模式由 LLM 选择合理镜头数；节奏倾向作为目标字数、镜头变化频率和平均停留时长的提示。</li>
+<li>自定义模式尝试满足目标数量，但只允许在自然语义边界拆分或合并。</li>
+<li>校验所有旁白单元拼接后与原文完全一致；失败时拒绝该次 LLM 切分并使用安全降级。</li>
+<li>如果目标数量无法自然满足，选择距离最近的合理数量；距离相同优先较少镜头，避免过度切碎。</li>
+<li>生成视觉焦点、关键文字锚点、预计时长和画面提示词。</li>
+<li>返回分析结果、镜头列表和非阻断提醒，前端直接进入列表。</li>
 </ol>
-<p>No separate BizyAir-specific panel is required in the first version.</p>
-<h2 id="workflow-definition">Workflow Definition<a class="headerlink" href="#workflow-definition" title="Permanent link">&para;</a></h2>
-<p>Add a standard Model Zoo wrapper workflow under:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>workflows/bizyair/image_o2.json
+<h2 id="_14">后端接口<a class="headerlink" href="#_14" title="Permanent link">&para;</a></h2>
+<h3 id="_15">分析请求<a class="headerlink" href="#_15" title="Permanent link">&para;</a></h3>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">"narration"</span><span class="p">:</span><span class="w"> </span><span class="s2">"原始旁白文本"</span><span class="p">,</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">"director_mode"</span><span class="p">:</span><span class="w"> </span><span class="s2">"auto"</span><span class="p">,</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">"density"</span><span class="p">:</span><span class="w"> </span><span class="s2">"standard"</span><span class="p">,</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">"target_scene_count"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>Recommended shape:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"bizyair"</span><span class="p">,</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">"api_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"modelzoo"</span><span class="p">,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">"endpoint"</span><span class="p">:</span><span class="w"> </span><span class="s2">"bza-image-o2-official/text-to-image"</span><span class="p">,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">"display_name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"BizyAir 通用图片O.2 文生图"</span><span class="p">,</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">"defaults"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nt">"quality"</span><span class="p">:</span><span class="w"> </span><span class="s2">"medium"</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">}</span>
-</span></code></pre></div>
-<p>The filename must start with <code>image_</code> so the current media workflow scanner includes it for
-image templates. The <code>source</code> value tells <code>MediaService</code> to bypass ComfyKit and call BizyAir.</p>
-<p><code>api_type</code> is included to keep the format explicit. The first implementation only needs to support
-<code>modelzoo</code>; unsupported values should produce a clear error.</p>
-<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
-<p>Store the BizyAir API key in the existing media-backend configuration object:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">comfyui</span><span class="p">:</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">bizyair_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
-</span></code></pre></div>
-<p>Although the parent key is named <code>comfyui</code>, it already owns cloud media backend settings such as
-RunningHub. Keeping BizyAir here minimizes churn and matches current configuration access patterns.</p>
-<p>Runtime lookup order:</p>
-<ol>
-<li><code>config.yaml</code> value: <code>comfyui.bizyair_api_key</code></li>
-<li>Environment fallback: <code>BIZYAIR_API_KEY</code></li>
-</ol>
-<p>The Web UI system settings should expose a password input for "BizyAir API Key" below the existing
-RunningHub cloud settings and persist it through <code>ConfigManager</code>.</p>
-<h2 id="bizyair-api-contract">BizyAir API Contract<a class="headerlink" href="#bizyair-api-contract" title="Permanent link">&para;</a></h2>
-<p>Submit request:</p>
-<div class="language-http highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="err">POST https://api.bizyair.cn/x/v1/modelzoo/tasks/openapi/bza-image-o2-official/text-to-image</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="err">Authorization: Bearer &lt;BIZYAIR_API_KEY&gt;</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="err">Content-Type: application/json</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="err">X-BizyAir-Log-Mask-Fields: prompt</span>
-</span></code></pre></div>
-<p>Request body:</p>
+<h3 id="_16">分析响应<a class="headerlink" href="#_16" title="Permanent link">&para;</a></h3>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"final prompt"</span><span class="p">,</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">"width"</span><span class="p">:</span><span class="w"> </span><span class="mi">1080</span><span class="p">,</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">"height"</span><span class="p">:</span><span class="w"> </span><span class="mi">1920</span><span class="p">,</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">"quality"</span><span class="p">:</span><span class="w"> </span><span class="s2">"medium"</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="p">}</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">"recommended_scene_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">"actual_scene_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">"target_scene_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">6</span><span class="p">,</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">"density"</span><span class="p">:</span><span class="w"> </span><span class="s2">"standard"</span><span class="p">,</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="nt">"estimated_duration_seconds"</span><span class="p">:</span><span class="w"> </span><span class="mi">37</span><span class="p">,</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="nt">"semantic_units"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span><span class="nt">"warnings"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"目标 6 个，实际采用 4 个自然语义镜头"</span><span class="p">]</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>Submit response:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">"request_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"4569bb94-1d30-417a-a987-9715de1e2633"</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="p">}</span>
-</span></code></pre></div>
-<p>Poll request:</p>
-<div class="language-http highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="err">GET https://api.bizyair.cn/x/v1/modelzoo/tasks/openapi/{request_id}</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="err">Authorization: Bearer &lt;BIZYAIR_API_KEY&gt;</span>
-</span></code></pre></div>
-<p>Successful poll response:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">"request_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"4569bb94-1d30-417a-a987-9715de1e2633"</span><span class="p">,</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Success"</span><span class="p">,</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="nt">"outputs"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="nt">"images"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">      </span><span class="s2">"https://storage.bizyair.cn/outputs_examples/WpD9CsEByO82auMg.png"</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span><span class="p">]</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="p">}</span>
-</span></code></pre></div>
-<p>Supported task statuses:</p>
+<p>项目创建和标准生成管线保存导演配置与分析快照。生图提示词生成只消费旁白、<code>visualFocus</code>、<code>textAnchors</code> 和用户填写的 <code>promptPrefix</code>，不把视觉焦点或锚点混入 TTS 文本。</p>
+<h2 id="llm">LLM 约束<a class="headerlink" href="#llm" title="Permanent link">&para;</a></h2>
+<p>语义切分提示词要求：</p>
 <ul>
-<li><code>Pending</code>: keep polling.</li>
-<li><code>Running</code>: keep polling.</li>
-<li><code>Saving</code>: keep polling.</li>
-<li><code>Success</code>: return the first URL in <code>outputs.images</code>.</li>
-<li><code>Failed</code>: raise an error using <code>message</code>.</li>
+<li>只输出严格 JSON。</li>
+<li>不改写、总结、翻译或补充原文。</li>
+<li>拼接所有 <code>narration</code> 必须与输入原文完全一致。</li>
+<li>不在中文词语、英文单词、日期、小数、版本号中间切分。</li>
+<li>优先句末边界，再使用逗号、分号、冒号等明确停顿。</li>
+<li>每个单元只声明一个主要语义焦点。</li>
+<li>抽取星期、日期、时间、数字、地点、名称、动作和可视化隐喻。</li>
 </ul>
-<p>Unknown non-terminal statuses should be logged and polled until timeout. Missing <code>request_id</code> or
-missing <code>outputs.images</code> after <code>Success</code> should be treated as errors.</p>
-<h2 id="dimension-validation">Dimension Validation<a class="headerlink" href="#dimension-validation" title="Permanent link">&para;</a></h2>
-<p>Validate dimensions before submitting to BizyAir:</p>
+<p>画面提示词约束：</p>
 <ul>
-<li><code>480 &lt;= width &lt;= 3840</code></li>
-<li><code>480 &lt;= height &lt;= 3840</code></li>
-<li><code>width % 16 == 0</code></li>
-<li><code>height % 16 == 0</code></li>
-<li><code>max(width, height) / min(width, height) &lt;= 3</code></li>
-<li><code>655360 &lt;= width * height &lt;= 8294400</code></li>
+<li>关键文字只在语义必要时出现，并放置在日历、钟表、票据、地图、清单、表格、书页或界面等合理载体上。</li>
+<li>长文本不强行生成到画面中，改为预留后期字幕或叠字区域。</li>
+<li>用户的 <code>promptPrefix</code> 作为整段序列的风格锁定；为空时不擅自添加媒介、色彩、时代或镜头风格。</li>
+<li>相邻镜头轮换景别和构图，同时保持主体、服装色块和关键道具连续。</li>
 </ul>
-<p>If validation fails, raise a clear error. Do not silently resize, because the downstream HTML frame
-composition expects media dimensions to match template metadata.</p>
-<p>Existing standard templates such as <code>1080x1920</code>, <code>1920x1080</code>, and <code>1080x1080</code> satisfy these rules.</p>
-<h2 id="service-design">Service Design<a class="headerlink" href="#service-design" title="Permanent link">&para;</a></h2>
-<p>Extend workflow parsing so BizyAir wrapper metadata is included in workflow info:</p>
+<h2 id="_17">错误与降级<a class="headerlink" href="#_17" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>source</code></li>
-<li><code>api_type</code></li>
-<li><code>endpoint</code></li>
-<li><code>display_name</code>, if present</li>
-<li><code>defaults</code>, if present</li>
+<li>LLM 不可用或返回非法 JSON：使用本地语义切分和已有安全规则。</li>
+<li>LLM 切分无法还原原文：丢弃该结果，不污染旁白，返回安全结果和警告。</li>
+<li>语义单元不足：采用最近合理数量并显示非阻断提醒。</li>
+<li>有手工画面提示词的旧场景：不自动改变其边界。</li>
+<li>分析接口失败：保留本地即时分析，允许用户继续生成。</li>
 </ul>
-<p>Update <code>MediaService.__call__</code>:</p>
+<h2 id="_18">实现边界<a class="headerlink" href="#_18" title="Permanent link">&para;</a></h2>
+<p>前端重点修改 Quick Create 内容步骤、导演配置状态、分镜列表卡片、提醒条和重新生成动作；类型定义与草稿/预设持久化同步新字段。后端重点修改分析请求模型、项目配置归一化、项目创建和标准管线参数传递。LLM 提示词保持严格 JSON 和原文完整性约束。</p>
+<h2 id="_19">验收与测试<a class="headerlink" href="#_19" title="Permanent link">&para;</a></h2>
+<h3 id="_20">前端<a class="headerlink" href="#_20" title="Permanent link">&para;</a></h3>
+<ul>
+<li>初始状态为自动标准，数量输入框默认隐藏。</li>
+<li>四种模式互斥，切换自定义时才启用数量输入。</li>
+<li>自动模式展示推荐数量、实际数量和预计时长。</li>
+<li>数量不一致时直接进入列表并显示提醒。</li>
+<li>单镜头锁定和字段级人工编辑标记可见且有效。</li>
+<li>三种重新生成动作不会越过锁定或人工编辑字段。</li>
+</ul>
+<h3 id="_21">后端与提示词<a class="headerlink" href="#_21" title="Permanent link">&para;</a></h3>
+<ul>
+<li>稀疏、标准、密集产生可验证的节奏差异。</li>
+<li>自定义目标无法满足时返回最近数量和原因。</li>
+<li>分割后拼接文本与原文严格一致。</li>
+<li>日期、小数和版本号不会被错误切断。</li>
+<li>视觉焦点和文字锚点传递到生图提示词，但不进入旁白或字幕文本。</li>
+<li>旧项目和旧预设仍能正常加载、生成和复用。</li>
+</ul>
+<h3 id="_22">回归<a class="headerlink" href="#_22" title="Permanent link">&para;</a></h3>
+<p>运行现有 Python 测试、前端 TypeScript 测试、lint、build 和 compileall；补充导演配置、软目标数量、锁定保护和接口响应的专项测试。</p>
+<h2 id="_23">分阶段交付<a class="headerlink" href="#_23" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Resolve the workflow as it does today.</li>
-<li>Build <code>workflow_params</code> from <code>prompt</code>, <code>width</code>, <code>height</code>, and extra params.</li>
-<li>If <code>workflow_info["source"] == "bizyair"</code>, call a BizyAir-specific method.</li>
-<li>Otherwise, keep the current ComfyKit path for selfhost and RunningHub.</li>
+<li>数据模型、接口和 LLM 契约。</li>
+<li>Quick Create 导演台和分析结果展示。</li>
+<li>分镜列表锁定、人工编辑保护和分离生成动作。</li>
+<li>兼容旧配置、补充测试、完成构建和端到端冒烟。</li>
 </ol>
-<p>BizyAir-specific method:</p>
-<ol>
-<li>Read API key from config or <code>BIZYAIR_API_KEY</code>.</li>
-<li>Validate <code>api_type == "modelzoo"</code>.</li>
-<li>Merge workflow defaults with runtime params.</li>
-<li>Validate dimensions.</li>
-<li>Submit the task with <code>httpx.AsyncClient</code>.</li>
-<li>Poll every 5 seconds until success, failure, or timeout.</li>
-<li>Return <code>MediaResult(media_type="image", url=image_url)</code>.</li>
-</ol>
-<p>Suggested first-version polling limits:</p>
-<ul>
-<li>Poll interval: 5 seconds.</li>
-<li>Timeout: 10 minutes.</li>
-</ul>
-<p><code>quality</code> defaults to <code>medium</code>. It can be overridden by workflow JSON defaults or advanced params
-later, but the first UI does not need a dedicated quality control.</p>
-<h2 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h2>
-<p>Errors should be actionable and visible in the Web UI through existing exception handling.</p>
-<p>Required error cases:</p>
-<ul>
-<li>BizyAir API key is not configured.</li>
-<li>Workflow has <code>source=bizyair</code> but no <code>endpoint</code>.</li>
-<li>Unsupported BizyAir <code>api_type</code>.</li>
-<li>Width or height violates BizyAir constraints.</li>
-<li>Submit API returns an HTTP error.</li>
-<li>Submit response has no <code>request_id</code>.</li>
-<li>Poll API returns an HTTP error.</li>
-<li>Task status is <code>Failed</code>.</li>
-<li>Task times out.</li>
-<li>Task succeeds but does not include <code>outputs.images</code>.</li>
-<li>Downloading the returned image URL fails.</li>
-</ul>
-<p>Logs should include <code>request_id</code> once available so the user can correlate a failed run with BizyAir
-calling records.</p>
-<h2 id="concurrency">Concurrency<a class="headerlink" href="#concurrency" title="Permanent link">&para;</a></h2>
-<p>The first version should not add BizyAir parallel execution. Current parallel frame processing is
-RunningHub-specific and controlled by <code>runninghub_concurrent_limit</code>.</p>
-<p>BizyAir is also a cloud task API, but its practical rate limits and billing behavior need validation.
-Start with serial execution. A later version can add <code>bizyair_concurrent_limit</code> and extend the
-pipeline's parallel path to include <code>bizyair/</code> workflows.</p>
-<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
-<p>Automated tests should not call the real BizyAir API because it requires a live API key and consumes
-coins.</p>
-<p>Add mocked tests for:</p>
-<ul>
-<li>Workflow parsing of a <code>source=bizyair</code> Model Zoo wrapper.</li>
-<li>API key lookup from config and environment fallback.</li>
-<li>Dimension validation pass/fail cases.</li>
-<li>Successful task lifecycle: submit returns <code>request_id</code>, poll returns <code>Running</code>, then <code>Success</code>.</li>
-<li>Failed task lifecycle: poll returns <code>Failed</code> with <code>message</code>.</li>
-<li>Malformed success response with missing <code>outputs.images</code>.</li>
-<li>Timeout behavior.</li>
-</ul>
-<p>Manual verification:</p>
-<ol>
-<li>Put a valid BizyAir API key in system settings.</li>
-<li>Select <code>bizyair/image_o2.json</code>.</li>
-<li>Generate a style preview.</li>
-<li>Confirm the preview image appears and the returned URL is downloaded during full video generation.</li>
-</ol>
-<h2 id="implementation-notes">Implementation Notes<a class="headerlink" href="#implementation-notes" title="Permanent link">&para;</a></h2>
-<p>Preserve user changes already present in the working tree. The current BizyAir-related code appears
-to be a partial WebApp API implementation; the implementation should either replace that branch with
-Model Zoo support or separate it behind <code>api_type == "webapp"</code> without making WebApp support part of
-the first version.</p>
-<p>Keep the integration scoped to image workflows. A selected BizyAir workflow should be treated as
-<code>media_type="image"</code> even if future BizyAir endpoints support other outputs.</p>
-<h2 id="open-questions-resolved">Open Questions Resolved<a class="headerlink" href="#open-questions-resolved" title="Permanent link">&para;</a></h2>
-<ul>
-<li>BizyAir should appear as a normal image workflow option in the current dropdown.</li>
-<li>The target API is the standard Model Zoo text-to-image API.</li>
-<li>First version quality should default to <code>medium</code>.</li>
-<li>First version should use polling, not webhook callbacks.</li>
-<li>First version should run serially.</li>
-</ul>
 
 
 
@@ -1749,7 +1805,7 @@ the first version.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="June 23, 2026 01:39:56 UTC">June 23, 2026 01:39:56</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="August 18, 2026 06:51:21 UTC">August 18, 2026 06:51:21</span>
   </span>
 
     
@@ -1759,7 +1815,7 @@ the first version.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="June 23, 2026 01:39:56 UTC">June 23, 2026 01:39:56</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="August 18, 2026 06:51:21 UTC">August 18, 2026 06:51:21</span>
   </span>
 
     

@@ -2191,7 +2191,7 @@ updated_at
 <h3 id="_11">里程碑出口<a class="headerlink" href="#_11" title="Permanent link">&para;</a></h3>
 <p>基线测试通过，fake provider 可以让测试确定性地模拟至少两个场景的顺序、失败和延迟。提交：</p>
 <div class="language-text highlight"><pre><span></span><code>git add tests/services/test_project_generation_fixtures.py tests/conftest.py
-git commit -m &quot;test: add project generation fixtures&quot;
+git commit -m "test: add project generation fixtures"
 </code></pre></div>
 <p>只在相关文件实际存在或修改时执行 git add；不要为了提交空变更创建提交。</p>
 <h2 id="milestone-1sqlite-schema">Milestone 1：运行模型、SQLite schema 与状态持久化<a class="headerlink" href="#milestone-1sqlite-schema" title="Permanent link">&para;</a></h2>
@@ -2288,7 +2288,7 @@ CREATE INDEX IF NOT EXISTS idx_generation_run_items_run_position
 <div class="language-text highlight"><pre><span></span><code>uv run --extra dev pytest tests/models/test_project_generation.py tests/services/test_project_generation_repository.py tests/services/test_workbench_repository.py -q
 
 git add pixelle_video/models/workbench.py pixelle_video/services/workbench_repository.py tests/models/test_project_generation.py tests/services/test_project_generation_repository.py
-git commit -m &quot;feat: persist project generation runs&quot;
+git commit -m "feat: persist project generation runs"
 </code></pre></div>
 <h2 id="milestone-2">Milestone 2：规划器、指纹和素材新鲜度<a class="headerlink" href="#milestone-2" title="Permanent link">&para;</a></h2>
 <h3 id="_17">目的<a class="headerlink" href="#_17" title="Permanent link">&para;</a></h3>
@@ -2341,7 +2341,7 @@ git commit -m &quot;feat: persist project generation runs&quot;
 <div class="language-text highlight"><pre><span></span><code>uv run --extra dev pytest tests/services/test_workbench_generation_planner.py -q
 
 git add pixelle_video/services/workbench_generation.py pixelle_video/models/workbench.py pixelle_video/services/workbench_repository.py tests/services/test_workbench_generation_planner.py
-git commit -m &quot;feat: plan project generation from asset freshness&quot;
+git commit -m "feat: plan project generation from asset freshness"
 </code></pre></div>
 <h2 id="milestone-3">Milestone 3：串行编排、暂停取消和重启恢复<a class="headerlink" href="#milestone-3" title="Permanent link">&para;</a></h2>
 <h3 id="_23">目的<a class="headerlink" href="#_23" title="Permanent link">&para;</a></h3>
@@ -2418,7 +2418,7 @@ git commit -m &quot;feat: plan project generation from asset freshness&quot;
 <div class="language-text highlight"><pre><span></span><code>uv run --extra dev pytest tests/services/test_project_generation_service.py tests/api/test_project_generation_lifecycle.py tests/services/test_workbench_jobs.py -q
 
 git add pixelle_video/services/project_generation_service.py pixelle_video/services/workbench_jobs.py pixelle_video/service.py api/tasks/models.py api/tasks/manager.py api/app.py tests/services/test_project_generation_service.py tests/api/test_project_generation_lifecycle.py
-git commit -m &quot;feat: orchestrate sequential project generation&quot;
+git commit -m "feat: orchestrate sequential project generation"
 </code></pre></div>
 <h2 id="milestone-4api">Milestone 4：API 契约与项目响应<a class="headerlink" href="#milestone-4api" title="Permanent link">&para;</a></h2>
 <h3 id="_31">目的<a class="headerlink" href="#_31" title="Permanent link">&para;</a></h3>
@@ -2444,8 +2444,8 @@ git commit -m &quot;feat: orchestrate sequential project generation&quot;
 </ul>
 <p>ProjectSceneResponse 增加 generationState：</p>
 <div class="language-text highlight"><pre><span></span><code>{
-  image: &quot;ready&quot; | &quot;missing&quot; | &quot;stale&quot;,
-  audio: &quot;ready&quot; | &quot;missing&quot; | &quot;stale&quot;,
+  image: "ready" | "missing" | "stale",
+  audio: "ready" | "missing" | "stale",
   candidateCount: number
 }
 </code></pre></div>
@@ -2481,7 +2481,7 @@ POST /api/projects/{project_id}/generation-runs/{run_id}/retry-failed
 <div class="language-text highlight"><pre><span></span><code>uv run --extra dev pytest tests/api/test_project_generation_api.py tests/api/test_projects.py tests/api/test_project_scene_mutations.py tests/api/test_project_export.py -q
 
 git add api/schemas/workbench.py api/routers/projects.py pixelle_video/services/workbench_repository.py tests/api/test_project_generation_api.py tests/api/test_projects.py tests/api/test_project_scene_mutations.py tests/api/test_project_export.py
-git commit -m &quot;feat: expose project generation run API&quot;
+git commit -m "feat: expose project generation run API"
 </code></pre></div>
 <h2 id="milestone-5">Milestone 5：前端运行控制、轮询和逐场景回填<a class="headerlink" href="#milestone-5" title="Permanent link">&para;</a></h2>
 <h3 id="_36">目的<a class="headerlink" href="#_36" title="Permanent link">&para;</a></h3>
@@ -2567,7 +2567,7 @@ Set-Location ..
 uv run --extra dev pytest tests/frontend/test_workbench_contract.py tests/browser/project_workbench_smoke.py -q
 
 git add frontend/src/types.ts frontend/src/lib/workbenchApi.ts frontend/src/lib/projectGenerationState.ts frontend/src/lib/projectGenerationState.test.ts frontend/src/components/GenerationRunPanel.tsx frontend/src/components/ProjectWorkbench.tsx frontend/src/components/SceneList.tsx frontend/src/components/SceneInspector.tsx frontend/src/components/WorkbenchTimeline.tsx frontend/src/components/ExportDialog.tsx tests/frontend/test_workbench_contract.py tests/browser/project_workbench_smoke.py
-git commit -m &quot;feat: add project generation controls to workbench&quot;
+git commit -m "feat: add project generation controls to workbench"
 </code></pre></div>
 <h2 id="milestone-6">Milestone 6：端到端验收、恢复演练和文档<a class="headerlink" href="#milestone-6" title="Permanent link">&para;</a></h2>
 <h3 id="_41">目的<a class="headerlink" href="#_41" title="Permanent link">&para;</a></h3>
@@ -2619,7 +2619,7 @@ npm run dev -- --host 127.0.0.1 --port 5173
 <h3 id="_46">里程碑出口与提交<a class="headerlink" href="#_46" title="Permanent link">&para;</a></h3>
 <p>先完成测试、浏览器 smoke 和文档自检，再提交：</p>
 <div class="language-text highlight"><pre><span></span><code>git add tests/integration/test_project_generation_e2e.py tests/browser/project_workbench_smoke.py docs/zh/user-guide/web-ui.md docs/en/user-guide/web-ui.md README.md README_EN.md
-git commit -m &quot;test: verify project generation workbench flow&quot;
+git commit -m "test: verify project generation workbench flow"
 </code></pre></div>
 <h2 id="_47">全量验收清单<a class="headerlink" href="#_47" title="Permanent link">&para;</a></h2>
 <ul class="task-list">

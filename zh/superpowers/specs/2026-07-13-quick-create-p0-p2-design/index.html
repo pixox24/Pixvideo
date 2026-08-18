@@ -1560,7 +1560,7 @@
 <p>取消流程为：DELETE task → cancel future → LinearPipeline 捕获 <code>CancelledError</code> → StandardPipeline 持久化 <code>cancelled</code> → TaskManager 标记 <code>cancelled</code> → history 返回同一状态。取消是正常终态，不再映射为失败。</p>
 <h3 id="_5">逐分镜输入<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
 <p><code>VideoGenerateRequest</code> 新增可选 <code>scenes</code>：</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">[{</span><span class="nt">&quot;narration&quot;</span><span class="p">:</span><span class="s2">&quot;旁白&quot;</span><span class="p">,</span><span class="nt">&quot;visual_prompt&quot;</span><span class="p">:</span><span class="s2">&quot;画面提示&quot;</span><span class="p">}]</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">[{</span><span class="nt">"narration"</span><span class="p">:</span><span class="s2">"旁白"</span><span class="p">,</span><span class="nt">"visual_prompt"</span><span class="p">:</span><span class="s2">"画面提示"</span><span class="p">}]</span>
 </span></code></pre></div>
 <p>当 scenes 存在时，StandardPipeline 直接使用 narration；非空 visual prompt 进入对应帧，空 prompt 才调用 LLM 补齐。全局 prompt prefix 仍统一应用。旧的 <code>text + split_mode</code> 保持兼容。</p>
 <h3 id="_6">历史列表<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>

@@ -49,6 +49,7 @@ class StoryboardConfig:
     minimax_emotion: Optional[str] = None      # MiniMax emotion override (MiniMax mode only)
     mimo_model: Optional[str] = None           # MiMo model name (MiMo mode only)
     mimo_style: Optional[str] = None           # MiMo natural-language style instruction (MiMo mode only)
+    qwen_audio_model: Optional[str] = None     # Qwen Audio model name (Qwen Audio mode only)
 
     # Media workflow
     media_workflow: Optional[str] = None       # Media workflow filename (image or video, None = use default)

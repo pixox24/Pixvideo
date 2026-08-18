@@ -12,14 +12,17 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-DraftSplitType = Literal["paragraph", "line", "sentence"]
+DraftSplitType = Literal["auto", "paragraph", "line", "sentence"]
 
 STORYBOARD_SCENE_MIN = 1
 STORYBOARD_SCENE_MAX = 100
 SOFT_EXPAND_MIN_PART = 4
+AUTO_MAX_CHARS_PER_SEGMENT = 52
+AUTO_MIN_CHARS_PER_SEGMENT = 12
 
 _TERMINAL = re.compile(r"[。！？.!?…]+$")
 _PAUSE = re.compile(r"[，,；;]+$")
+_ASCII_LETTER = re.compile(r"[A-Za-z]")
 
 
 def clamp_scene_count(value: int, minimum: int = STORYBOARD_SCENE_MIN, maximum: int = STORYBOARD_SCENE_MAX) -> int:
@@ -30,21 +33,109 @@ def clamp_scene_count(value: int, minimum: int = STORYBOARD_SCENE_MIN, maximum: 
     return min(maximum, max(minimum, number))
 
 
-def split_draft_by_rule(text: str, split_type: DraftSplitType = "line") -> list[str]:
+def split_draft_by_rule(text: str, split_type: DraftSplitType = "auto") -> list[str]:
     trimmed = str(text or "").strip()
     if not trimmed:
         return []
+
+    if split_type == "auto":
+        return auto_split_draft(trimmed)
 
     if split_type == "paragraph":
         return [segment.strip() for segment in re.split(r"\n\s*\n", trimmed) if segment.strip()]
 
     if split_type == "sentence":
         # Keep terminal punctuation with the sentence.
-        parts = re.findall(r"[^。！？.!?\n]+[。！？.!?]?", trimmed)
-        return [part.strip() for part in parts if part.strip()]
+        return _split_sentence_units(trimmed)
 
-    # line (default)
+    # Explicit line mode
     return [line.strip() for line in re.split(r"\r?\n", trimmed) if line.strip()]
+
+
+def _meaningful_length(text: str) -> int:
+    return len(re.sub(r"\s+", "", str(text or "")))
+
+
+def _split_sentence_units(text: str) -> list[str]:
+    """Split at sentence punctuation without breaking decimal/date/domain tokens."""
+    units: list[str] = []
+    buffer: list[str] = []
+    source = str(text or "")
+    for index, char in enumerate(source):
+        if char == "\n":
+            if buffer:
+                units.append("".join(buffer).strip())
+                buffer = []
+            continue
+        buffer.append(char)
+        next_char = source[index + 1] if index + 1 < len(source) else ""
+        if char in "。！？!?…":
+            if next_char in "。！？!?…":
+                continue
+            units.append("".join(buffer).strip())
+            buffer = []
+        elif char == ".":
+            # Decimal numbers, dates, domains, and version strings are not boundaries.
+            if next_char.isdigit() or next_char == "." or _ASCII_LETTER.fullmatch(next_char or ""):
+                continue
+            units.append("".join(buffer).strip())
+            buffer = []
+    if buffer:
+        units.append("".join(buffer).strip())
+    return [unit for unit in units if unit]
+
+
+def _split_long_sentence(sentence: str) -> list[str]:
+    """Split a long sentence only at explicit pause boundaries."""
+    if _meaningful_length(sentence) <= AUTO_MAX_CHARS_PER_SEGMENT:
+        return [sentence.strip()]
+
+    pieces = [piece for piece in re.split(r"([，,；;：:]+)", sentence) if piece]
+    parts: list[str] = []
+    buffer = ""
+    for piece in pieces:
+        buffer = f"{buffer}{piece}".strip()
+        if re.fullmatch(r"[，,；;：:]+", piece):
+            parts.append(buffer)
+            buffer = ""
+    if buffer:
+        parts.append(buffer)
+
+    if len(parts) <= 1 or any(_meaningful_length(part) > AUTO_MAX_CHARS_PER_SEGMENT for part in parts):
+        return [sentence.strip()]
+
+    groups: list[str] = []
+    buffer = ""
+    for part in parts:
+        candidate = f"{buffer}{part}".strip()
+        if buffer and _meaningful_length(candidate) > AUTO_MAX_CHARS_PER_SEGMENT:
+            groups.append(buffer)
+            buffer = part
+        else:
+            buffer = candidate
+    if buffer:
+        groups.append(buffer)
+
+    # Avoid creating a tiny tail when the preceding clause is a safe merge.
+    if len(groups) > 1 and _meaningful_length(groups[-1]) < AUTO_MIN_CHARS_PER_SEGMENT:
+        groups[-2] = f"{groups[-2]}{groups[-1]}"
+        groups.pop()
+    return groups or [sentence.strip()]
+
+
+def auto_split_draft(text: str) -> list[str]:
+    """Create safe, duration-aware narration units without rewriting source text."""
+    trimmed = str(text or "").strip()
+    if not trimmed:
+        return []
+
+    sentences = _split_sentence_units(trimmed)
+    units: list[str] = []
+    for sentence in sentences:
+        clean = sentence.strip()
+        if clean:
+            units.extend(_split_long_sentence(clean))
+    return units or [trimmed]
 
 
 def soft_expand_by_pause(units: list[str]) -> list[str]:
@@ -168,7 +259,7 @@ def _should_merge_mid_cut(left: str, right: str) -> bool:
 
 def build_storyboard_narrations(
     text: str,
-    split_type: DraftSplitType = "line",
+    split_type: DraftSplitType = "auto",
     target_count: int = 5,
     *,
     soft_expand: bool = True,

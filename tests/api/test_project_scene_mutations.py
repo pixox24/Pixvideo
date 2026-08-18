@@ -47,6 +47,24 @@ async def test_scene_update_rejects_duration_shorter_than_audio(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_locked_scene_allows_unlock_but_rejects_content_edit(tmp_path):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scene = Scene(project.project_id, 0, "旁白", "画面", locked=True)
+    core.workbench_repository.create_project(project, [scene])
+
+    with pytest.raises(HTTPException) as error:
+        await update_scene(project.project_id, scene.scene_id, UpdateSceneRequest(narration="新旁白"), core)
+    assert error.value.status_code == 409
+
+    response = await update_scene(project.project_id, scene.scene_id, UpdateSceneRequest(locked=False), core)
+    assert response["locked"] is False
+    updated = core.workbench_repository.get_scene(scene.scene_id)
+    assert updated is not None and updated.locked is False
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
 async def test_reorder_requires_exact_scene_set(tmp_path):
     core = Core(tmp_path)
     project = Project("p", {})

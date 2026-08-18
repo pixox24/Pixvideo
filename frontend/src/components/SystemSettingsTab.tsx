@@ -382,7 +382,7 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
           </div>
 
           <div className="space-y-3 md:border-l md:border-[var(--color-border-subtle)] md:pl-4">
-            <h4 className="text-xs font-semibold text-amber-400">BizyAir · MiniMax · MiMo</h4>
+            <h4 className="text-xs font-semibold text-amber-400">BizyAir · MiniMax · MiMo · Qwen Audio</h4>
             <div>
               <label className={fieldLabel}>BizyAir API Key</label>
               <input
@@ -422,7 +422,20 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
                 <span className={savedHint}>已保存：{settings.mimoKeyMasked}，输入新值可替换</span>
               )}
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className={fieldLabel}>DashScope API Key（Qwen Audio）</label>
+              <input
+                type="password"
+                placeholder="请输入 DashScope API Key，或使用 DASHSCOPE_API_KEY"
+                value={settings.qwenAudioKey}
+                onChange={(e) => handleFieldChange("qwenAudioKey", "", e.target.value)}
+                className="ui-input"
+              />
+              {settings.qwenAudioKeyMasked && !settings.qwenAudioKey && (
+                <span className={savedHint}>已保存：{settings.qwenAudioKeyMasked}，输入新值可替换</span>
+              )}
+            </div>
+            <div className="grid grid-cols-4 gap-2">
               <TestBtn
                 service="bizyair"
                 label="BizyAir"
@@ -437,6 +450,11 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
                 service="mimo"
                 label="MiMo"
                 onClick={() => testConnection("mimo", { apiKey: settings.mimoKey })}
+              />
+              <TestBtn
+                service="qwen_audio"
+                label="Qwen Audio"
+                onClick={() => testConnection("qwen_audio", { apiKey: settings.qwenAudioKey })}
               />
             </div>
           </div>

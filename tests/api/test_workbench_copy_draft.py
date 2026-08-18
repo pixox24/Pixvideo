@@ -89,3 +89,38 @@ async def test_generate_script_uses_confirmed_segmented_copy_without_regeneratin
         {"id": 1, "ttsText": "第一段旁白", "visualPrompt": "visual 1"},
         {"id": 2, "ttsText": "第二段旁白", "visualPrompt": "visual 2"},
     ]
+
+
+@pytest.mark.asyncio
+async def test_generate_script_passes_semantic_visual_focus_to_image_prompts(monkeypatch):
+    monkeypatch.setattr(workbench.config_manager, "get_llm_config", _valid_llm_config)
+    source = "今天我们从日历开始规划发布会倒计时并把每一个任务安排到准确的时间线上同时检查人员物料场地和最终确认清单确保发布当天万无一失"
+    captured = {}
+
+    async def fake_segment(*_args, **_kwargs):
+        return [
+            {"text": "今天我们从日历开始规划发布会倒计时", "visual_focus": "calendar and countdown"},
+            {"text": "并把每一个任务安排到准确的时间线上同时检查人员物料场地和最终确认清单确保发布当天万无一失", "visual_focus": "timeline and task cards"},
+        ]
+
+    async def fake_image_prompts(**kwargs):
+        captured["visual_focuses"] = kwargs["visual_focuses"]
+        return ["visual 1", "visual 2"]
+
+    monkeypatch.setattr(workbench, "segment_narration_semantically", fake_segment)
+    monkeypatch.setattr(workbench, "generate_image_prompts", fake_image_prompts)
+
+    result = await workbench.generate_script(
+        workbench.GenerateScriptRequest(
+            topic="发布会",
+            sceneCount=2,
+            splitType="auto",
+            draftMode="full",
+            confirmedText=source,
+            segmentationMode="auto",
+        ),
+        SimpleNamespace(llm=object()),
+    )
+
+    assert result["success"] is True
+    assert captured["visual_focuses"] == ["calendar and countdown", "timeline and task cards"]

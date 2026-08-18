@@ -28,6 +28,11 @@ export const VOICE_OPTIONS = {
     { id: "Milo", name: "Milo (英文男声)", desc: "英文男性音色" },
     { id: "Dean", name: "Dean (英文男声)", desc: "英文男性音色" },
   ],
+  qwen_audio: [
+    { id: "Cherry", name: "Cherry（中文女声）", desc: "Qwen3-TTS 默认音色" },
+    { id: "Serena", name: "Serena（英文女声）", desc: "Qwen3-TTS 英文音色" },
+    { id: "Ethan", name: "Ethan（男声）", desc: "Qwen3-TTS 男声音色" },
+  ],
   comfyui: [
     { id: "comfy-custom-voice1", name: "自定义参考音频 (根据上传克隆)", desc: "由 ComfyUI Audio-Prompt 提取特征" },
   ],

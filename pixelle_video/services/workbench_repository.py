@@ -66,7 +66,10 @@ class WorkbenchRepository:
               subtitle_alignment_json TEXT NOT NULL DEFAULT '[]', duration_seconds REAL NOT NULL DEFAULT 0,
               manual_hold_seconds REAL NOT NULL DEFAULT 0, duration_mode TEXT NOT NULL DEFAULT 'audio',
               status TEXT NOT NULL DEFAULT 'pending', updated_at TEXT NOT NULL,
-              image_fingerprint TEXT, audio_fingerprint TEXT, UNIQUE(project_id, position)
+              image_fingerprint TEXT, audio_fingerprint TEXT,
+              visual_focus TEXT NOT NULL DEFAULT '', text_anchors_json TEXT NOT NULL DEFAULT '[]',
+              locked_fields_json TEXT NOT NULL DEFAULT '[]', edited_fields_json TEXT NOT NULL DEFAULT '[]',
+              locked INTEGER NOT NULL DEFAULT 0, UNIQUE(project_id, position)
             );
             CREATE TABLE IF NOT EXISTS asset_versions (
               version_id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
@@ -118,6 +121,11 @@ class WorkbenchRepository:
         )
         self._ensure_column("scenes", "image_fingerprint", "TEXT")
         self._ensure_column("scenes", "audio_fingerprint", "TEXT")
+        self._ensure_column("scenes", "visual_focus", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("scenes", "text_anchors_json", "TEXT NOT NULL DEFAULT '[]'")
+        self._ensure_column("scenes", "locked_fields_json", "TEXT NOT NULL DEFAULT '[]'")
+        self._ensure_column("scenes", "edited_fields_json", "TEXT NOT NULL DEFAULT '[]'")
+        self._ensure_column("scenes", "locked", "INTEGER NOT NULL DEFAULT 0")
         self._connection.commit()
 
     def _ensure_column(self, table: str, column: str, definition: str) -> None:
@@ -149,13 +157,15 @@ class WorkbenchRepository:
               scene_id, project_id, position, narration, visual_prompt,
               current_version_id, audio_relative_path, subtitle_alignment_json,
               duration_seconds, manual_hold_seconds, duration_mode, status,
-              updated_at, image_fingerprint, audio_fingerprint
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              updated_at, image_fingerprint, audio_fingerprint, visual_focus,
+              text_anchors_json, locked_fields_json, edited_fields_json, locked
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (scene.scene_id, scene.project_id, scene.position, scene.narration, scene.visual_prompt,
              scene.current_version_id, scene.audio_relative_path, _json(scene.subtitle_alignment),
              scene.duration_seconds, scene.manual_hold_seconds, scene.duration_mode, scene.status,
-             _dt(scene.updated_at), scene.image_fingerprint, scene.audio_fingerprint),
+             _dt(scene.updated_at), scene.image_fingerprint, scene.audio_fingerprint, scene.visual_focus,
+             _json(scene.text_anchors), _json(scene.locked_fields), _json(scene.edited_fields), int(scene.locked)),
         )
 
     def get_project(self, project_id: str) -> Project | None:
@@ -195,6 +205,11 @@ class WorkbenchRepository:
             updated_at=_from_dt(row["updated_at"]),
             image_fingerprint=row["image_fingerprint"],
             audio_fingerprint=row["audio_fingerprint"],
+            visual_focus=row["visual_focus"] or "",
+            text_anchors=json.loads(row["text_anchors_json"] or "[]"),
+            locked_fields=json.loads(row["locked_fields_json"] or "[]"),
+            edited_fields=json.loads(row["edited_fields_json"] or "[]"),
+            locked=bool(row["locked"]),
         )
 
     def update_project(self, project_id: str, **changes: Any) -> None:
@@ -212,10 +227,15 @@ class WorkbenchRepository:
             self._connection.execute(f"UPDATE projects SET {', '.join(f'{k}=?' for k in values)} WHERE project_id=?", (*values.values(), project_id))
 
     def update_scene(self, scene_id: str, **changes: Any) -> None:
-        allowed = {"position", "narration", "visual_prompt", "current_version_id", "audio_relative_path", "subtitle_alignment", "duration_seconds", "manual_hold_seconds", "duration_mode", "status", "updated_at", "image_fingerprint", "audio_fingerprint"}
+        allowed = {"position", "narration", "visual_prompt", "current_version_id", "audio_relative_path", "subtitle_alignment", "duration_seconds", "manual_hold_seconds", "duration_mode", "status", "updated_at", "image_fingerprint", "audio_fingerprint", "visual_focus", "text_anchors", "locked_fields", "edited_fields", "locked"}
         values = {key: value for key, value in changes.items() if key in allowed}
         if "subtitle_alignment" in values:
             values["subtitle_alignment_json"] = _json(values.pop("subtitle_alignment"))
+        for key in ("text_anchors", "locked_fields", "edited_fields"):
+            if key in values:
+                values[f"{key}_json"] = _json(values.pop(key))
+        if "locked" in values:
+            values["locked"] = int(bool(values["locked"]))
         if "updated_at" in values:
             values["updated_at"] = _dt(values["updated_at"])
         if not values:

@@ -46,7 +46,7 @@ comfyui:
   
   # TTS-specific configuration
   tts:
-    inference_mode: local  # Options: local, comfyui, minimax, mimo
+    inference_mode: local  # Options: local, comfyui, minimax, mimo, qwen_audio
     default_workflow: selfhost/tts_edge.json  # TTS workflow to use
     local:
       voice: zh-CN-YunjianNeural
@@ -66,6 +66,12 @@ comfyui:
       model: mimo-v2.5-tts
       voice_id: mimo_default
       style: ""  # Natural-language style instruction (optional)
+    qwen_audio:
+      api_key: ""  # DashScope API key (or set DASHSCOPE_API_KEY environment variable)
+      model: qwen3-tts-flash
+      voice_id: Cherry
+      language_type: Chinese
+      endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
   
   # Image-specific configuration
   image:

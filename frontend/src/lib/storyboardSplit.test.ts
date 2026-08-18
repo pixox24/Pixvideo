@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   analyzeStoryboardRecommendation,
+  autoSplitDraft,
   buildStoryboardNarrations,
   healMidCuts,
   packSemanticUnits,
@@ -92,4 +93,51 @@ test("analyzeStoryboardRecommendation returns dual suggestions", () => {
   assert.ok(rec.rhythm >= 1);
   assert.equal(rec.preferred, rec.semantic);
   assert.ok(rec.charCount > 0);
+});
+
+test("density changes rhythm estimate without changing semantic boundaries", () => {
+  const text = "第一句完整表达一个观点。第二句继续推进叙事。第三句收束主题。";
+  const sparse = analyzeStoryboardRecommendation(text, "sentence", { density: "sparse", softExpand: false });
+  const dense = analyzeStoryboardRecommendation(text, "sentence", { density: "dense", softExpand: false });
+  assert.equal(sparse.semantic, dense.semantic);
+  assert.ok(dense.rhythm >= sparse.rhythm);
+  assert.equal(sparse.targetSceneCount, null);
+  assert.equal(sparse.actualSceneCount, sparse.semantic);
+});
+
+test("custom target remains a soft target when semantic units are fewer", () => {
+  const text = "一个完整观点。第二个完整观点。";
+  const recommendation = analyzeStoryboardRecommendation(text, "sentence", {
+    softExpand: false,
+    targetSceneCount: 5,
+  });
+  assert.equal(recommendation.actualSceneCount, 2);
+  assert.ok(recommendation.warnings.some((warning) => warning.includes("目标 5 镜")));
+});
+
+test("auto split handles unbroken multi-sentence copy", () => {
+  const text = "星期一早上八点我走进办公室。打开电脑后邮件已经堆满屏幕。那一刻我意识到这一周又要重复开始。";
+  const scenes = autoSplitDraft(text);
+  assert.equal(scenes.length, 3);
+  assert.ok(scenes[0]!.includes("星期一"));
+  assert.ok(scenes[1]!.includes("邮件"));
+  assert.ok(scenes[2]!.includes("重复开始"));
+  assert.equal(scenes.join(""), text);
+});
+
+test("auto split uses pause boundaries for long sentences", () => {
+  const text = "进入房间以后我先打开窗户让新鲜空气进来，然后把桌上的文件按照日期重新整理，最后坐下来开始处理今天最重要的工作。";
+  const scenes = autoSplitDraft(text);
+  assert.ok(scenes.length >= 2);
+  assert.equal(scenes.join(""), text);
+  assert.ok(scenes.every((scene) => scene.replace(/\s+/g, "").length >= 12));
+});
+
+test("auto and sentence split keep decimal dates and versions intact", () => {
+  const text = "版本 3.14 于 2026.08.18 发布。随后团队开始复盘。";
+  assert.deepEqual(splitDraftByRule(text, "sentence"), [
+    "版本 3.14 于 2026.08.18 发布。",
+    "随后团队开始复盘。",
+  ]);
+  assert.deepEqual(autoSplitDraft(text), splitDraftByRule(text, "sentence"));
 });

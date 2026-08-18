@@ -184,6 +184,13 @@ class ConfigManager:
                     "voice_id": self.config.comfyui.tts.mimo.voice_id,
                     "style": self.config.comfyui.tts.mimo.style,
                 },
+                "qwen_audio": {
+                    "api_key": self.config.comfyui.tts.qwen_audio.api_key,
+                    "model": self.config.comfyui.tts.qwen_audio.model,
+                    "voice_id": self.config.comfyui.tts.qwen_audio.voice_id,
+                    "language_type": self.config.comfyui.tts.qwen_audio.language_type,
+                    "endpoint": self.config.comfyui.tts.qwen_audio.endpoint,
+                },
             },
             "image": {
                 "default_workflow": self.config.comfyui.image.default_workflow,
@@ -205,6 +212,7 @@ class ConfigManager:
         bizyair_api_key: Optional[str] = None,
         minimax_api_key: Optional[str] = None,
         mimo_api_key: Optional[str] = None,
+        qwen_audio_api_key: Optional[str] = None,
     ):
         """Set ComfyUI global configuration"""
         updates = {}
@@ -225,6 +233,8 @@ class ConfigManager:
             updates.setdefault("tts", {}).setdefault("minimax", {})["api_key"] = minimax_api_key
         if mimo_api_key is not None:
             updates.setdefault("tts", {}).setdefault("mimo", {})["api_key"] = mimo_api_key
+        if qwen_audio_api_key is not None:
+            updates.setdefault("tts", {}).setdefault("qwen_audio", {})["api_key"] = qwen_audio_api_key
         
         if updates:
             self.update({"comfyui": updates})
@@ -293,6 +303,16 @@ class ConfigManager:
                 mimo_updates["style"] = video_params.get("mimo_style")
             if mimo_updates:
                 comfyui_updates["tts"]["mimo"] = mimo_updates
+        elif tts_mode == "qwen_audio":
+            qwen_updates = {}
+            if video_params.get("qwen_audio_model"):
+                qwen_updates["model"] = video_params["qwen_audio_model"]
+            if video_params.get("tts_voice"):
+                qwen_updates["voice_id"] = video_params["tts_voice"]
+            if video_params.get("qwen_audio_language_type"):
+                qwen_updates["language_type"] = video_params["qwen_audio_language_type"]
+            if qwen_updates:
+                comfyui_updates["tts"]["qwen_audio"] = qwen_updates
 
         if media_config_key:
             media_updates = {}

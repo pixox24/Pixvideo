@@ -50,7 +50,7 @@ class DigitalHumanGenerateRequest(BaseModel):
     product_file_key: str | None = None
     product_title: str | None = Field(default=None, max_length=300)
     script: str = Field(default="", max_length=8000)
-    tts_inference_mode: Literal["local", "minimax", "comfyui", "mimo"] = "local"
+    tts_inference_mode: Literal["local", "minimax", "comfyui", "mimo", "qwen_audio"] = "local"
     voice: str | None = None
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
     title: str = Field(default="", max_length=200)

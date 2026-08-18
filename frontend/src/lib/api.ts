@@ -170,6 +170,7 @@ export function buildConfigPayload(settings: SystemSettings) {
       bizyair_api_key: settings.bizyairKey || undefined,
       minimax_api_key: settings.minimaxKey || undefined,
       mimo_api_key: settings.mimoKey || undefined,
+      qwen_audio_api_key: settings.qwenAudioKey || undefined,
     },
   };
 }
@@ -211,6 +212,8 @@ export function mapBackendConfigToSettings(data: any, fallback: SystemSettings):
     minimaxKeyMasked: data.comfyui?.minimax_api_key_masked || "",
     mimoKey: data.comfyui?.mimo_api_key_set ? fallback.mimoKey : "",
     mimoKeyMasked: data.comfyui?.mimo_api_key_masked || "",
+    qwenAudioKey: data.comfyui?.qwen_audio_api_key_set ? fallback.qwenAudioKey : "",
+    qwenAudioKeyMasked: data.comfyui?.qwen_audio_api_key_masked || "",
   };
 }
 
@@ -274,7 +277,7 @@ function buildVideoPayload(input: any) {
   const scenes = input.scenes || [];
   const sceneTexts = scenes.map((scene: any) => scene.ttsText).filter(Boolean);
   const text = sceneTexts.join("\n\n") || input.title;
-  const ttsMode = input.ttsMode === "minimax" ? "minimax" : input.ttsMode === "mimo" ? "mimo" : input.ttsMode === "comfyui" ? "comfyui" : "local";
+  const ttsMode = input.ttsMode === "minimax" ? "minimax" : input.ttsMode === "mimo" ? "mimo" : input.ttsMode === "qwen_audio" ? "qwen_audio" : input.ttsMode === "comfyui" ? "comfyui" : "local";
   const bgmPath = input.bgm && input.bgm !== "bgm-none" ? input.bgm : undefined;
   const bgmVolume = input.bgmVolume > 1 ? input.bgmVolume / 100 : input.bgmVolume;
   const subtitleStyle = input.subtitleStyle
@@ -291,6 +294,9 @@ function buildVideoPayload(input: any) {
     mode: "fixed",
     split_mode: scenes.length > 0 ? "paragraph" : input.splitType || "line",
     n_scenes: scenes.length || 1,
+    directorMode: input.directorMode || "auto",
+    density: input.density || "standard",
+    targetSceneCount: input.targetSceneCount ?? null,
     scenes: scenes.map((scene: any) => ({
       narration: String(scene.ttsText || "").trim(),
       visual_prompt: String(scene.visualPrompt || "").trim(),

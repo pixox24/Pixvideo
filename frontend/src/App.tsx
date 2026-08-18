@@ -120,7 +120,8 @@ export default function App() {
     },
     bizyairKey: "",
     minimaxKey: "",
-    mimoKey: ""
+    mimoKey: "",
+    qwenAudioKey: ""
   });
 
   // Toaster helper — errors stay until dismissed; success/info auto-hide.
@@ -641,6 +642,7 @@ export default function App() {
   const hasImageGeneration = serviceStatus.image_generation || settings.imageGeneration.apiKey !== "";
   const hasMiniMax = serviceStatus.minimax || settings.minimaxKey !== "";
   const hasMimo = serviceStatus.mimo || settings.mimoKey !== "";
+  const hasQwenAudio = serviceStatus.qwen_audio || settings.qwenAudioKey !== "";
   const latestCompletedQuickCreateTask = tasks.find(
     (task) => task.tabType === "quick-create" && task.status === "completed" && !isPendingTaskId(task.id),
   ) || null;
@@ -649,6 +651,7 @@ export default function App() {
     { key: "image", label: "图像生成", ok: hasImageGeneration, detail: hasImageGeneration ? "已就绪" : "待配置" },
     { key: "minimax", label: "MiniMax 配音", ok: Boolean(serviceStatus.minimax || hasMiniMax), detail: serviceStatus.minimax ? "已连接" : hasMiniMax ? "已配置" : "未配置" },
     { key: "mimo", label: "MiMo 配音", ok: Boolean(serviceStatus.mimo || hasMimo), detail: serviceStatus.mimo ? "已连接" : hasMimo ? "已配置" : "未配置" },
+    { key: "qwen_audio", label: "Qwen Audio 配音", ok: Boolean(serviceStatus.qwen_audio || hasQwenAudio), detail: serviceStatus.qwen_audio ? "已连接" : hasQwenAudio ? "已配置" : "未配置" },
     { key: "runninghub", label: "RunningHub", ok: hasRunningHub, detail: hasRunningHub ? "已就绪" : "待配置" },
     { key: "bizyair", label: "BizyAir", ok: Boolean(serviceStatus.bizyair), detail: serviceStatus.bizyair ? "已连接" : "未检测" },
   ];
@@ -950,6 +953,7 @@ export default function App() {
                 image: hasImageGeneration,
                 minimax: hasMiniMax || Boolean(serviceStatus.minimax),
                 mimo: hasMimo || Boolean(serviceStatus.mimo),
+                qwen_audio: hasQwenAudio || Boolean(serviceStatus.qwen_audio),
               }}
               onOpenSettings={() => setActiveTab("settings")}
               onOpenConsole={() => setConsoleOpen(true)}

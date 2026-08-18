@@ -91,6 +91,10 @@ async def tts_synthesize(
             tts_params["mimo_model"] = request.mimo_model
         if request.mimo_style:
             tts_params["mimo_style"] = request.mimo_style
+        if request.qwen_audio_model:
+            tts_params["qwen_audio_model"] = request.qwen_audio_model
+        if request.qwen_audio_language_type:
+            tts_params["qwen_audio_language_type"] = request.qwen_audio_language_type
         
         # Call TTS service
         audio_path = await pixelle_video.tts(**tts_params)

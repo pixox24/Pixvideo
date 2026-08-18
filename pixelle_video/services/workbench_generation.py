@@ -109,7 +109,7 @@ def normalize_tts_inference_mode(mode: Any) -> str:
     value = str(mode or "local").strip().lower()
     if value in {"edge", "local"}:
         return "local"
-    if value in {"minimax", "mimo", "comfyui"}:
+    if value in {"minimax", "mimo", "qwen_audio", "comfyui"}:
         return value
     return "local"
 
@@ -144,6 +144,8 @@ def build_parameter_snapshot(
         if tts_mode == "minimax"
         else "mimo_default"
         if tts_mode == "mimo"
+        else "Cherry"
+        if tts_mode == "qwen_audio"
         else "zh-CN-YunjianNeural"
     )
     default_speed = 1.0 if tts_mode in {"minimax", "mimo"} else 1.2
@@ -188,6 +190,8 @@ def build_parameter_snapshot(
             "minimax_model",
             ("comfyui", "tts", "minimax", "model"),
         ) or "speech-2.8-turbo"
+    elif tts_mode == "qwen_audio":
+        tts_model = _lookup(merged, "qwenAudioModel", "qwen_audio_model", ("comfyui", "tts", "qwen_audio", "model")) or "qwen3-tts-flash"
     else:
         tts_model = None
     mimo_style = _lookup(

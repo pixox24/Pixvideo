@@ -4,7 +4,19 @@ import { requestJson } from "./api";
 export async function createProject(input: QuickCreateInput): Promise<Project> {
   return requestJson<Project>("/api/projects", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: input.title, config: input, scenes: input.scenes.map((scene) => ({ narration: scene.ttsText, visualPrompt: scene.visualPrompt })) }),
+    body: JSON.stringify({
+      title: input.title,
+      config: input,
+      scenes: input.scenes.map((scene) => ({
+        narration: scene.ttsText,
+        visualPrompt: scene.visualPrompt,
+        visualFocus: scene.visualFocus,
+        textAnchors: scene.textAnchors,
+        lockedFields: scene.lockedFields,
+        editedFields: scene.editedFields,
+        locked: scene.locked,
+      })),
+    }),
   });
 }
 
@@ -12,7 +24,7 @@ export const fetchProject = (projectId: string) => requestJson<Project>(`/api/pr
 export const patchProject = (projectId: string, body: { title?: string; config?: Record<string, unknown>; expectedUpdatedAt?: string }) => requestJson<Project>(`/api/projects/${projectId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 export const createProjectFromHistory = (taskId: string) => requestJson<Project>(`/api/projects/from-history/${taskId}`, { method: "POST" });
 
-export async function patchScene(projectId: string, sceneId: string, patch: Partial<Pick<WorkbenchScene, "narration" | "visualPrompt" | "manualHoldSeconds" | "durationSeconds">>) {
+export async function patchScene(projectId: string, sceneId: string, patch: Partial<Pick<WorkbenchScene, "narration" | "visualPrompt" | "visualFocus" | "textAnchors" | "lockedFields" | "editedFields" | "locked" | "manualHoldSeconds" | "durationSeconds">>) {
   return requestJson(`/api/projects/${projectId}/scenes/${sceneId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
 }
 

@@ -9,6 +9,11 @@ class CreateProjectScene(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     narration: str = Field(..., min_length=1)
     visual_prompt: str = Field("", alias="visualPrompt")
+    visual_focus: str = Field("", alias="visualFocus")
+    text_anchors: list[str] = Field(default_factory=list, alias="textAnchors")
+    locked_fields: list[str] = Field(default_factory=list, alias="lockedFields")
+    edited_fields: list[str] = Field(default_factory=list, alias="editedFields")
+    locked: bool = False
 
     @field_validator("narration")
     @classmethod
@@ -66,6 +71,11 @@ class UpdateSceneRequest(BaseModel):
     visual_prompt: str | None = Field(default=None, alias="visualPrompt")
     manual_hold_seconds: float | None = Field(default=None, ge=0, alias="manualHoldSeconds")
     duration_seconds: float | None = Field(default=None, gt=0, alias="durationSeconds")
+    visual_focus: str | None = Field(default=None, alias="visualFocus")
+    text_anchors: list[str] | None = Field(default=None, alias="textAnchors")
+    locked_fields: list[str] | None = Field(default=None, alias="lockedFields")
+    edited_fields: list[str] | None = Field(default=None, alias="editedFields")
+    locked: bool | None = None
 
     @field_validator("narration")
     @classmethod
@@ -154,6 +164,11 @@ class ProjectSceneResponse(BaseModel):
     position: int
     narration: str
     visual_prompt: str = Field(alias="visualPrompt")
+    visual_focus: str = Field(default="", alias="visualFocus")
+    text_anchors: list[str] = Field(default_factory=list, alias="textAnchors")
+    locked_fields: list[str] = Field(default_factory=list, alias="lockedFields")
+    edited_fields: list[str] = Field(default_factory=list, alias="editedFields")
+    locked: bool = False
     current_version_id: str | None = Field(alias="currentVersionId")
     audio_url: str | None = Field(default=None, alias="audioUrl")
     duration_seconds: float = Field(alias="durationSeconds")

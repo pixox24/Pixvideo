@@ -49,6 +49,42 @@ async def test_batch_creates_one_job_per_scene(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_batch_skips_user_locked_scenes(tmp_path, monkeypatch):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    locked = Scene(project.project_id, 0, "locked", "prompt", locked=True)
+    open_scene = Scene(project.project_id, 1, "open", "prompt")
+    core.workbench_repository.create_project(project, [locked, open_scene])
+
+    async def noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(task_manager, "execute_task", noop)
+    response = await batch_image_generations(
+        project.project_id,
+        BatchImageRequest(sceneIds=[locked.scene_id, open_scene.scene_id]),
+        core,
+    )
+    assert [job["sceneId"] for job in response["jobs"]] == [open_scene.scene_id]
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_batch_rejects_when_all_selected_scenes_are_user_locked(tmp_path):
+    core = Core(tmp_path)
+    project = Project("p", {})
+    scene = Scene(project.project_id, 0, "locked", "prompt", locked=True)
+    core.workbench_repository.create_project(project, [scene])
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as error:
+        await batch_image_generations(project.project_id, BatchImageRequest(sceneIds=[scene.scene_id]), core)
+    assert error.value.status_code == 409
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
 async def test_batch_rejects_locked_active_scene_before_creating_jobs(tmp_path, monkeypatch):
     core = Core(tmp_path)
     project = Project("p", {})

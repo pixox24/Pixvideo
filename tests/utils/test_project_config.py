@@ -38,3 +38,20 @@ def test_normalize_camel_wins_when_both_conflict():
     assert out["subtitle_enabled"] is False
     assert out["enableMotion"] is False
     assert out["image_motion_enabled"] is False
+
+
+def test_normalize_defaults_to_auto_standard_director():
+    out = normalize_project_config({})
+    assert out["directorMode"] == "auto"
+    assert out["director_mode"] == "auto"
+    assert out["density"] == "standard"
+    assert out["storyboard_density"] == "standard"
+    assert out["targetSceneCount"] is None
+
+
+def test_normalize_legacy_scene_count_as_custom_soft_target():
+    out = normalize_project_config({"sceneCount": 7})
+    assert out["directorMode"] == "custom"
+    assert out["director_mode"] == "custom"
+    assert out["targetSceneCount"] == 7
+    assert out["target_scene_count"] == 7

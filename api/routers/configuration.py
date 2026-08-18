@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import os
 import requests
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -39,6 +40,8 @@ def _sanitized_config() -> dict:
     comfyui = config_manager.get_comfyui_config()
     minimax = comfyui.get("tts", {}).get("minimax", {})
     mimo = comfyui.get("tts", {}).get("mimo", {})
+    qwen_audio = comfyui.get("tts", {}).get("qwen_audio", {})
+    qwen_audio_key = qwen_audio.get("api_key") or os.getenv("DASHSCOPE_API_KEY")
 
     return {
         "success": True,
@@ -70,6 +73,8 @@ def _sanitized_config() -> dict:
             "minimax_api_key_masked": _mask_secret(minimax.get("api_key")),
             "mimo_api_key_set": bool(mimo.get("api_key")),
             "mimo_api_key_masked": _mask_secret(mimo.get("api_key")),
+            "qwen_audio_api_key_set": bool(qwen_audio_key),
+            "qwen_audio_api_key_masked": _mask_secret(qwen_audio_key),
         },
         "quick_create": config_manager.get("quick_create", {}),
         "template": config_manager.get("template", {}),
@@ -85,6 +90,7 @@ def _sanitized_config() -> dict:
             "bizyair": bool(comfyui.get("bizyair_api_key")),
             "minimax": bool(minimax.get("api_key")),
             "mimo": bool(mimo.get("api_key")),
+            "qwen_audio": bool(qwen_audio_key),
         },
     }
 
@@ -137,6 +143,7 @@ async def update_config(request: ConfigUpdateRequest):
                 bizyair_api_key=request.comfyui.bizyair_api_key,
                 minimax_api_key=request.comfyui.minimax_api_key,
                 mimo_api_key=request.comfyui.mimo_api_key,
+                qwen_audio_api_key=request.comfyui.qwen_audio_api_key,
             )
 
         config_manager.save()
@@ -201,6 +208,7 @@ async def test_service(request: ServiceTestRequest):
             "bizyair": "bizyair_api_key",
             "minimax": "minimax_api_key",
             "mimo": "mimo_api_key",
+            "qwen_audio": "qwen_audio_api_key",
         }
         key_name = key_names[request.service]
         key = request.config.get(key_name)
@@ -210,6 +218,8 @@ async def test_service(request: ServiceTestRequest):
                 key = comfyui.get("tts", {}).get("minimax", {}).get("api_key")
             elif request.service == "mimo":
                 key = comfyui.get("tts", {}).get("mimo", {}).get("api_key")
+            elif request.service == "qwen_audio":
+                key = comfyui.get("tts", {}).get("qwen_audio", {}).get("api_key") or os.getenv("DASHSCOPE_API_KEY")
             else:
                 key = comfyui.get(key_name)
         return {

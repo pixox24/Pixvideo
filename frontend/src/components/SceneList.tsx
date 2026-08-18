@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { AlertTriangle, Check, Image as ImageIcon, Loader } from "lucide-react";
+import { AlertTriangle, Check, Image as ImageIcon, Loader, Lock, Pencil } from "lucide-react";
 import { GenerationRun, WorkbenchScene } from "../types";
 import { resolveSceneVisualStatus, SCENE_STATUS_LABEL, SceneVisualStatus } from "../lib/sceneStatus";
 
@@ -109,6 +109,18 @@ export const SceneList: React.FC<Props> = ({
                   <div className="flex items-center gap-1.5 text-caption">
                     <span>#{position + 1}</span>
                     <span className={badge.className}>{badge.label}</span>
+                    {scene.locked && (
+                      <span className="inline-flex items-center gap-0.5 text-amber-300" title="已锁定，重新生成会跳过">
+                        <Lock className="h-3 w-3" aria-hidden="true" />
+                        <span className="sr-only">已锁定</span>
+                      </span>
+                    )}
+                    {!scene.locked && (scene.editedFields || []).length > 0 && (
+                      <span className="inline-flex items-center text-sky-300" title="包含人工编辑内容">
+                        <Pencil className="h-3 w-3" aria-hidden="true" />
+                        <span className="sr-only">人工编辑</span>
+                      </span>
+                    )}
                   </div>
                   <div className="truncate text-xs text-zinc-300">{scene.narration.slice(0, 42)}</div>
                 </div>

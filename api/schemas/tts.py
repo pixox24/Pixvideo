@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 class TTSSynthesizeRequest(BaseModel):
     """TTS synthesis request"""
     text: str = Field(..., description="Text to synthesize")
-    inference_mode: Optional[Literal["local", "comfyui", "minimax", "mimo"]] = Field(
+    inference_mode: Optional[Literal["local", "comfyui", "minimax", "mimo", "qwen_audio"]] = Field(
         None,
         description="TTS inference mode override. Use 'local' for Edge TTS."
     )
@@ -60,6 +60,8 @@ class TTSSynthesizeRequest(BaseModel):
         None,
         description="MiMo natural-language style instruction (optional)"
     )
+    qwen_audio_model: Optional[str] = Field(None, description="Qwen Audio TTS model override")
+    qwen_audio_language_type: Optional[str] = Field(None, description="Qwen Audio language type override")
     
     class Config:
         json_schema_extra = {

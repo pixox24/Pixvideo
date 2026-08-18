@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Check, Loader, RefreshCw, Upload, Volume2 } from "lucide-react";
+import { Check, Loader, Lock, RefreshCw, Unlock, Upload, Volume2 } from "lucide-react";
 import { WorkbenchScene } from "../types";
 
 interface Props {
   scene: WorkbenchScene | null;
-  onSave: (patch: { narration?: string; visualPrompt?: string }) => Promise<void>;
+  onSave: (patch: Partial<Pick<WorkbenchScene, "narration" | "visualPrompt" | "visualFocus" | "textAnchors" | "lockedFields" | "editedFields" | "locked">>) => Promise<void>;
   onRegenerateImage: (prompt: string) => Promise<void>;
   onRegenerateTts: (narration: string) => Promise<void>;
   onUpload: (file: File) => Promise<void>;
@@ -17,7 +17,7 @@ export const SceneInspector: React.FC<Props> = ({ scene, onSave, onRegenerateIma
   const [prompt, setPrompt] = useState("");
   const [saveState, setSaveState] = useState("idle");
   const [busy, setBusy] = useState<string | null>(null);
-  useEffect(() => { setNarration(scene?.narration || ""); setPrompt(scene?.visualPrompt || ""); setSaveState("idle"); }, [scene?.sceneId]);
+  useEffect(() => { setNarration(scene?.narration || ""); setPrompt(scene?.visualPrompt || ""); setSaveState("idle"); }, [scene?.sceneId, scene?.narration, scene?.visualPrompt]);
   useEffect(() => {
     if (!scene || (narration === scene.narration && prompt === scene.visualPrompt)) return;
     const timer = window.setTimeout(async () => { setSaveState("saving"); try { await onSave({ narration, visualPrompt: prompt }); setSaveState("saved"); } catch { setSaveState("failed"); } }, 500);
@@ -38,22 +38,46 @@ export const SceneInspector: React.FC<Props> = ({ scene, onSave, onRegenerateIma
       className={`min-h-0 overflow-y-auto border-l border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] p-4 ${className}`}
     >
       <div className="mb-3 flex items-center justify-between text-xs font-semibold text-zinc-200">
-        <span>提示词 / 版本</span>
+        <span className="flex items-center gap-1.5">
+          提示词 / 版本
+          {scene.locked && <span className="ui-chip ui-chip-brand !py-0"><Lock className="h-3 w-3" />已锁定</span>}
+          {!scene.locked && (scene.editedFields || []).length > 0 && <span className="text-sky-300">人工编辑</span>}
+        </span>
         <span className="text-caption">
           {saveState === "saving" ? "保存中" : saveState === "saved" ? "已保存" : saveState === "failed" ? "保存失败" : ""}
         </span>
+      </div>
+      <div className="mb-3 flex items-center justify-between gap-2 rounded border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-2 py-1.5 text-caption text-zinc-400">
+        <span>{scene.locked ? "重新生成会跳过此镜头" : "人工修改会自动保留"}</span>
+        <button
+          type="button"
+          disabled={Boolean(busy)}
+          onClick={() => run("lock", () => onSave({ locked: !scene.locked }))}
+          className="ui-btn ui-btn-secondary ui-btn-sm"
+          title={scene.locked ? "解锁此镜头" : "锁定此镜头"}
+        >
+          {scene.locked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+          {scene.locked ? "解锁" : "锁定"}
+        </button>
       </div>
       <label className="mb-2 block text-label">
         旁白
         <textarea
           value={narration}
           onChange={(event) => setNarration(event.target.value)}
+          disabled={Boolean(scene.locked || scene.lockedFields?.includes("narration"))}
           className="ui-input mt-1 min-h-20 w-full resize-y !h-auto py-2"
         />
       </label>
+      {(scene.visualFocus || (scene.textAnchors || []).length > 0) && (
+        <div className="mb-3 rounded border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-2 py-1.5 text-caption text-zinc-400">
+          <div>视觉焦点：{scene.visualFocus || "—"}</div>
+          {(scene.textAnchors || []).length > 0 && <div className="mt-0.5">文字锚点：{scene.textAnchors!.join("、")}</div>}
+        </div>
+      )}
       <button
         type="button"
-        disabled={Boolean(busy) || !narration.trim()}
+        disabled={Boolean(busy) || scene.locked || !narration.trim()}
         onClick={() => run("tts", () => onRegenerateTts(narration))}
         className="ui-btn ui-btn-secondary mb-3 w-full"
       >
@@ -65,6 +89,7 @@ export const SceneInspector: React.FC<Props> = ({ scene, onSave, onRegenerateIma
         <textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
+          disabled={Boolean(scene.locked || scene.lockedFields?.includes("visualPrompt"))}
           className="ui-input mt-1 min-h-24 w-full resize-y !h-auto py-2"
         />
       </label>
@@ -73,7 +98,7 @@ export const SceneInspector: React.FC<Props> = ({ scene, onSave, onRegenerateIma
           type="button"
           title="重新生成"
           aria-label="重新生成"
-          disabled={Boolean(busy) || !prompt.trim()}
+          disabled={Boolean(busy) || scene.locked || !prompt.trim()}
           onClick={() => run("image", () => onRegenerateImage(prompt))}
           className="ui-btn ui-btn-primary ui-btn-sm"
         >
@@ -86,6 +111,7 @@ export const SceneInspector: React.FC<Props> = ({ scene, onSave, onRegenerateIma
           <input
             className="hidden"
             type="file"
+            disabled={Boolean(scene.locked)}
             accept="image/png,image/jpeg,image/webp"
             onChange={(event) => {
               const file = event.target.files?.[0];

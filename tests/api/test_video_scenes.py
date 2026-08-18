@@ -16,6 +16,11 @@ def test_video_request_accepts_100_explicit_scenes():
     assert len(request.scenes) == 100
 
 
+def test_video_request_defaults_to_auto_storyboard_split():
+    request = VideoGenerateRequest(text="星期一开始准备发布会。")
+    assert request.split_mode == "auto"
+
+
 def test_video_request_rejects_101_explicit_scenes():
     with pytest.raises(ValidationError):
         VideoGenerateRequest(

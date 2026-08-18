@@ -11,12 +11,41 @@ export type TaskSource =
   | "image-to-video"
   | "action-transfer";
 
+export type DirectorMode = "auto" | "custom";
+export type StoryboardDensity = "sparse" | "standard" | "dense";
+
+export interface StoryboardDirectorConfig {
+  directorMode: DirectorMode;
+  density: StoryboardDensity;
+  targetSceneCount: number | null;
+}
+
+export interface StoryboardAnalysisUnit {
+  index: number;
+  text: string;
+  chars: number;
+  estimatedSeconds: number;
+  boundaryReason: string;
+  visualFocus: string;
+  textAnchors: string[];
+}
+
+export interface StoryboardAnalysis {
+  recommendedSceneCount: number;
+  actualSceneCount: number;
+  targetSceneCount: number | null;
+  density: StoryboardDensity;
+  estimatedDurationSeconds: number;
+  semanticUnits: StoryboardAnalysisUnit[];
+  warnings: string[];
+}
+
 export interface Preset {
   id: string;
   name: string;
   createdAt?: string;
   updatedAt?: string;
-  ttsMode: "edge" | "comfyui" | "minimax" | "mimo";
+  ttsMode: "edge" | "comfyui" | "minimax" | "mimo" | "qwen_audio";
   voice: string;
   speed: number;
   /** continuous = one multi-scene synth then split (recommended); per_scene = legacy */
@@ -25,7 +54,7 @@ export interface Preset {
   bgm: string;
   bgmVolume: number;
   promptPrefix: string;
-  splitType: "paragraph" | "line" | "sentence";
+  splitType: "auto" | "paragraph" | "line" | "sentence";
   enableMotion?: boolean;
   enableSubtitles?: boolean;
   /** When true, call image API / workflows; when false (default), use local 素材库. */
@@ -44,6 +73,9 @@ export interface Preset {
   videoFps?: number;
   imageAspectRatio?: string;
   subtitleStyle?: SubtitleStyle;
+  directorMode?: DirectorMode;
+  density?: StoryboardDensity;
+  targetSceneCount?: number | null;
 }
 
 export interface Task {
@@ -114,6 +146,8 @@ export interface SystemSettings {
   minimaxKeyMasked?: string;
   mimoKey: string;
   mimoKeyMasked?: string;
+  qwenAudioKey: string;
+  qwenAudioKeyMasked?: string;
 }
 
 export interface WorkflowOption {
@@ -187,7 +221,25 @@ export interface WorkbenchResources {
 
 export type WorkbenchJobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 export interface AssetVersion { versionId: string; source: "ai" | "upload"; imageUrl: string; thumbnailUrl?: string; promptSnapshot?: string; createdAt: string; }
-export interface WorkbenchScene { sceneId: string; position: number; narration: string; visualPrompt: string; currentVersionId: string | null; audioUrl?: string; durationSeconds: number; manualHoldSeconds: number; status: string; versions: AssetVersion[]; generationState?: GenerationState; }
+export type StoryboardField = "narration" | "visualPrompt" | "visualFocus" | "textAnchors";
+export interface WorkbenchScene {
+  sceneId: string;
+  position: number;
+  narration: string;
+  visualPrompt: string;
+  visualFocus?: string;
+  textAnchors?: string[];
+  lockedFields?: StoryboardField[];
+  editedFields?: StoryboardField[];
+  locked?: boolean;
+  currentVersionId: string | null;
+  audioUrl?: string;
+  durationSeconds: number;
+  manualHoldSeconds: number;
+  status: string;
+  versions: AssetVersion[];
+  generationState?: GenerationState;
+}
 export type GenerationRunStatus = "queued" | "running" | "paused" | "completed" | "completed_with_failures" | "cancelled" | "failed";
 export type GenerationRunItemStatus = "queued" | "running_tts" | "running_image" | "completed" | "skipped" | "failed" | "cancelled" | "candidate_review";
 export interface GenerationState { image: "ready" | "missing" | "stale"; audio: "ready" | "missing" | "stale"; candidateCount: number; }
@@ -277,5 +329,18 @@ export interface Project {
   dirty?: boolean;
   pipelineProgress?: PipelineProgress | null;
 }
-export interface QuickCreateInput { title: string; scenes: Array<{ id?: number; ttsText: string; visualPrompt: string }>; [key: string]: unknown; }
+export interface QuickCreateInput {
+  title: string;
+  scenes: Array<{
+    id?: number;
+    ttsText: string;
+    visualPrompt: string;
+    visualFocus?: string;
+    textAnchors?: string[];
+    lockedFields?: StoryboardField[];
+    editedFields?: StoryboardField[];
+    locked?: boolean;
+  }>;
+  [key: string]: unknown;
+}
 export interface ExportSubmission { exportId: string; jobId: string; taskId: string; status: WorkbenchJobStatus; blockingScenes: string[]; candidateWarnings?: string[]; }

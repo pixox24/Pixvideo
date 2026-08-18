@@ -115,6 +115,9 @@ def _build_video_params(request_body: VideoGenerateRequest, progress_callback=No
         "pipeline": request_body.pipeline,
         "mode": request_body.mode,
         "split_mode": request_body.split_mode,
+        "director_mode": request_body.director_mode,
+        "density": request_body.storyboard_density,
+        "target_scene_count": request_body.target_scene_count,
         "title": request_body.title,
         "n_scenes": request_body.n_scenes,
         "scenes": [scene.model_dump() for scene in request_body.scenes]

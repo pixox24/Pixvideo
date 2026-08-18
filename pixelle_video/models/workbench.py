@@ -101,6 +101,11 @@ class Scene:
     updated_at: datetime = field(default_factory=utc_now)
     image_fingerprint: str | None = None
     audio_fingerprint: str | None = None
+    visual_focus: str = ""
+    text_anchors: list[str] = field(default_factory=list)
+    locked_fields: list[str] = field(default_factory=list)
+    edited_fields: list[str] = field(default_factory=list)
+    locked: bool = False
 
 
 @dataclass

@@ -33,6 +33,9 @@ _CONFIG_KEY_PAIRS: tuple[tuple[str, str], ...] = (
     ("workflowId", "media_workflow"),
     ("bookendEnabled", "bookend_enabled"),
     ("useApiImage", "use_api_image"),
+    ("directorMode", "director_mode"),
+    ("density", "storyboard_density"),
+    ("targetSceneCount", "target_scene_count"),
 )
 
 
@@ -56,11 +59,32 @@ def normalize_project_config(config: dict[str, Any] | None) -> dict[str, Any]:
     When both exist, camel wins (UI is source of truth after editor saves).
     """
     out = dict(config or {})
+    legacy_scene_count = out.get("sceneCount") or out.get("scene_count")
+    has_explicit_director_mode = any(
+        out.get(key) is not None for key in ("directorMode", "director_mode")
+    )
     for camel, snake in _CONFIG_KEY_PAIRS:
         if camel in out and out[camel] is not None:
             out[snake] = out[camel]
         elif snake in out and out[snake] is not None:
             out[camel] = out[snake]
+    # Projects saved before the director console had only sceneCount. Preserve
+    # that explicit intent as a soft custom target instead of silently switching
+    # the project to semantic auto mode.
+    if not has_explicit_director_mode and legacy_scene_count is not None:
+        out["directorMode"] = "custom"
+        out["director_mode"] = "custom"
+        if out.get("targetSceneCount") is None:
+            out["targetSceneCount"] = legacy_scene_count
+        if out.get("target_scene_count") is None:
+            out["target_scene_count"] = legacy_scene_count
+    out.setdefault("directorMode", "auto")
+    out.setdefault("director_mode", out["directorMode"])
+    out.setdefault("density", "standard")
+    out.setdefault("storyboard_density", out["density"])
+    if "targetSceneCount" not in out and "target_scene_count" not in out:
+        out["targetSceneCount"] = None
+        out["target_scene_count"] = None
     # Alias workflow → media_workflow / workflowId when only one form is present
     if "workflowId" not in out or out.get("workflowId") in (None, ""):
         workflow = out.get("workflow") or out.get("media_workflow")

@@ -84,7 +84,7 @@ class TTSService(ComfyBaseService):
         # Unit tests and direct service usage may pass the TTS subsection
         # instead of the full app config. Keep full-config behavior unchanged.
         if not self.config and any(
-            key in config for key in ("inference_mode", "local", "comfyui", "minimax", "mimo", "default_workflow")
+            key in config for key in ("inference_mode", "local", "comfyui", "minimax", "mimo", "qwen_audio", "default_workflow")
         ):
             self.config = config
             self._direct_config = True
@@ -122,6 +122,7 @@ class TTSService(ComfyBaseService):
         runninghub_api_key: Optional[str] = None,
         minimax_api_key: Optional[str] = None,
         mimo_api_key: Optional[str] = None,
+        qwen_audio_api_key: Optional[str] = None,
         # TTS parameters
         voice: Optional[str] = None,
         speed: Optional[float] = None,
@@ -174,7 +175,7 @@ class TTSService(ComfyBaseService):
         mode = str(raw_mode or "local").strip().lower()
         if mode in {"edge", "local"}:
             mode = "local"
-        elif mode not in {"comfyui", "minimax", "mimo"}:
+        elif mode not in {"comfyui", "minimax", "mimo", "qwen_audio"}:
             mode = "local"
         
         # Route to appropriate implementation
@@ -202,6 +203,11 @@ class TTSService(ComfyBaseService):
                 speed=speed,
                 output_path=output_path,
                 **params
+            )
+        elif mode == "qwen_audio":
+            return await self._call_qwen_audio_tts(
+                text=text, api_key=qwen_audio_api_key, voice=voice,
+                speed=speed, output_path=output_path, **params
             )
         else:  # comfyui
             # 1. Resolve workflow (returns structured info)
@@ -308,6 +314,73 @@ class TTSService(ComfyBaseService):
                 "Please set it in Advanced Settings or MIMO_API_KEY."
             )
         return final_api_key.strip()
+
+    def _resolve_qwen_audio_api_key(self, api_key: Optional[str] = None) -> str:
+        config = self.config.get("qwen_audio", {})
+        value = api_key or os.getenv("DASHSCOPE_API_KEY") or self._load_dotenv_value("DASHSCOPE_API_KEY") or config.get("api_key") or ""
+        if not str(value).strip():
+            raise ValueError("DashScope API key is not configured. Please set it in Advanced Settings or DASHSCOPE_API_KEY.")
+        return str(value).strip()
+
+    async def _call_qwen_audio_tts(self, text: str, api_key: Optional[str] = None,
+                                   voice: Optional[str] = None, speed: Optional[float] = None,
+                                   output_path: Optional[str] = None, **params) -> str:
+        """Generate speech with DashScope Qwen TTS multimodal generation."""
+        import httpx
+
+        config = self.config.get("qwen_audio", {})
+        key = self._resolve_qwen_audio_api_key(api_key)
+        model = params.get("qwen_audio_model") or config.get("model", "qwen3-tts-flash")
+        final_voice = voice or config.get("voice_id", "Cherry")
+        language = params.get("qwen_audio_language_type") or config.get("language_type", "Chinese")
+        endpoint = params.get("qwen_audio_endpoint") or config.get("endpoint", "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation")
+        output_path = output_path or f"output/{uuid.uuid4().hex}.mp3"
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        parameters = {"voice": final_voice, "language_type": language, "response_format": params.get("qwen_audio_format", "mp3")}
+        if speed is not None:
+            parameters["rate"] = speed
+        payload = {"model": model, "input": {"text": text}, "parameters": parameters}
+        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        try:
+            async with _async_http_client(timeout=params.get("qwen_audio_timeout", 120.0)) as client:
+                response = await client.post(endpoint, json=payload, headers=headers)
+                response.raise_for_status()
+                body = response.json()
+        except httpx.HTTPStatusError as exc:
+            raise Exception(f"Qwen Audio TTS HTTP error: {exc.response.status_code} - {exc.response.text}") from exc
+        except httpx.HTTPError as exc:
+            raise Exception(f"Qwen Audio TTS request failed: {exc}") from exc
+        except ValueError as exc:
+            raise Exception(f"Qwen Audio TTS returned invalid JSON: {exc}") from exc
+
+        output = body.get("output") if isinstance(body, dict) else None
+        audio_value = output.get("audio") if isinstance(output, dict) else None
+        audio_value = audio_value or (body.get("audio") if isinstance(body, dict) else None)
+        if not audio_value:
+            raise Exception(f"Qwen Audio TTS response did not include audio: {body.get('message') or body.get('code') or 'unknown error'}")
+        if isinstance(audio_value, dict):
+            audio_value = audio_value.get("url") or audio_value.get("data") or audio_value.get("base64")
+        if isinstance(audio_value, str) and audio_value.startswith(("http://", "https://")):
+            async with _async_http_client(timeout=params.get("qwen_audio_timeout", 120.0)) as client:
+                audio_response = await client.get(audio_value)
+                audio_response.raise_for_status()
+                audio_bytes = audio_response.content
+        elif isinstance(audio_value, str):
+            try:
+                if "," in audio_value and audio_value.startswith("data:"):
+                    audio_value = audio_value.split(",", 1)[1]
+                audio_bytes = base64.b64decode(audio_value, validate=True)
+            except (ValueError, binascii.Error) as exc:
+                raise Exception("Qwen Audio TTS returned invalid base64 audio") from exc
+        elif isinstance(audio_value, (bytes, bytearray)):
+            audio_bytes = bytes(audio_value)
+        else:
+            raise Exception("Qwen Audio TTS returned unsupported audio data")
+        output_file.write_bytes(audio_bytes)
+        from pixelle_video.utils.tts_audio_postprocess import postprocess_tts_clip
+        await asyncio.to_thread(postprocess_tts_clip, output_path)
+        return output_path
 
     def _load_dotenv_value(self, key: str) -> Optional[str]:
         env_path = Path(".env")

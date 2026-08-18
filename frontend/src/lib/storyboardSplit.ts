@@ -5,13 +5,26 @@
  * See docs/plans/2026-08-10-semantic-storyboard-count-plan.md
  */
 
-export type DraftSplitType = "paragraph" | "line" | "sentence";
+export type DraftSplitType = "auto" | "paragraph" | "line" | "sentence";
+export type StoryboardDensity = "sparse" | "standard" | "dense";
 
 export const STORYBOARD_SCENE_MIN = 1;
 export const STORYBOARD_SCENE_MAX = 30;
 
 /** Minimum length of each side when soft-splitting on pause punctuation. */
 const SOFT_EXPAND_MIN_PART = 4;
+export const AUTO_MAX_CHARS_PER_SEGMENT = 52;
+export const AUTO_MIN_CHARS_PER_SEGMENT = 12;
+
+export const DENSITY_CHARS_PER_SCENE: Record<StoryboardDensity, number> = {
+  sparse: 60,
+  standard: 40,
+  dense: 28,
+};
+
+export function charsPerSceneForDensity(density: StoryboardDensity = "standard"): number {
+  return DENSITY_CHARS_PER_SCENE[density] || DENSITY_CHARS_PER_SCENE.standard;
+}
 
 export const clampSceneCount = (value: number, min = STORYBOARD_SCENE_MIN, max = STORYBOARD_SCENE_MAX) => {
   if (!Number.isFinite(value)) return min;
@@ -26,6 +39,8 @@ export function splitDraftByRule(text: string, splitType: DraftSplitType): strin
   const trimmed = String(text || "").trim();
   if (!trimmed) return [];
 
+  if (splitType === "auto") return autoSplitDraft(trimmed);
+
   if (splitType === "paragraph") {
     return trimmed
       .split(/\n\s*\n/)
@@ -33,20 +48,98 @@ export function splitDraftByRule(text: string, splitType: DraftSplitType): strin
       .filter(Boolean);
   }
 
-  if (splitType === "sentence") {
-    return (
-      trimmed
-        .match(/[^。！？.!?\n]+[。！？.!?]?/g)
-        ?.map((segment) => segment.trim())
-        .filter(Boolean) || []
-    );
-  }
+  if (splitType === "sentence") return splitSentenceUnits(trimmed);
 
-  // line (default)
+  // Explicit line mode
   return trimmed
     .split(/\r?\n/)
     .map((segment) => segment.trim())
     .filter(Boolean);
+}
+
+const meaningfulLength = (value: string) => value.replace(/\s+/g, "").length;
+
+function splitSentenceUnits(text: string): string[] {
+  const units: string[] = [];
+  let buffer = "";
+  const source = String(text || "");
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index] || "";
+    if (char === "\n") {
+      if (buffer.trim()) units.push(buffer.trim());
+      buffer = "";
+      continue;
+    }
+    buffer += char;
+    const next = source[index + 1] || "";
+    if ("。！？!?…".includes(char)) {
+      if ("。！？!?…".includes(next)) continue;
+      units.push(buffer.trim());
+      buffer = "";
+    } else if (char === ".") {
+      // Do not split decimal numbers, dates, domains, or version strings.
+      if (/\d/.test(next) || next === "." || /[A-Za-z]/.test(next)) continue;
+      units.push(buffer.trim());
+      buffer = "";
+    }
+  }
+  if (buffer.trim()) units.push(buffer.trim());
+  return units.filter(Boolean);
+}
+
+function splitLongSentence(sentence: string): string[] {
+  if (meaningfulLength(sentence) <= AUTO_MAX_CHARS_PER_SEGMENT) return [sentence.trim()];
+
+  const tokens = sentence.split(/([，,；;：:]+)/).filter(Boolean);
+  const parts: string[] = [];
+  let buffer = "";
+  for (const token of tokens) {
+    buffer = `${buffer}${token}`.trim();
+    if (/^[，,；;：:]+$/.test(token)) {
+      parts.push(buffer);
+      buffer = "";
+    }
+  }
+  if (buffer) parts.push(buffer);
+
+  if (
+    parts.length <= 1 ||
+    parts.some((part) => meaningfulLength(part) > AUTO_MAX_CHARS_PER_SEGMENT)
+  ) {
+    return [sentence.trim()];
+  }
+
+  const groups: string[] = [];
+  buffer = "";
+  for (const part of parts) {
+    const candidate = `${buffer}${part}`.trim();
+    if (buffer && meaningfulLength(candidate) > AUTO_MAX_CHARS_PER_SEGMENT) {
+      groups.push(buffer);
+      buffer = part;
+    } else {
+      buffer = candidate;
+    }
+  }
+  if (buffer) groups.push(buffer);
+
+  if (groups.length > 1 && meaningfulLength(groups.at(-1) || "") < AUTO_MIN_CHARS_PER_SEGMENT) {
+    groups[groups.length - 2] = `${groups[groups.length - 2]}${groups[groups.length - 1]}`;
+    groups.pop();
+  }
+  return groups.length ? groups : [sentence.trim()];
+}
+
+/** Split only at sentence or explicit pause boundaries; never character-slice. */
+export function autoSplitDraft(text: string): string[] {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return [];
+  const sentences = splitSentenceUnits(trimmed);
+  const units: string[] = [];
+  for (const sentence of sentences) {
+    const clean = sentence.trim();
+    if (clean) units.push(...splitLongSentence(clean));
+  }
+  return units.length ? units : [trimmed];
 }
 
 /**
@@ -124,8 +217,17 @@ export interface StoryboardRecommendation {
   semantic: number;
   rhythm: number;
   charCount: number;
+  units: string[];
+  longestChars: number;
+  longestSeconds: number;
+  warnings: string[];
   /** Preferred default adopt target: semantic first. */
   preferred: number;
+  density: StoryboardDensity;
+  recommendedSceneCount: number;
+  actualSceneCount: number;
+  targetSceneCount: number | null;
+  estimatedDurationSeconds: number;
 }
 
 /**
@@ -134,16 +236,55 @@ export interface StoryboardRecommendation {
 export function analyzeStoryboardRecommendation(
   text: string,
   splitType: DraftSplitType,
-  options?: { softExpand?: boolean; charsPerScene?: number; min?: number; max?: number },
+  options?: {
+    softExpand?: boolean;
+    charsPerScene?: number;
+    density?: StoryboardDensity;
+    targetSceneCount?: number | null;
+    min?: number;
+    max?: number;
+  },
 ): StoryboardRecommendation {
   const charCount = countCopyChars(text);
   const semantic = suggestSceneCount(text, splitType, options);
-  const rhythm = suggestRhythmSceneCount(charCount, options);
+  const density = options?.density || "standard";
+  const rhythm = suggestRhythmSceneCount(charCount, {
+    ...options,
+    charsPerScene: options?.charsPerScene ?? charsPerSceneForDensity(density),
+  });
+  let units = splitDraftByRule(text, splitType);
+  if (options?.softExpand !== false) units = softExpandByPause(units);
+  const longestChars = Math.max(0, ...units.map((unit) => meaningfulLength(unit)));
+  const longestSeconds = (longestChars / 260) * 60;
+  const warnings: string[] = [];
+  if (longestChars > AUTO_MAX_CHARS_PER_SEGMENT) {
+    warnings.push(`仍有 ${longestChars} 字的旁白无法在现有标点处安全拆分`);
+  }
+  if (longestSeconds > 10) {
+    warnings.push(`最长分镜预计 ${longestSeconds.toFixed(1)} 秒，建议启用视觉节拍或补充停顿标点`);
+  }
+  const targetSceneCount = options?.targetSceneCount == null
+    ? null
+    : clampSceneCount(options.targetSceneCount, options?.min, options?.max);
+  const actualUnits = targetSceneCount == null ? units : packSemanticUnits(units, targetSceneCount);
+  const actualSceneCount = actualUnits.length || 1;
+  if (targetSceneCount != null && actualSceneCount !== targetSceneCount) {
+    warnings.push(`目标 ${targetSceneCount} 镜，实际采用 ${actualSceneCount} 个自然语义镜头`);
+  }
   return {
     semantic,
     rhythm,
     charCount,
+    units,
+    longestChars,
+    longestSeconds,
+    warnings,
     preferred: semantic,
+    density,
+    recommendedSceneCount: semantic,
+    actualSceneCount,
+    targetSceneCount,
+    estimatedDurationSeconds: Math.max(1, Math.round((charCount / 260) * 60)),
   };
 }
 

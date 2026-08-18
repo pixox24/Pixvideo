@@ -27,7 +27,7 @@ import {
   RefreshCw,
   XCircle,
 } from "lucide-react";
-import { Preset, QuickCreateInput, SubtitleStyle, WorkbenchResources } from "../types";
+import { DirectorMode, Preset, QuickCreateInput, StoryboardDensity, SubtitleStyle, WorkbenchResources } from "../types";
 import { VOICE_OPTIONS } from "../data";
 import {
   extractHighlightKeywords,
@@ -46,6 +46,7 @@ import {
   clampSceneCount,
   STORYBOARD_SCENE_MAX,
   STORYBOARD_SCENE_MIN,
+  charsPerSceneForDensity,
   type DraftSplitType,
 } from "../lib/storyboardSplit";
 import {
@@ -61,6 +62,7 @@ interface ServiceReadyState {
   image: boolean;
   minimax: boolean;
   mimo: boolean;
+  qwen_audio?: boolean;
 }
 
 interface QuickCreateProps {
@@ -86,11 +88,27 @@ interface QuickCreateProps {
 }
 
 type FieldErrors = Partial<Record<"title" | "content" | "review" | "tts", string>>;
+type QuickSceneField = "narration" | "visualPrompt" | "visualFocus" | "textAnchors";
+type QuickScene = {
+  id: number;
+  ttsText: string;
+  visualPrompt: string;
+  visualFocus?: string;
+  textAnchors?: string[];
+  lockedFields?: QuickSceneField[];
+  editedFields?: QuickSceneField[];
+  locked?: boolean;
+};
 
 const DEFAULT_PREVIEW_TTS_TEXT = "这是一段 TTS 试听文案，用来检查音色、语速和发音效果。";
 const QUICK_CREATE_DRAFT_KEY = "pixvideo.quick-create.draft.v1";
 /** Sentinel for MiniMax free-form voice_id (clone / design / unlisted system IDs). */
 const CUSTOM_VOICE_OPTION_VALUE = "__custom__";
+const STORYBOARD_DENSITY_LABEL: Record<StoryboardDensity, string> = {
+  sparse: "稀疏",
+  standard: "标准",
+  dense: "密集",
+};
 
 const isKnownVoiceOption = (mode: keyof typeof VOICE_OPTIONS, voiceId: string) =>
   VOICE_OPTIONS[mode].some((item) => item.id === voiceId);
@@ -317,12 +335,19 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   // AI Creation states
   const [aiTopic, setAiTopic] = useState("探索未来世界的智能机器人生活碎片");
   const [aiSceneCount, setAiSceneCount] = useState(5);
+  const [directorMode, setDirectorMode] = useState<DirectorMode>("auto");
+  const [storyboardDensity, setStoryboardDensity] = useState<StoryboardDensity>("standard");
   /** True once the user manually edits scene count (or loads a preset/draft with an explicit count). */
   const [aiSceneCountTouched, setAiSceneCountTouched] = useState(false);
   /** Semantic suggestion (sentence/line units) after pure-copy step. */
   const [suggestedSceneCount, setSuggestedSceneCount] = useState<number | null>(null);
   /** Rhythm suggestion (chars ÷ ~40) — secondary, not forced. */
   const [rhythmSceneCount, setRhythmSceneCount] = useState<number | null>(null);
+  const [actualStoryboardSceneCount, setActualStoryboardSceneCount] = useState<number | null>(null);
+  const [estimatedStoryboardSeconds, setEstimatedStoryboardSeconds] = useState<number | null>(null);
+  const [storyboardWarnings, setStoryboardWarnings] = useState<string[]>([]);
+  const [storyboardAnalysisLoading, setStoryboardAnalysisLoading] = useState(false);
+  const storyboardAnalysisRequestIdRef = React.useRef(0);
   const [aiLoading, setAiLoading] = useState(false);
   /** Default full: step1 pure copy → step2 semantic recommend (not locked to N). */
   const [copyDraftMode, setCopyDraftMode] = useState<"full" | "segmented">("full");
@@ -333,7 +358,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [copyCharCountMode, setCopyCharCountMode] = useState<"around" | "within">("around");
 
   // Manual Creation states (Scenes list)
-  const [scenes, setScenes] = useState<Array<{ id: number; ttsText: string; visualPrompt: string }>>([
+  const [scenes, setScenes] = useState<QuickScene[]>([
     { id: 1, ttsText: "这是一个科技感爆棚的高能概念画卷。", visualPrompt: "Cinematic digital art of high-tech lab, warm amber lighting, futuristic, 4k" },
     { id: 2, ttsText: "每一个齿轮的咬合，都是精工美学的体现。", visualPrompt: "Macro close-up of amber golden machine gears interlocking in motion, cinematic depth of field" }
   ]);
@@ -341,7 +366,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   // Batch Creation states
   const [batchInput, setBatchInput] = useState("主题一: 智能机器人在雨夜撑伞\n主题二: 机械宠物狗在客厅嬉戏\n主题三: 未来城市空中飞车速递");
   const [batchCount, setBatchCount] = useState(3);
-  const [splitType, setSplitType] = useState<DraftSplitType>("line");
+  const [splitType, setSplitType] = useState<DraftSplitType>("auto");
 
   // BGM states
   const [bgm, setBgm] = useState("");
@@ -350,7 +375,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const bgmPreviewRef = React.useRef<HTMLAudioElement | null>(null);
 
   // TTS States — default Edge (zero-config). Presets / MiniMax ready state may upgrade later.
-  const [ttsMode, setTtsMode] = useState<"edge" | "comfyui" | "minimax" | "mimo">("edge");
+  const [ttsMode, setTtsMode] = useState<"edge" | "comfyui" | "minimax" | "mimo" | "qwen_audio">("edge");
   // Phase-1 recommended default: whole-script continuous synth + per-scene split.
   const [ttsDelivery, setTtsDelivery] = useState<"continuous" | "per_scene">("continuous");
   const [voice, setVoice] = useState("zh-CN-XiaoxiaoNeural");
@@ -388,7 +413,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   // Render Workflow states
   const [workflowId, setWorkflowId] = useState("");
   const [workflowsCollapsed, setWorkflowsCollapsed] = useState(true);
-  const [promptPrefix, setPromptPrefix] = useState("masterpiece, best quality, ultra-detailed, photorealistic, cinematic volumetric lighting, warm color palette, amber glow");
+  const [promptPrefix, setPromptPrefix] = useState("");
   const [testImagePrompt, setTestImagePrompt] = useState("a futuristic robot walking through a warm cinematic city street");
   const [testImageUrl, setTestImageUrl] = useState<string | null>(null);
   const [testImageError, setTestImageError] = useState<string | null>(null);
@@ -511,6 +536,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           if (["ai", "manual", "batch"].includes(draft.mode)) setMode(draft.mode);
           if (typeof draft.title === "string") setTitle(draft.title);
           if (typeof draft.aiTopic === "string") setAiTopic(draft.aiTopic);
+          if (draft.directorMode === "auto" || draft.directorMode === "custom") setDirectorMode(draft.directorMode);
+          if (["sparse", "standard", "dense"].includes(draft.storyboardDensity)) {
+            setStoryboardDensity(draft.storyboardDensity);
+          }
           if (typeof draft.copyDraft === "string") setCopyDraft(draft.copyDraft);
           if (typeof draft.batchInput === "string") {
             setBatchInput(draft.batchInput);
@@ -537,15 +566,21 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           if (typeof draft.suggestedSceneCount === "number") {
             setSuggestedSceneCount(clampSceneCount(draft.suggestedSceneCount));
           }
+          if (typeof draft.actualStoryboardSceneCount === "number") {
+            setActualStoryboardSceneCount(clampSceneCount(draft.actualStoryboardSceneCount));
+          }
+          if (typeof draft.estimatedStoryboardSeconds === "number") {
+            setEstimatedStoryboardSeconds(Math.max(1, draft.estimatedStoryboardSeconds));
+          }
           if (["full", "segmented"].includes(draft.copyDraftMode)) setCopyDraftMode(draft.copyDraftMode);
           if (typeof draft.copyCharCount === "number") {
             setCopyCharCount(draft.copyCharCount);
             setCopyCharCountTouched(true);
           }
           if (["around", "within"].includes(draft.copyCharCountMode)) setCopyCharCountMode(draft.copyCharCountMode);
-          if (["paragraph", "line", "sentence"].includes(draft.splitType)) setSplitType(draft.splitType);
+          if (["auto", "paragraph", "line", "sentence"].includes(draft.splitType)) setSplitType(draft.splitType);
           if (typeof draft.workflowId === "string") setWorkflowId(draft.workflowId);
-          if (["edge", "comfyui", "minimax", "mimo"].includes(draft.ttsMode)) setTtsMode(draft.ttsMode);
+          if (["edge", "comfyui", "minimax", "mimo", "qwen_audio"].includes(draft.ttsMode)) setTtsMode(draft.ttsMode as typeof ttsMode);
           if (draft.ttsDelivery === "continuous" || draft.ttsDelivery === "per_scene") {
             setTtsDelivery(draft.ttsDelivery);
           }
@@ -604,7 +639,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         aiTopic,
         aiSceneCount,
         aiSceneCountTouched,
+        directorMode,
+        storyboardDensity,
         suggestedSceneCount,
+        actualStoryboardSceneCount,
+        estimatedStoryboardSeconds,
         copyDraft,
         copyDraftMode,
         copyCharCount,
@@ -638,7 +677,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setDraftSavedAt(savedAt);
     }, 500);
     return () => window.clearTimeout(timeoutId);
-  }, [mode, title, aiTopic, aiSceneCount, aiSceneCountTouched, suggestedSceneCount, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, useApiImage, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, reuseAssetsEnabled, keywordPreferences]);
+  }, [mode, title, aiTopic, aiSceneCount, aiSceneCountTouched, directorMode, storyboardDensity, suggestedSceneCount, actualStoryboardSceneCount, estimatedStoryboardSeconds, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, useApiImage, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, reuseAssetsEnabled, keywordPreferences]);
 
   // Invalidate the review whenever a submitted production setting changes.
   React.useEffect(() => {
@@ -651,7 +690,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       return;
     }
     setReviewConfirmed(false);
-  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, useApiImage, imageWidth, imageHeight, subtitleStyle]);
+  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, directorMode, storyboardDensity, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, useApiImage, imageWidth, imageHeight, subtitleStyle]);
 
   React.useEffect(() => {
     if (!copyCharCountTouched) {
@@ -1040,7 +1079,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setPreviewingTts(true);
     setPreviewTtsAudioUrl(null);
     const previewInferenceMode = ttsMode === "edge" ? "local" : ttsMode;
-    const previewServiceName = ttsMode === "minimax" ? "MiniMax" : ttsMode === "mimo" ? "MiMo" : ttsMode === "comfyui" ? "ComfyUI" : "Edge";
+    const previewServiceName = ttsMode === "minimax" ? "MiniMax" : ttsMode === "mimo" ? "MiMo" : ttsMode === "qwen_audio" ? "Qwen Audio" : ttsMode === "comfyui" ? "ComfyUI" : "Edge";
     addToast(`正在生成 ${previewServiceName} TTS 试听音频...`, "info");
 
     try {
@@ -1122,7 +1161,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setCopyTtsSourceLabel(currentCopy.label);
 
     const copyInferenceMode = ttsMode === "edge" ? "local" : ttsMode;
-    const copyServiceName = ttsMode === "minimax" ? "MiniMax" : ttsMode === "mimo" ? "MiMo" : ttsMode === "comfyui" ? "ComfyUI" : "Edge";
+    const copyServiceName = ttsMode === "minimax" ? "MiniMax" : ttsMode === "mimo" ? "MiMo" : ttsMode === "qwen_audio" ? "Qwen Audio" : ttsMode === "comfyui" ? "ComfyUI" : "Edge";
     addToast(`正在合成 ${copyServiceName} 当前文案音频...`, "info");
 
     try {
@@ -1181,6 +1220,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setVolume(activePreset.bgmVolume);
       setPromptPrefix(activePreset.promptPrefix);
       setSplitType(activePreset.splitType);
+      setDirectorMode(activePreset.directorMode || (activePreset.sceneCount ? "custom" : "auto"));
+      setStoryboardDensity(activePreset.density || "standard");
       if (activePreset.enableMotion !== undefined) setEnableMotion(activePreset.enableMotion);
       if (activePreset.enableSubtitles !== undefined) setEnableSubtitles(activePreset.enableSubtitles);
       if (activePreset.useApiImage !== undefined) setUseApiImage(Boolean(activePreset.useApiImage));
@@ -1191,7 +1232,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setMimoStyle(activePreset.mimoStyle || "");
       if (activePreset.sceneCount) {
         setAiSceneCount(clampSceneCount(activePreset.sceneCount));
-        setAiSceneCountTouched(true);
+        setAiSceneCountTouched(activePreset.directorMode === "custom" || !activePreset.directorMode);
       }
       if (activePreset.copyCharCount) {
         setCopyCharCount(activePreset.copyCharCount);
@@ -1238,17 +1279,25 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     if (!text) {
       setSuggestedSceneCount(null);
       setRhythmSceneCount(null);
+      setStoryboardWarnings([]);
       return null;
     }
     const continuousTts = String(ttsDelivery || "").toLowerCase() === "continuous";
     const rule: DraftSplitType = copyDraftMode === "segmented" ? "line" : splitType;
     // continuous: no soft comma-expand (avoids mid-sentence holds)
-    const softExpand = copyDraftMode === "full" && !continuousTts;
-    const analysis = analyzeStoryboardRecommendation(text, rule, { softExpand });
+    const softExpand = copyDraftMode === "full" && storyboardDensity !== "sparse" && !continuousTts;
+    const analysis = analyzeStoryboardRecommendation(text, rule, {
+      softExpand,
+      density: storyboardDensity,
+      targetSceneCount: directorMode === "custom" ? aiSceneCount : null,
+    });
     setSuggestedSceneCount(analysis.semantic);
     setRhythmSceneCount(analysis.rhythm);
+    setActualStoryboardSceneCount(analysis.actualSceneCount);
+    setEstimatedStoryboardSeconds(analysis.estimatedDurationSeconds);
+    setStoryboardWarnings(analysis.warnings);
 
-    const adopt = options?.adoptIfUnlocked !== false && !aiSceneCountTouched;
+    const adopt = directorMode === "auto" && options?.adoptIfUnlocked !== false && !aiSceneCountTouched;
     if (adopt) {
       setAiSceneCount(analysis.preferred);
     }
@@ -1257,17 +1306,75 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       const prefix = options?.draftJustGenerated ? "AI 文案草稿已生成。" : "分镜分析完成。";
       if (adopt) {
         addToast(
-          `${prefix}语义建议 ${analysis.semantic} 镜（已填入）· 节奏约 ${analysis.rhythm} 镜（${analysis.charCount} 字）`,
+          `${prefix}标准语义建议 ${analysis.semantic} 镜（已填入）· ${STORYBOARD_DENSITY_LABEL[storyboardDensity]} 节奏约 ${analysis.rhythm} 镜（${analysis.charCount} 字）`,
           "success",
         );
       } else {
         addToast(
-          `${prefix}语义建议 ${analysis.semantic} 镜 · 节奏约 ${analysis.rhythm} 镜（你已锁定分镜数 ${aiSceneCount}）`,
+          `${prefix}语义建议 ${analysis.semantic} 镜 · ${STORYBOARD_DENSITY_LABEL[storyboardDensity]} 节奏约 ${analysis.rhythm} 镜（当前为自定义目标 ${aiSceneCount}）`,
           "success",
         );
       }
     }
     return analysis;
+  };
+
+  /**
+   * Ask the backend for validated semantic boundaries after the instant local preview.
+   * A failed request never discards the deterministic result already shown to the user.
+   */
+  const analyzeStoryboardOnBackend = async (
+    draftText: string,
+    options?: { adoptIfUnlocked?: boolean },
+  ) => {
+    const text = String(draftText || "").trim();
+    if (!text) return;
+    const requestId = storyboardAnalysisRequestIdRef.current + 1;
+    storyboardAnalysisRequestIdRef.current = requestId;
+    setStoryboardAnalysisLoading(true);
+    try {
+      const response = await fetch("/api/storyboard/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          splitType: copyDraftMode === "segmented" ? "line" : splitType,
+          sceneCount: aiSceneCount,
+          ttsDelivery,
+          segmentationMode: "auto",
+          directorMode,
+          density: storyboardDensity,
+          targetSceneCount: directorMode === "custom" ? aiSceneCount : null,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) {
+        throw new Error(formatApiErrorValue(payload?.detail) || "后端分镜分析失败");
+      }
+      if (storyboardAnalysisRequestIdRef.current !== requestId) return;
+
+      const semantic = Number(payload.semanticSceneCount);
+      const rhythm = Number(payload.rhythmSceneCount);
+      if (Number.isFinite(semantic) && semantic > 0) setSuggestedSceneCount(clampSceneCount(semantic));
+      if (Number.isFinite(rhythm) && rhythm > 0) setRhythmSceneCount(clampSceneCount(rhythm));
+      const actual = Number(payload.actualSceneCount);
+      if (Number.isFinite(actual) && actual > 0) setActualStoryboardSceneCount(clampSceneCount(actual));
+      const estimated = Number(payload.estimatedDurationSeconds);
+      if (Number.isFinite(estimated) && estimated > 0) setEstimatedStoryboardSeconds(estimated);
+      if (Array.isArray(payload.warnings)) setStoryboardWarnings(payload.warnings.filter(Boolean));
+
+      const adopt = directorMode === "auto" && options?.adoptIfUnlocked !== false && !aiSceneCountTouched;
+      if (adopt && Number.isFinite(semantic) && semantic > 0) {
+        setAiSceneCount(clampSceneCount(semantic));
+      }
+    } catch (error: any) {
+      // Local analysis remains authoritative when the optional semantic pass is unavailable.
+      console.warn("Storyboard backend analysis unavailable", error);
+    } finally {
+      if (storyboardAnalysisRequestIdRef.current === requestId) {
+        setStoryboardAnalysisLoading(false);
+      }
+    }
   };
 
   const handleGenerateCopyDraft = async () => {
@@ -1294,6 +1401,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           targetCharCount: copyCharCount,
           charCountMode: copyCharCountMode,
           splitType,
+          directorMode,
+          density: storyboardDensity,
+          targetSceneCount: directorMode === "custom" ? aiSceneCount : null,
         }),
       });
       const resData = await response.json();
@@ -1355,6 +1465,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           splitType,
           ttsDelivery,
           promptPrefix,
+          segmentationMode: "auto",
+          directorMode,
+          density: storyboardDensity,
+          targetSceneCount: directorMode === "custom" ? aiSceneCount : null,
         }),
       });
       const resData = await response.json();
@@ -1364,18 +1478,24 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           id: item.id,
           ttsText: item.ttsText,
           visualPrompt: item.visualPrompt,
+          visualFocus: item.visualFocus || "",
+          textAnchors: Array.isArray(item.textAnchors) ? item.textAnchors : [],
+          lockedFields: [],
+          editedFields: [],
+          locked: false,
         }));
         setScenes(generated);
         setMode("manual"); // switch to manual scene editor so user can review and edit
         const actualCount = generated.length;
         setSuggestedSceneCount(actualCount);
-        if (!aiSceneCountTouched) {
+        setActualStoryboardSceneCount(actualCount);
+        if (directorMode === "auto" && !aiSceneCountTouched) {
           setAiSceneCount(clampSceneCount(actualCount));
         }
-        addToast(
-          `AI 分镜脚本生成就绪！已按语义切成 ${actualCount} 个分镜，您可直接在下方编辑或点击渲染。`,
-          "success",
-        );
+        const countNotice = directorMode === "custom" && actualCount !== aiSceneCount
+          ? `目标为 ${aiSceneCount} 镜，已采用 ${actualCount} 个自然语义镜头。`
+          : `已按语义切成 ${actualCount} 个分镜。`;
+        addToast(`AI 分镜脚本生成就绪！${countNotice}您可直接在下方编辑或点击渲染。`, "success");
       } else {
         addToast(formatApiErrorValue(resData.detail) || formatApiErrorValue(resData.error) || "脚本构思异常，请检查 LLM 设置。", "error");
       }
@@ -1395,7 +1515,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   // Scene CRUD
   const addScene = () => {
     const newId = scenes.length > 0 ? Math.max(...scenes.map((s) => s.id)) + 1 : 1;
-    setScenes([...scenes, { id: newId, ttsText: "", visualPrompt: "" }]);
+    setScenes([...scenes, { id: newId, ttsText: "", visualPrompt: "", textAnchors: [], lockedFields: [], editedFields: [], locked: false }]);
   };
 
   const removeScene = (id: number) => {
@@ -1403,7 +1523,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   };
 
   const updateScene = (id: number, key: "ttsText" | "visualPrompt", value: string) => {
-    setScenes(scenes.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
+    const field: QuickSceneField = key === "ttsText" ? "narration" : "visualPrompt";
+    setScenes(scenes.map((s) => {
+      if (s.id !== id) return s;
+      const editedFields = Array.from(new Set([...(s.editedFields || []), field]));
+      return { ...s, [key]: value, editedFields };
+    }));
+  };
+
+  const toggleSceneLock = (id: number) => {
+    setScenes(scenes.map((scene) => (scene.id === id ? { ...scene, locked: !scene.locked } : scene)));
   };
 
   const buildScenesForRender = () => {
@@ -1412,6 +1541,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         id: scene.id,
         ttsText: scene.ttsText.trim(),
         visualPrompt: scene.visualPrompt,
+        visualFocus: scene.visualFocus || "",
+        textAnchors: scene.textAnchors || [],
+        lockedFields: scene.lockedFields || [],
+        editedFields: scene.editedFields || [],
+        locked: Boolean(scene.locked),
       }));
     }
 
@@ -1424,14 +1558,22 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       // continuous TTS: disable soft comma-expand — clause-level clips + hold = mid-sentence pause.
       const rule: DraftSplitType = copyDraftMode === "segmented" ? "line" : splitType;
       const continuousTts = String(ttsDelivery || "").toLowerCase() === "continuous";
-      const draftSegments = buildStoryboardNarrations(draftText, rule, aiSceneCount, {
-        softExpand: copyDraftMode === "full" && !continuousTts,
+      const targetCount = directorMode === "custom"
+        ? aiSceneCount
+        : (suggestedSceneCount || aiSceneCount);
+      const draftSegments = buildStoryboardNarrations(draftText, rule, targetCount, {
+        softExpand: copyDraftMode === "full" && storyboardDensity !== "sparse" && !continuousTts,
       });
 
       return draftSegments.map((ttsText, index) => ({
         id: index + 1,
         ttsText,
         visualPrompt: "",
+        visualFocus: "",
+        textAnchors: [],
+        lockedFields: [],
+        editedFields: [],
+        locked: false,
       }));
     }
 
@@ -1443,6 +1585,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         id: index + 1,
         ttsText,
         visualPrompt: "",
+        visualFocus: "",
+        textAnchors: [],
+        lockedFields: [],
+        editedFields: [],
+        locked: false,
       }));
   };
 
@@ -1487,6 +1634,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     if (ttsMode === "mimo" && serviceReady && !serviceReady.mimo) {
       errors.tts = "MiMo 未配置，请前往设置填写 Key，或改用 Edge 配音";
     }
+    if (ttsMode === "qwen_audio" && serviceReady && !serviceReady.qwen_audio) {
+      errors.tts = "Qwen Audio 未配置，请前往设置填写 DashScope Key，或改用 Edge 配音";
+    }
     if (useApiImage && serviceReady && !serviceReady.image) {
       errors.review = "已开启 API 生图但未配置图像服务，请前往设置填写，或关闭开关改用素材库";
     }
@@ -1511,9 +1661,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     setAiTopic("探索未来世界的智能机器人生活碎片");
     setCopyDraft("");
     setAiSceneCount(5);
+    setDirectorMode("auto");
+    setStoryboardDensity("standard");
     setAiSceneCountTouched(false);
     setSuggestedSceneCount(null);
     setRhythmSceneCount(null);
+    setActualStoryboardSceneCount(null);
+    setEstimatedStoryboardSeconds(null);
     setScenes([
       { id: 1, ttsText: "这是一个科技感爆棚的高能概念画卷。", visualPrompt: "Cinematic digital art of high-tech lab, warm amber lighting, futuristic, 4k" },
       { id: 2, ttsText: "每一个齿轮的咬合，都是精工美学的体现。", visualPrompt: "Macro close-up of amber golden machine gears interlocking in motion, cinematic depth of field" },
@@ -1579,6 +1733,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         useApiImage,
         subtitleStyle,
         splitType,
+        directorMode,
+        density: storyboardDensity,
+        targetSceneCount: directorMode === "custom" ? aiSceneCount : null,
         reuseTaskId: mode === "batch" ? undefined : effectiveReuseSourceTaskId,
         scenes: renderScenes,
       };
@@ -1591,6 +1748,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             scenes: renderScenes.map((scene) => ({
               ...scene,
               visualPrompt: scene.visualPrompt.trim(),
+              visualFocus: scene.visualFocus || "",
+              textAnchors: scene.textAnchors || [],
+              lockedFields: scene.lockedFields || [],
+              editedFields: scene.editedFields || [],
+              locked: Boolean(scene.locked),
             })),
           });
           setReviewConfirmed(false);
@@ -1654,6 +1816,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       bgmVolume: volume,
       promptPrefix,
       splitType,
+      directorMode,
+      density: storyboardDensity,
+      targetSceneCount: directorMode === "custom" ? aiSceneCount : null,
       enableMotion,
       enableSubtitles,
       useApiImage,
@@ -1720,7 +1885,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const reviewNarrationSeconds = estimateNarrationSeconds(
     reviewScenes.reduce((total, scene) => total + scene.ttsText.length, 0),
   );
-  const averageCopyCharsPerStoryboard = Math.max(1, Math.round(copyCharCount / Math.max(aiSceneCount, 1)));
+  const effectivePreviewSceneCount = directorMode === "custom"
+    ? aiSceneCount
+    : (actualStoryboardSceneCount || suggestedSceneCount || aiSceneCount);
+  const averageCopyCharsPerStoryboard = Math.max(1, Math.round(copyCharCount / Math.max(effectivePreviewSceneCount, 1)));
   const estimatedCopySeconds = estimateNarrationSeconds(copyCharCount);
   const currentCopyForTts = getCurrentCopyForTts();
   const copyTtsDownloadName = `${title.trim() || "pixelle"}-current-copy-tts.mp3`.replace(/[\\/:*?"<>|]+/g, "-");
@@ -1730,13 +1898,15 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     { key: "image", label: "图像生成", ok: serviceReady?.image !== false, action: "去配置" },
     {
       key: "tts",
-      label: ttsMode === "edge" ? "配音 (Edge)" : ttsMode === "minimax" ? "配音 (MiniMax)" : ttsMode === "mimo" ? "配音 (MiMo)" : "配音",
+      label: ttsMode === "edge" ? "配音 (Edge)" : ttsMode === "minimax" ? "配音 (MiniMax)" : ttsMode === "mimo" ? "配音 (MiMo)" : ttsMode === "qwen_audio" ? "配音 (Qwen Audio)" : "配音",
       ok:
         ttsMode === "edge" || ttsMode === "comfyui"
           ? true
           : ttsMode === "minimax"
           ? Boolean(serviceReady?.minimax)
-          : Boolean(serviceReady?.mimo),
+          : ttsMode === "mimo"
+          ? Boolean(serviceReady?.mimo)
+          : Boolean(serviceReady?.qwen_audio),
       action: ttsMode === "edge" ? "" : "去配置或改用 Edge",
     },
   ];
@@ -1744,6 +1914,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const liveStoryboardPreview = mode === "ai" ? buildScenesForRender() : [];
   const sceneCountMismatch =
     mode === "ai" &&
+    directorMode === "custom" &&
     Boolean(copyDraft.trim()) &&
     liveStoryboardPreview.length > 0 &&
     liveStoryboardPreview.length !== aiSceneCount;
@@ -2294,39 +2465,85 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">分镜数量</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={STORYBOARD_SCENE_MIN}
-                    max={STORYBOARD_SCENE_MAX}
-                    step={1}
-                    value={aiSceneCount}
-                    onChange={(e) => {
-                      const next = clampSceneCount(parseInt(e.target.value || String(STORYBOARD_SCENE_MIN), 10));
-                      setAiSceneCount(next);
-                      setAiSceneCountTouched(true);
-                    }}
-                    className="ui-input"
-                  />
-                  <span className="shrink-0 text-caption">个</span>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">分镜导演模式</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {([
+                    ["auto", "自动导演"],
+                    ["custom", "自定义数量"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => {
+                        setDirectorMode(value);
+                        if (value === "auto") setAiSceneCountTouched(false);
+                      }}
+                      className={`rounded border px-2 py-1.5 text-xs transition-colors ${
+                        directorMode === value
+                          ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
+                          : "border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
+                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                  {([
+                    ["sparse", "稀疏"],
+                    ["standard", "标准"],
+                    ["dense", "密集"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setStoryboardDensity(value)}
+                      className={`rounded border px-2 py-1 text-[11px] transition-colors ${
+                        storyboardDensity === value
+                          ? "border-amber-500/50 bg-amber-500/10 text-amber-300"
+                          : "border-zinc-800 bg-[#17181c] text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {directorMode === "custom" && (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={STORYBOARD_SCENE_MIN}
+                      max={STORYBOARD_SCENE_MAX}
+                      step={1}
+                      value={aiSceneCount}
+                      onChange={(e) => {
+                        const next = clampSceneCount(parseInt(e.target.value || String(STORYBOARD_SCENE_MIN), 10));
+                        setAiSceneCount(next);
+                        setAiSceneCountTouched(true);
+                      }}
+                      className="ui-input"
+                      aria-label="目标分镜数量"
+                    />
+                    <span className="shrink-0 text-caption">个目标</span>
+                  </div>
+                )}
                 <p className="mt-1 text-caption leading-relaxed">
                   {suggestedSceneCount != null ? (
                     <>
                       <span className="text-zinc-400">步骤 2 · </span>
-                      语义 <span className="text-zinc-200 font-medium">{suggestedSceneCount}</span>
+                      {directorMode === "auto" ? "系统建议 " : "语义参考 "}
+                      <span className="text-zinc-200 font-medium">{suggestedSceneCount}</span>
                       {rhythmSceneCount != null && (
                         <>
                           {" "}· 节奏 <span className="text-zinc-200 font-medium">{rhythmSceneCount}</span>
-                          <span className="text-zinc-600">（约 40 字/镜）</span>
+                          <span className="text-zinc-600">（约 {charsPerSceneForDensity(storyboardDensity)} 字/镜）</span>
                         </>
                       )}
-                      {!aiSceneCountTouched && suggestedSceneCount === aiSceneCount ? (
-                        <span className="text-zinc-500"> · 已用语义填入</span>
+                      {directorMode === "auto" && actualStoryboardSceneCount != null ? (
+                        <span className="text-zinc-500"> · 实际 {actualStoryboardSceneCount} 镜 · 约 {estimatedStoryboardSeconds || "—"} 秒</span>
                       ) : null}
                       <span className="ml-1.5 inline-flex flex-wrap gap-x-2 gap-y-0.5">
-                        {suggestedSceneCount !== aiSceneCount && (
+                        {directorMode === "custom" && suggestedSceneCount !== aiSceneCount && (
                           <button
                             type="button"
                             onClick={() => {
@@ -2338,7 +2555,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                             采用语义
                           </button>
                         )}
-                        {rhythmSceneCount != null && rhythmSceneCount !== aiSceneCount && (
+                        {directorMode === "custom" && rhythmSceneCount != null && rhythmSceneCount !== aiSceneCount && (
                           <button
                             type="button"
                             onClick={() => {
@@ -2358,17 +2575,27 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                                 adoptIfUnlocked: false,
                                 toastOnResult: true,
                               });
-                              if (!result) addToast("请先填写或生成文案", "info");
+                              if (!result) {
+                                addToast("请先填写或生成文案", "info");
+                                return;
+                              }
+                              void analyzeStoryboardOnBackend(copyDraft, { adoptIfUnlocked: false });
                             }}
-                            className="text-zinc-400 hover:text-zinc-200 underline-offset-2 hover:underline"
+                            disabled={storyboardAnalysisLoading}
+                            className="text-zinc-400 hover:text-zinc-200 disabled:text-zinc-600 underline-offset-2 hover:underline"
                           >
-                            重新分析
+                            {storyboardAnalysisLoading ? "分析中..." : "重新分析"}
                           </button>
                         )}
                       </span>
+                      {storyboardWarnings.length > 0 && (
+                        <span className="mt-1 block text-amber-400/90">
+                          {storyboardWarnings.join("；")}
+                        </span>
+                      )}
                     </>
                   ) : (
-                    <>步骤 2：生成纯净文案后，按语义 + 节奏推荐分镜 · 可改 {STORYBOARD_SCENE_MIN}–{STORYBOARD_SCENE_MAX}</>
+                    <>步骤 2：{directorMode === "auto" ? "由系统按语义自动决定镜头数" : "填写镜头数量作为软目标"} · {STORYBOARD_DENSITY_LABEL[storyboardDensity]}节奏</>
                   )}
                 </p>
                 <p className="mt-0.5 text-[10px] text-zinc-600 leading-relaxed">
@@ -2377,6 +2604,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 {sceneCountMismatch && (
                   <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
                     目标 {aiSceneCount} 镜 · 当前可安全切分 {liveStoryboardPreview.length} 镜（语义优先，未强制字切）
+                  </p>
+                )}
+                {storyboardWarnings.length > 0 && (
+                  <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
+                    {storyboardWarnings.join("；")}
                   </p>
                 )}
               </div>
@@ -2388,7 +2620,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   onChange={(e: any) => setSplitType(e.target.value)}
                   className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
                 >
-                  <option value="paragraph">按段落智能切分</option>
+                  <option value="auto">自动语义 + 节奏切分（推荐）</option>
+                  <option value="paragraph">按段落切分</option>
                   <option value="line">按每一行/换行切分</option>
                   <option value="sentence">按句子标点切分</option>
                 </Select>
@@ -2422,43 +2655,49 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             )}
 
             <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2 border-t border-zinc-900">
-              <button
-                type="button"
-                onClick={handleGenerateCopyDraft}
-                disabled={copyDraftLoading || aiLoading || serviceReady?.llm === false}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-800 text-black disabled:text-zinc-500 font-semibold text-sm rounded shadow-md flex items-center justify-center gap-1.5 transition-colors"
-              >
-                {copyDraftLoading ? (
-                  <>
-                    <Loader className="w-3.5 h-3.5 animate-spin" />
-                    AI 正在生成文案...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5 text-black" />
-                    {copyDraftMode === "full" ? "生成口播稿" : "生成分镜旁白"}
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={handleAIGenerateScript}
-                disabled={aiLoading || copyDraftLoading || !copyDraft.trim()}
-                className="px-3 py-2 bg-zinc-800 text-zinc-300 hover:text-white disabled:bg-zinc-900 disabled:text-zinc-600 border border-zinc-700 hover:border-amber-500/40 text-xs font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
-                title="进阶：为每镜生成画面提示词并切换到手动分镜编辑"
-              >
-                {aiLoading ? (
-                  <>
-                    <Loader className="w-3.5 h-3.5 animate-spin text-amber-500" />
-                    生成画面提示词中...
-                  </>
-                ) : (
-                  <>
-                    <Edit3 className="w-3.5 h-3.5 text-amber-500" />
-                    进阶：生成画面提示词并手动编辑
-                  </>
-                )}
-              </button>
+              {!copyDraft.trim() ? (
+                <button
+                  type="button"
+                  onClick={handleGenerateCopyDraft}
+                  disabled={copyDraftLoading || aiLoading || serviceReady?.llm === false}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-800 text-black disabled:text-zinc-500 font-semibold text-sm rounded shadow-md flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  {copyDraftLoading ? (
+                    <>
+                      <Loader className="w-3.5 h-3.5 animate-spin" />
+                      AI 正在生成文案...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-black" />
+                      {copyDraftMode === "full" ? "生成口播稿" : "生成分镜旁白"}
+                    </>
+                  )}
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleGenerateCopyDraft}
+                    disabled={copyDraftLoading || aiLoading || serviceReady?.llm === false}
+                    className="ui-btn ui-btn-secondary"
+                    title="重新生成口播稿"
+                  >
+                    {copyDraftLoading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    重新写口播稿
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAIGenerateScript}
+                    disabled={aiLoading || copyDraftLoading || serviceReady?.llm === false}
+                    className="ui-btn ui-btn-primary"
+                    title="按当前导演模式切分旁白并进入分镜编辑"
+                  >
+                    {aiLoading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Edit3 className="h-3.5 w-3.5" />}
+                    {aiLoading ? "生成分镜中..." : "按当前导演设置生成分镜"}
+                  </button>
+                </>
+              )}
             </div>
             {serviceReady?.llm === false && (
               <p className="text-xs text-amber-300 text-right">
@@ -2474,9 +2713,25 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         {mode === "manual" && (
           <div className="space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-zinc-900">
-              <span className="text-xs font-medium text-zinc-300 flex items-center gap-1">
-                分镜列表编辑器 (精细化定制旁白与画面提示词)
-              </span>
+              <div className="min-w-0">
+                <div className="text-xs font-medium text-zinc-300 flex items-center gap-1">
+                  分镜列表编辑器 (精细化定制旁白与画面提示词)
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-500">
+                  <span>{directorMode === "auto" ? "自动导演" : "自定义软目标"}</span>
+                  <span>· {STORYBOARD_DENSITY_LABEL[storyboardDensity]}节奏</span>
+                  <span>· 实际 {scenes.length} 镜</span>
+                  {estimatedStoryboardSeconds > 0 && <span>· 预计 {estimatedStoryboardSeconds} 秒</span>}
+                  {directorMode === "custom" && actualStoryboardSceneCount != null && actualStoryboardSceneCount !== aiSceneCount && (
+                    <span className="text-amber-400/90">· 目标 {aiSceneCount} 镜，已采用自然边界</span>
+                  )}
+                </div>
+                {storyboardWarnings.length > 0 && (
+                  <div className="mt-1 text-[10px] leading-relaxed text-amber-400/90">
+                    {storyboardWarnings.join("；")}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={addScene}
                 className="px-2 py-1 bg-[#17181c] hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded text-[11px] font-medium flex items-center gap-1 transition-colors"
@@ -2506,6 +2761,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                         placeholder="请输入本分镜念出来的配音旁白文案..."
                         value={scene.ttsText}
                         onChange={(e) => updateScene(scene.id, "ttsText", e.target.value)}
+                        disabled={Boolean(scene.locked || scene.lockedFields?.includes("narration"))}
                         rows={3}
                         className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 leading-relaxed resize-y max-h-48 overflow-y-auto focus:outline-none focus:border-amber-500"
                       />
@@ -2519,10 +2775,32 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                         placeholder="请输入本分镜的画面提示词，留空将沿用主题..."
                         value={scene.visualPrompt}
                         onChange={(e) => updateScene(scene.id, "visualPrompt", e.target.value)}
+                        disabled={Boolean(scene.locked || scene.lockedFields?.includes("visualPrompt"))}
                         rows={3}
                         className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 leading-relaxed resize-y max-h-48 overflow-y-auto focus:outline-none focus:border-amber-500"
                       />
+                      {(scene.visualFocus || (scene.textAnchors || []).length > 0) && (
+                        <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+                          视觉焦点：{scene.visualFocus || "—"}
+                          {(scene.textAnchors || []).length > 0 && ` · 文字锚点：${scene.textAnchors!.join("、")}`}
+                        </p>
+                      )}
                     </div>
+                  </div>
+
+                  <div className="absolute right-9 top-1.5 flex items-center gap-1">
+                    {(scene.editedFields || []).length > 0 && (
+                      <span className="text-[10px] text-sky-300" title="该镜头含人工编辑字段">人工编辑</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => toggleSceneLock(scene.id)}
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${scene.locked ? "bg-amber-500/15 text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}
+                      title={scene.locked ? "解锁镜头" : "锁定镜头"}
+                      aria-label={scene.locked ? `解锁分镜 ${idx + 1}` : `锁定分镜 ${idx + 1}`}
+                    >
+                      {scene.locked ? "已锁定" : "锁定"}
+                    </button>
                   </div>
 
                   <button
@@ -2631,8 +2909,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           </h3>
           <p className="text-[10px] text-amber-400/80">试听与“合成当前文案”仅供预览，不会复用到最终成片。</p>
 
-          <div className="grid grid-cols-4 gap-1 p-0.5 bg-[#17181c] border border-zinc-850 rounded">
-            {(["edge", "comfyui", "minimax", "mimo"] as const).map((opt) => (
+          <div className="grid grid-cols-5 gap-1 p-0.5 bg-[#17181c] border border-zinc-850 rounded">
+            {(["edge", "comfyui", "minimax", "mimo", "qwen_audio"] as const).map((opt) => (
               <button
                 key={opt}
                 onClick={() => {
@@ -2647,6 +2925,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 {opt === "comfyui" && "Comfy 克隆"}
                 {opt === "minimax" && "MiniMax 精致"}
                 {opt === "mimo" && "MiMo 自然"}
+                {opt === "qwen_audio" && "Qwen Audio"}
               </button>
             ))}
           </div>
@@ -3138,7 +3417,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               onChange={(e) => setPromptPrefix(e.target.value)}
               rows={3}
               className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 font-mono resize-none leading-relaxed"
-              placeholder="输入会固定拼接在每个分镜画面提示词前面的底模风格参数"
+              placeholder="例：紫色夜景叙事插画，细密黑色线稿，颗粒纸张质感，单一暖黄色灯光，高对比硬边阴影"
             />
           </div>
 

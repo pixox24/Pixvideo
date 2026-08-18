@@ -53,6 +53,99 @@ async def test_create_and_read_project_response(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_project_persists_director_metadata_and_lock_state(tmp_path):
+    core = FakeCore(tmp_path)
+    body = CreateProjectRequest(
+        title="导演台元数据",
+        config={"directorMode": "custom", "density": "dense", "targetSceneCount": 4},
+        scenes=[{
+            "narration": "星期一开始执行",
+            "visualPrompt": "日历特写",
+            "visualFocus": "星期一日历",
+            "textAnchors": ["星期一"],
+            "lockedFields": ["visualPrompt"],
+            "editedFields": ["visualPrompt"],
+            "locked": True,
+        }],
+    )
+
+    created = await create_project(body, core, None)
+    loaded = await get_project(created.project_id, core, None)
+
+    scene = loaded.scenes[0]
+    assert loaded.config["directorMode"] == "custom"
+    assert loaded.config["density"] == "dense"
+    assert scene.visual_focus == "星期一日历"
+    assert scene.text_anchors == ["星期一"]
+    assert scene.locked_fields == ["visualPrompt"]
+    assert scene.edited_fields == ["visualPrompt"]
+    assert scene.locked is True
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_create_project_auto_expands_one_long_scene_with_validated_segments(tmp_path, monkeypatch):
+    core = FakeCore(tmp_path)
+    core.llm = object()
+    source = "今天我们从日历开始规划发布会倒计时并把每一个任务安排到准确的时间线上同时检查人员物料场地和最终确认清单确保发布当天万无一失"
+    calls = []
+
+    async def fake_segment(*_args, **_kwargs):
+        calls.append((_args, _kwargs))
+        return [
+            {"text": "今天我们从日历开始规划发布会倒计时", "boundary_reason": "时间锚点", "visual_focus": "日历"},
+            {"text": "并把每一个任务安排到准确的时间线上同时检查人员物料场地和最终确认清单确保发布当天万无一失", "boundary_reason": "执行动作", "visual_focus": "时间线"},
+        ]
+
+    monkeypatch.setattr("api.routers.projects.segment_narration_semantically", fake_segment)
+    created = await create_project(
+        CreateProjectRequest(
+            title="自动分镜",
+            config={"splitType": "auto", "sceneCount": 3},
+            scenes=[{"narration": source}],
+        ),
+        core,
+        None,
+    )
+
+    assert len(created.scenes) == 2
+    assert [scene.narration for scene in created.scenes] == [
+        "今天我们从日历开始规划发布会倒计时",
+        "并把每一个任务安排到准确的时间线上同时检查人员物料场地和最终确认清单确保发布当天万无一失",
+    ]
+    assert calls
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_create_project_manual_visual_prompt_disables_auto_resegmentation(tmp_path, monkeypatch):
+    core = FakeCore(tmp_path)
+    core.llm = object()
+    calls = []
+
+    async def fail_if_called(*_args, **_kwargs):
+        calls.append(True)
+        raise AssertionError("manual visual prompts must prevent auto resegmentation")
+
+    monkeypatch.setattr("api.routers.projects.segment_narration_semantically", fail_if_called)
+    source = "今天我们从日历开始规划发布会倒计时并把每一个任务安排到准确的时间线上同时检查人员物料场地和最终确认清单确保发布当天万无一失"
+    created = await create_project(
+        CreateProjectRequest(
+            title="保留手工场景",
+            config={"splitType": "auto", "sceneCount": 3},
+            scenes=[{"narration": source, "visualPrompt": "手工指定的日历特写"}],
+        ),
+        core,
+        None,
+    )
+
+    assert len(created.scenes) == 1
+    assert created.scenes[0].visual_prompt == "手工指定的日历特写"
+    assert calls == []
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
 async def test_project_media_url_and_endpoint(tmp_path):
     core = FakeCore(tmp_path)
     body = CreateProjectRequest(title="媒体", scenes=[{"narration": "旁白", "visualPrompt": "画面"}])

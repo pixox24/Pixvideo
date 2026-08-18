@@ -79,11 +79,25 @@ class ProjectGenerationService:
         if active is not None:
             raise ActiveGenerationRunError(active)
 
+        # Explicit partial regeneration requests must never cross a user lock.
+        # Initial runs without scene_ids still include every scene so a locked
+        # draft can receive its first set of assets.
+        effective_scene_ids = list(scene_ids) if scene_ids is not None else None
+        if effective_scene_ids is not None:
+            locked_ids = {
+                scene.scene_id
+                for scene in self.repository.list_project_scenes(project_id)
+                if scene.locked
+            }
+            effective_scene_ids = [scene_id for scene_id in effective_scene_ids if scene_id not in locked_ids]
+            if not effective_scene_ids:
+                raise ValueError("所选分镜均已锁定，未启动重新生成")
+
         task = self.task_manager.create_task(
             TaskType.WORKBENCH_PROJECT_RUN,
             request_params={
                 "project_id": project_id,
-                "scene_ids": list(scene_ids) if scene_ids is not None else None,
+                "scene_ids": effective_scene_ids,
                 "config_override": dict(config_override or {}),
             },
         )
@@ -91,7 +105,7 @@ class ProjectGenerationService:
             run, items = self.planner.plan_run(
                 project_id,
                 task_id=task.task_id,
-                scene_ids=scene_ids,
+                scene_ids=effective_scene_ids,
                 config_override=config_override,
             )
             self.repository.create_generation_run(run, items)

@@ -65,13 +65,26 @@ class TTSMimoConfig(BaseModel):
     style: str = Field(default="", description="MiMo natural-language style instruction (optional)")
 
 
+class TTSQwenAudioConfig(BaseModel):
+    """DashScope Qwen TTS configuration."""
+    api_key: str = Field(default="", description="DashScope API Key")
+    model: str = Field(default="qwen3-tts-flash", description="Qwen TTS model")
+    voice_id: str = Field(default="Cherry", description="Qwen TTS voice ID")
+    language_type: str = Field(default="Chinese", description="Qwen TTS language type")
+    endpoint: str = Field(
+        default="https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        description="DashScope multimodal generation endpoint",
+    )
+
+
 class TTSSubConfig(BaseModel):
     """TTS-specific configuration (under comfyui.tts)"""
-    inference_mode: str = Field(default="local", description="TTS inference mode: 'local', 'comfyui', 'minimax', or 'mimo'")
+    inference_mode: str = Field(default="local", description="TTS inference mode: 'local', 'comfyui', 'minimax', 'mimo', or 'qwen_audio'")
     local: TTSLocalConfig = Field(default_factory=TTSLocalConfig, description="Local TTS (Edge TTS) configuration")
     comfyui: TTSComfyUIConfig = Field(default_factory=TTSComfyUIConfig, description="ComfyUI TTS configuration")
     minimax: TTSMiniMaxConfig = Field(default_factory=TTSMiniMaxConfig, description="MiniMax TTS API configuration")
     mimo: TTSMimoConfig = Field(default_factory=TTSMimoConfig, description="MiMo TTS API configuration")
+    qwen_audio: TTSQwenAudioConfig = Field(default_factory=TTSQwenAudioConfig, description="Qwen Audio TTS configuration")
     
     # Backward compatibility: keep default_workflow at top level
     @property

@@ -16,7 +16,7 @@ Video generation API schemas
 
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SubtitleStyle(BaseModel):
@@ -91,6 +91,8 @@ class VideoSceneInput(BaseModel):
 class VideoGenerateRequest(BaseModel):
     """Video generation request"""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     # === Pipeline ===
     pipeline: str = Field("standard", description="Backend pipeline key")
     
@@ -123,9 +125,26 @@ class VideoGenerateRequest(BaseModel):
         "generate",
         description="Processing mode: 'generate' (AI generates narrations) or 'fixed' (use text as-is)"
     )
-    split_mode: Literal["paragraph", "line", "sentence"] = Field(
-        "paragraph",
+    split_mode: Literal["auto", "paragraph", "line", "sentence"] = Field(
+        "auto",
         description="Fixed-script split mode"
+    )
+    director_mode: Literal["auto", "custom"] = Field(
+        "auto",
+        alias="directorMode",
+        description="Storyboard director mode; auto lets semantic analysis choose the count",
+    )
+    storyboard_density: Literal["sparse", "standard", "dense"] = Field(
+        "standard",
+        alias="density",
+        description="Storyboard rhythm preference",
+    )
+    target_scene_count: Optional[int] = Field(
+        None,
+        ge=1,
+        le=100,
+        alias="targetSceneCount",
+        description="Soft target scene count for custom director mode",
     )
     
     # === Optional Title ===
@@ -135,7 +154,7 @@ class VideoGenerateRequest(BaseModel):
     n_scenes: Optional[int] = Field(5, ge=1, le=100, description="Number of scenes (only used in 'generate' mode, ignored in 'fixed' mode)")
     
     # === TTS Parameters ===
-    tts_inference_mode: Literal["local", "comfyui", "minimax", "mimo"] = Field(
+    tts_inference_mode: Literal["local", "comfyui", "minimax", "mimo", "qwen_audio"] = Field(
         "local",
         description="TTS inference mode"
     )
@@ -211,8 +230,9 @@ class VideoGenerateRequest(BaseModel):
     bgm_path: Optional[str] = Field(None, description="Background music path")
     bgm_volume: float = Field(0.3, ge=0.0, le=1.0, description="BGM volume (0.0-1.0)")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
             "example": {
                 "text": "Atomic Habits teaches us that small changes compound over time to produce remarkable results.",
                 "mode": "generate",
@@ -224,7 +244,8 @@ class VideoGenerateRequest(BaseModel):
                 },
                 "title": "The Power of Atomic Habits"
             }
-        }
+        },
+    )
 
 
 class VideoGenerateResponse(BaseModel):

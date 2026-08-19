@@ -1,0 +1,2697 @@
+{
+ "nodes": [
+  {
+   "id": "file:pixelle_video/utils/__init__.py",
+   "type": "file",
+   "name": "__init__.py",
+   "filePath": "pixelle_video/utils/__init__.py",
+   "summary": "Package marker for pixelle_video.utils with a module docstring. Exposes no symbols itself; the package hosts all shared utility helpers consumed across pipelines, services, and the API layer.",
+   "tags": [
+    "package",
+    "utils",
+    "init"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/bookend.py",
+   "type": "file",
+   "name": "bookend.py",
+   "filePath": "pixelle_video/utils/bookend.py",
+   "summary": "Project-level intro/outro bookend packaging defaults and normalization. Normalizes project/export config into a canonical bookend dict (enabled, intro_seconds, outro_seconds, fade seconds) accepting camelCase (frontend) and snake_case (backend) keys, clamping fades to pad durations. Product defaults: intro 1.2s / outro 2.0s.",
+   "tags": [
+    "bookend",
+    "intro",
+    "outro",
+    "config-normalization"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/content_generators.py",
+   "type": "file",
+   "name": "content_generators.py",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Pure/stateless LLM content generation utilities reused across pipelines: title generation (auto/direct/llm strategies), narration generation from topic/content with batch + top-up strategy for 50-100 scene counts, narration script splitting, semantic segmentation, highlight keyword extraction (LLM with heuristic fallback + color palette), image prompt and video prompt generation with batching/retry, and robust LLM JSON parsing/recovery (truncated arrays, unescaped quotes, markdown fences, trailing commas).",
+   "tags": [
+    "llm",
+    "generation",
+    "narrations",
+    "keywords",
+    "image-prompts",
+    "video-prompts",
+    "json-parsing"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/ffmpeg_scratch.py",
+   "type": "file",
+   "name": "ffmpeg_scratch.py",
+   "filePath": "pixelle_video/utils/ffmpeg_scratch.py",
+   "summary": "Shared ffmpeg/TTS temp directory helpers and garbage collection. Provides a stable OS-temp scratch dir (pixelle_video_ffmpeg) and cleanup_ffmpeg_scratch which deletes stale files older than max_age_hours plus empty subdirs; called on API startup.",
+   "tags": [
+    "ffmpeg",
+    "temp",
+    "cleanup",
+    "gc"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/llm_util.py",
+   "type": "file",
+   "name": "llm_util.py",
+   "filePath": "pixelle_video/utils/llm_util.py",
+   "summary": "LLM utility functions for model discovery and connection testing against OpenAI-compatible /v1/models endpoints using httpx (trust_env=False to avoid dead local proxies). fetch_available_models lists model IDs; test_llm_connection returns (success, message, model_count) with detailed error mapping for 401/403/404/timeout.",
+   "tags": [
+    "llm",
+    "openai-compatible",
+    "models",
+    "connection-test"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/os_util.py",
+   "type": "file",
+   "name": "os_util.py",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "OS utilities for file and path management (inspired by Pixelle-MCP's os_util.py). Resolves the project root via PIXELLE_VIDEO_ROOT env var, provides temp/data/output path builders, byte-file saving, task ID generation and per-task output directory layout (output/{task_id}/frames/...), and resource management for bgm/templates/workflows with custom-override priority (data/<type> before <type>).",
+   "tags": [
+    "paths",
+    "filesystem",
+    "tasks",
+    "resources",
+    "os"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/project_config.py",
+   "type": "file",
+   "name": "project_config.py",
+   "filePath": "pixelle_video/utils/project_config.py",
+   "summary": "Project config dual-key normalization between camelCase (editor/UI-owned, preferred when both present) and snake_case (pipeline) for ~26 key pairs (enableSubtitles, bgmVolume, mediaWidth, ttsMode, workflowId, bookendEnabled, directorMode, density, styleSlotId, etc.). pick_config returns first non-None key; normalize_project_config dual-writes both casings, preserves legacy sceneCount as a soft custom director target, and aliases workflow/media_workflow.",
+   "tags": [
+    "config",
+    "normalization",
+    "camelCase",
+    "snake_case"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/prompt_helper.py",
+   "type": "file",
+   "name": "prompt_helper.py",
+   "filePath": "pixelle_video/utils/prompt_helper.py",
+   "summary": "Prompt helper utilities for composing and validating visual prompts: whitespace normalization for comparing user-facing prompt fields, legacy fallback detection (visual_prompt copied from narration), and final image prompt assembly with an optional style prefix applied only at the provider boundary.",
+   "tags": [
+    "prompts",
+    "validation",
+    "image"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/storyboard_split.py",
+   "type": "file",
+   "name": "storyboard_split.py",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Semantic storyboard packing that mirrors frontend/src/lib/storyboardSplit.ts. Splits narration drafts into duration-aware units (auto/paragraph/line/sentence modes) without inventing mid-word/mid-phrase hard cuts: sentence-unit splitting, long-sentence splitting at pauses/semantic joins, bounded rhythm fallback for unpunctuated CJK text, soft-expand on pause punctuation, semantic packing to a target scene count, and healing of mid-cut segments.",
+   "tags": [
+    "storyboard",
+    "split",
+    "segmentation",
+    "narration",
+    "chinese-text"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/template_util.py",
+   "type": "file",
+   "name": "template_util.py",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Template utility functions for size parsing and template management. Parses WIDTHxHEIGHT sizes from template paths, lists available sizes/templates merged from default and custom (data/) locations via os_util resource API, resolves template paths with backward-compatible default.html->image_default.html migration, detects template type (static_/image_/video_ naming), and builds TemplateInfo/TemplateDisplayInfo models grouped by size and type for the UI.",
+   "tags": [
+    "templates",
+    "resolution",
+    "sizes",
+    "pydantic"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/tts_audio_postprocess.py",
+   "type": "file",
+   "name": "tts_audio_postprocess.py",
+   "filePath": "pixelle_video/utils/tts_audio_postprocess.py",
+   "summary": "Lightweight per-scene TTS clip post-processing to reduce 'different speaker' artifacts: single-pass loudnorm (target I=-16 LUFS), short fade in/out via ffmpeg-python compiled command run with subprocess timeout (bounded 30-180s), writing to the shared ffmpeg scratch dir. Also provides with_speaker_lock which appends a Chinese speaker-identity constraint to multi-scene style prompts.",
+   "tags": [
+    "tts",
+    "audio",
+    "ffmpeg",
+    "loudness",
+    "fade"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/tts_util.py",
+   "type": "file",
+   "name": "tts_util.py",
+   "filePath": "pixelle_video/utils/tts_util.py",
+   "summary": "Edge TTS utility (original edge-tts implementation, temporarily unused — TTS service currently uses ComfyUI workflows). edge_tts() synthesizes speech with retry (exponential backoff + jitter), concurrency limiting via per-event-loop semaphore, request delay, word-boundary subtitle alignment saving, and optional output file. Also provides get_audio_duration (ffmpeg probe with size-based estimate fallback) and list_voices with locale filter.",
+   "tags": [
+    "tts",
+    "edge-tts",
+    "audio",
+    "retry",
+    "rate-limit"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/video_canvas.py",
+   "type": "file",
+   "name": "video_canvas.py",
+   "filePath": "pixelle_video/utils/video_canvas.py",
+   "summary": "Video canvas (成片规格) vs image-generation size mapping. Defines 8 canvas presets (1080x1920 default @30fps, 720x1280 fast, 1440x2560 advanced, 16:9 and 1:1 variants), normalizes canvas config (width/height/fps with clamping, even dimensions for yuv420, tier detection), and maps any canvas to the nearest image-API whitelist size by orientation, aspect ratio, and pixel count.",
+   "tags": [
+    "video",
+    "canvas",
+    "resolution",
+    "size-mapping",
+    "presets"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "file:pixelle_video/utils/workflow_util.py",
+   "type": "file",
+   "name": "workflow_util.py",
+   "filePath": "pixelle_video/utils/workflow_util.py",
+   "summary": "Standardized ComfyUI workflow path resolution for all services using convention {source}/{service_name}.json (source: runninghub default or selfhost). resolve_workflow_path returns the relative path; get_default_source returns 'runninghub' (cloud-first for beginners).",
+   "tags": [
+    "comfyui",
+    "workflow",
+    "paths"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/bookend.py:_to_float",
+   "type": "function",
+   "name": "_to_float",
+   "filePath": "pixelle_video/utils/bookend.py",
+   "summary": "Convert value to float, returning default on TypeError/ValueError/NaN.",
+   "tags": [
+    "helper",
+    "float"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/bookend.py:_clamp",
+   "type": "function",
+   "name": "_clamp",
+   "filePath": "pixelle_video/utils/bookend.py",
+   "summary": "Clamp value into [minimum, maximum].",
+   "tags": [
+    "helper",
+    "math"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/bookend.py:normalize_bookend_config",
+   "type": "function",
+   "name": "normalize_bookend_config",
+   "filePath": "pixelle_video/utils/bookend.py",
+   "summary": "Normalize project/export config into canonical bookend dict; accepts camelCase/snake_case and nested config.bookend object, coerces enabled flag from string/bool, clamps durations and fades (fades capped at pad duration), zeroes everything when disabled.",
+   "tags": [
+    "normalization",
+    "bookend",
+    "config"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/ffmpeg_scratch.py:ffmpeg_scratch_dir",
+   "type": "function",
+   "name": "ffmpeg_scratch_dir",
+   "filePath": "pixelle_video/utils/ffmpeg_scratch.py",
+   "summary": "Return (creating if needed) the shared OS-temp scratch directory pixelle_video_ffmpeg for ffmpeg/TTS intermediate files.",
+   "tags": [
+    "ffmpeg",
+    "temp"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/ffmpeg_scratch.py:cleanup_ffmpeg_scratch",
+   "type": "function",
+   "name": "cleanup_ffmpeg_scratch",
+   "filePath": "pixelle_video/utils/ffmpeg_scratch.py",
+   "summary": "Delete files under the shared ffmpeg scratch dir older than max_age_hours and prune empty subdirs; returns number of paths removed. Called on API startup.",
+   "tags": [
+    "ffmpeg",
+    "cleanup",
+    "gc"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/llm_util.py:fetch_available_models",
+   "type": "function",
+   "name": "fetch_available_models",
+   "filePath": "pixelle_video/utils/llm_util.py",
+   "summary": "Fetch sorted model ID list from an OpenAI-compatible GET /v1/models endpoint with Bearer auth (trust_env=False to bypass dead local proxies).",
+   "tags": [
+    "llm",
+    "models",
+    "httpx"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/llm_util.py:test_llm_connection",
+   "type": "function",
+   "name": "test_llm_connection",
+   "filePath": "pixelle_video/utils/llm_util.py",
+   "summary": "Test LLM API connection by fetching the models list; optionally verify a model exists. Returns (success, message, model_count) mapping 401/403/404/connect/timeout to user-friendly messages.",
+   "tags": [
+    "llm",
+    "connection-test"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:get_pixelle_video_root_path",
+   "type": "function",
+   "name": "get_pixelle_video_root_path",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Resolve project root from PIXELLE_VIDEO_ROOT env var (resolved absolute path if it exists), falling back to the current working directory.",
+   "tags": [
+    "paths",
+    "root"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:ensure_pixelle_video_root_path",
+   "type": "function",
+   "name": "ensure_pixelle_video_root_path",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Ensure the root path and its output/ directory exist, then return the root path.",
+   "tags": [
+    "paths",
+    "setup"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:get_root_path",
+   "type": "function",
+   "name": "get_root_path",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Join paths relative to the Pixelle-Video root (ensures root/output exist first).",
+   "tags": [
+    "paths"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:get_temp_path",
+   "type": "function",
+   "name": "get_temp_path",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Join paths under the temp/ directory, creating it if needed.",
+   "tags": [
+    "paths",
+    "temp"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:get_data_path",
+   "type": "function",
+   "name": "get_data_path",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Join paths under the data/ directory, creating it if needed.",
+   "tags": [
+    "paths",
+    "data"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:get_output_path",
+   "type": "function",
+   "name": "get_output_path",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Join paths under the output/ directory, creating it if needed.",
+   "tags": [
+    "paths",
+    "output"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:save_bytes_to_file",
+   "type": "function",
+   "name": "save_bytes_to_file",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Write binary data to file_path, creating parent directories; returns the absolute path.",
+   "tags": [
+    "filesystem",
+    "bytes"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:ensure_dir",
+   "type": "function",
+   "name": "ensure_dir",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Create directory if missing and return its absolute path.",
+   "tags": [
+    "filesystem"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:create_task_id",
+   "type": "function",
+   "name": "create_task_id",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Create a unique task ID '{YYYYmmdd_HHMMSS}_{4-hex}' with collision probability < 0.0001% per second.",
+   "tags": [
+    "tasks",
+    "id"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:create_task_output_dir",
+   "type": "function",
+   "name": "create_task_output_dir",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Create isolated per-task output directory output/{task_id}/ with a frames/ subdir; returns (task_dir, task_id).",
+   "tags": [
+    "tasks",
+    "output"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:get_task_path",
+   "type": "function",
+   "name": "get_task_path",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Join paths within a task's output directory.",
+   "tags": [
+    "tasks",
+    "paths"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:get_task_frame_path",
+   "type": "function",
+   "name": "get_task_frame_path",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Build a frame file path 'NN_{audio|image|video|composed|segment}.{ext}' under the task's frames/ dir (1-indexed filenames).",
+   "tags": [
+    "tasks",
+    "frames"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:get_task_final_video_path",
+   "type": "function",
+   "name": "get_task_final_video_path",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Return the task's final video path (final.mp4).",
+   "tags": [
+    "tasks",
+    "video"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:get_resource_path",
+   "type": "function",
+   "name": "get_resource_path",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Resolve a resource file path for bgm/templates/workflows with custom-override priority: data/{type}/... first, then root {type}/...; raises FileNotFoundError with searched locations when missing.",
+   "tags": [
+    "resources",
+    "paths"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:list_resource_files",
+   "type": "function",
+   "name": "list_resource_files",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "List resource filenames merged from default and custom (data/) locations, deduplicated with custom taking precedence; optional subdir (e.g. template size).",
+   "tags": [
+    "resources",
+    "listing"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:list_resource_dirs",
+   "type": "function",
+   "name": "list_resource_dirs",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "List subdirectories of a resource type merged from default and custom locations.",
+   "tags": [
+    "resources",
+    "listing"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/os_util.py:resource_exists",
+   "type": "function",
+   "name": "resource_exists",
+   "filePath": "pixelle_video/utils/os_util.py",
+   "summary": "Check whether a resource file exists in either the custom or default location.",
+   "tags": [
+    "resources",
+    "check"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/project_config.py:pick_config",
+   "type": "function",
+   "name": "pick_config",
+   "filePath": "pixelle_video/utils/project_config.py",
+   "summary": "Return the first present non-None value among the given keys (order = priority), else default.",
+   "tags": [
+    "config",
+    "helper"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/project_config.py:normalize_project_config",
+   "type": "function",
+   "name": "normalize_project_config",
+   "filePath": "pixelle_video/utils/project_config.py",
+   "summary": "Dual-write 26 known camel/snake key pairs so both casings stay in sync (camel wins when both present); preserves legacy sceneCount as soft custom directorMode target, defaults directorMode/density, and aliases workflow <-> workflowId/media_workflow.",
+   "tags": [
+    "config",
+    "normalization"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/prompt_helper.py:normalize_prompt_text",
+   "type": "function",
+   "name": "normalize_prompt_text",
+   "filePath": "pixelle_video/utils/prompt_helper.py",
+   "summary": "Collapse whitespace and strip for comparing user-facing prompt fields.",
+   "tags": [
+    "prompts",
+    "helper"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/prompt_helper.py:is_visual_prompt_same_as_narration",
+   "type": "function",
+   "name": "is_visual_prompt_same_as_narration",
+   "filePath": "pixelle_video/utils/prompt_helper.py",
+   "summary": "Detect the legacy fallback where visual_prompt was copied from narration (case-insensitive equality after normalization).",
+   "tags": [
+    "prompts",
+    "detection"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/prompt_helper.py:build_image_prompt",
+   "type": "function",
+   "name": "build_image_prompt",
+   "filePath": "pixelle_video/utils/prompt_helper.py",
+   "summary": "Assemble the final image prompt, prepending an optional style prefix only at the provider boundary ('prefix, prompt').",
+   "tags": [
+    "prompts",
+    "image"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/tts_audio_postprocess.py:with_speaker_lock",
+   "type": "function",
+   "name": "with_speaker_lock",
+   "filePath": "pixelle_video/utils/tts_audio_postprocess.py",
+   "summary": "Append the shared Chinese speaker-lock phrase to a style prompt when multi_scene (or force), deduplicating if already present.",
+   "tags": [
+    "tts",
+    "speaker-lock"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/tts_audio_postprocess.py:_postprocess_timeout_seconds",
+   "type": "function",
+   "name": "_postprocess_timeout_seconds",
+   "filePath": "pixelle_video/utils/tts_audio_postprocess.py",
+   "summary": "Bound ffmpeg timeout for loudnorm: max(30, min(180, duration*2.5+20)) so a hung process cannot freeze generation.",
+   "tags": [
+    "tts",
+    "timeout"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/tts_audio_postprocess.py:postprocess_tts_clip",
+   "type": "function",
+   "name": "postprocess_tts_clip",
+   "filePath": "pixelle_video/utils/tts_audio_postprocess.py",
+   "summary": "Normalize loudness (single-pass loudnorm) and apply fade in/out to a TTS clip in-place via ffmpeg-python compiled command + subprocess timeout; writes via shared ffmpeg scratch dir and returns the original path unchanged on any failure.",
+   "tags": [
+    "tts",
+    "ffmpeg",
+    "loudness",
+    "fade"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/workflow_util.py:resolve_workflow_path",
+   "type": "function",
+   "name": "resolve_workflow_path",
+   "filePath": "pixelle_video/utils/workflow_util.py",
+   "summary": "Resolve a ComfyUI workflow path using the convention '{source}/{service_name}.json', defaulting source to runninghub.",
+   "tags": [
+    "comfyui",
+    "workflow"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/workflow_util.py:get_default_source",
+   "type": "function",
+   "name": "get_default_source",
+   "filePath": "pixelle_video/utils/workflow_util.py",
+   "summary": "Return the default workflow source 'runninghub' (cloud-first).",
+   "tags": [
+    "comfyui",
+    "workflow"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/video_canvas.py:_to_int",
+   "type": "function",
+   "name": "_to_int",
+   "filePath": "pixelle_video/utils/video_canvas.py",
+   "summary": "Convert to positive int with default fallback on error/non-positive.",
+   "tags": [
+    "helper"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/video_canvas.py:normalize_video_canvas",
+   "type": "function",
+   "name": "normalize_video_canvas",
+   "filePath": "pixelle_video/utils/video_canvas.py",
+   "summary": "Resolve video canvas (media size + fps) from project config, defaulting to 1080x1920@30; snaps to known presets or clamps custom sizes to even 480-3840 dimensions; returns width/height/fps/preset_id/tier/is_advanced.",
+   "tags": [
+    "canvas",
+    "normalization"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/video_canvas.py:map_image_gen_size",
+   "type": "function",
+   "name": "map_image_gen_size",
+   "filePath": "pixelle_video/utils/video_canvas.py",
+   "summary": "Map a video canvas size to the closest image-API whitelist size: exact hit, then same orientation, closest aspect ratio, then pixel count with undersize penalty.",
+   "tags": [
+    "image",
+    "size-mapping"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/video_canvas.py:image_gen_size_from_config",
+   "type": "function",
+   "name": "image_gen_size_from_config",
+   "filePath": "pixelle_video/utils/video_canvas.py",
+   "summary": "Convenience: normalize canvas from config then map to image-gen size.",
+   "tags": [
+    "image",
+    "size-mapping"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/video_canvas.py:resolve_video_fps",
+   "type": "function",
+   "name": "resolve_video_fps",
+   "filePath": "pixelle_video/utils/video_canvas.py",
+   "summary": "Convenience: return normalized fps from config.",
+   "tags": [
+    "video",
+    "fps"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:clean_narration_text",
+   "type": "function",
+   "name": "clean_narration_text",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Strip speakable ordering labels (numbered prefixes like '1.', '第1段', '旁白1') from narration text before it reaches TTS, up to 3 iterative passes.",
+   "tags": [
+    "narration",
+    "cleanup"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_clean_narrations",
+   "type": "function",
+   "name": "_clean_narrations",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Map clean_narration_text over a narration list.",
+   "tags": [
+    "narration",
+    "helper"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:generate_title",
+   "type": "function",
+   "name": "generate_title",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Generate a short video title from content: 'direct' truncates content, 'auto' short-circuits <=15 chars, otherwise LLM via build_title_generation_prompt with quote/punctuation cleanup and smart word-boundary truncation to max_length.",
+   "tags": [
+    "title",
+    "llm"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:generate_narrations_from_topic",
+   "type": "function",
+   "name": "generate_narrations_from_topic",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Generate n_scenes narrations from a topic via batched LLM calls (batch_size=12) with automatic top-up when batches return fewer items (common at 50-100 scenes).",
+   "tags": [
+    "narration",
+    "llm",
+    "topic"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:generate_narrations_from_content",
+   "type": "function",
+   "name": "generate_narrations_from_content",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Generate n_scenes narrations from user content with the same batch + top-up strategy as topic mode.",
+   "tags": [
+    "narration",
+    "llm",
+    "content"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_generate_narrations_batched",
+   "type": "function",
+   "name": "_generate_narrations_batched",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Core batched narration generator: splits target into batches, appends batch continuity context (global numbering, previous tail, source preview), collects chunks, cleans, and runs a last-resort global top-up; raises if still short.",
+   "tags": [
+    "narration",
+    "batching"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_append_batch_context",
+   "type": "function",
+   "name": "_append_batch_context",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Append batch-generation instructions to a prompt: exact count for storyboards global_start-global_end, continue-the-arc note, source preview (<=800 chars) and previous narration tail.",
+   "tags": [
+    "prompt",
+    "batching"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_generate_narration_chunk_with_topup",
+   "type": "function",
+   "name": "_generate_narration_chunk_with_topup",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Request one narration chunk and top-up with extra LLM rounds (up to 4, deduplicated) until full or rounds exhausted; defers to global top-up when partial, raises on empty.",
+   "tags": [
+    "narration",
+    "topup"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_topup_narrations",
+   "type": "function",
+   "name": "_topup_narrations",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Ask the LLM (Chinese prompt, strict JSON) for exactly 'need' more narrations continuing previous tail; returns cleaned list or [] on failure.",
+   "tags": [
+    "narration",
+    "topup"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_coerce_narration_list",
+   "type": "function",
+   "name": "_coerce_narration_list",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Normalize LLM JSON/list payloads into non-empty narration strings, handling dict keys narrations/data/result/items/scenes and dict items with narration/text/content/ttsText.",
+   "tags": [
+    "narration",
+    "parsing"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:split_narration_script",
+   "type": "function",
+   "name": "split_narration_script",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Split a user narration script into segments by mode: auto (semantic storyboard_split auto_split_draft), paragraph (double newline), line (single newline), sentence (sentence punctuation via storyboard_split). Cleans and logs length stats.",
+   "tags": [
+    "narration",
+    "split"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_normalize_segment_match",
+   "type": "function",
+   "name": "_normalize_segment_match",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Strip all whitespace for segment equality verification.",
+   "tags": [
+    "helper"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:segment_narration_semantically",
+   "type": "function",
+   "name": "segment_narration_semantically",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Ask the LLM for extractive semantic segmentation of a narration (text + boundary_reason + visual_focus + text_anchors per segment) and strictly validate: source text must round-trip unchanged, count <= target, per-segment <= max_chars.",
+   "tags": [
+    "llm",
+    "segmentation",
+    "validation"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:generate_highlight_keywords",
+   "type": "function",
+   "name": "generate_highlight_keywords",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Extract highlight keywords (word + hex color) from narration via LLM with style/density/avoid tuning; falls back to heuristics when the response cannot be parsed; validates words appear in source, caps at max_keywords with density cap.",
+   "tags": [
+    "keywords",
+    "llm",
+    "subtitle"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_heuristic_keywords",
+   "type": "function",
+   "name": "_heuristic_keywords",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Fallback keyword extraction: English tokens + sliding 2-4 char CJK windows, stop/avoid-word filtering, rarity-ranked with color palette assignment and char de-duplication.",
+   "tags": [
+    "keywords",
+    "heuristic"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_normalize_keyword_words",
+   "type": "function",
+   "name": "_normalize_keyword_words",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Normalize avoid-words to a casefolded set (max 48 entries, len <= 20).",
+   "tags": [
+    "keywords",
+    "helper"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_keyword_limit",
+   "type": "function",
+   "name": "_keyword_limit",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Cap keyword count by density (low=4, standard=8, high=12) within 1-24.",
+   "tags": [
+    "keywords",
+    "helper"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:generate_image_prompts",
+   "type": "function",
+   "name": "generate_image_prompts",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Generate one strict English visual prompt per narration in batches with retries, real director system prompt, optional style_prefix, one-to-one visual_focuses/text_anchors alignment, and progress callback.",
+   "tags": [
+    "image-prompts",
+    "llm",
+    "batching"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_parse_image_prompt_response",
+   "type": "function",
+   "name": "_parse_image_prompt_response",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Parse an object-shaped image-prompt JSON response, stripping code fences and requiring non-empty string image_prompts array.",
+   "tags": [
+    "parsing",
+    "json"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_repair_unescaped_json_quotes",
+   "type": "function",
+   "name": "_repair_unescaped_json_quotes",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Repair unescaped quotes inside model-generated JSON string values: a quote only terminates the string when followed by structural JSON punctuation; otherwise it is escaped.",
+   "tags": [
+    "json",
+    "repair"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_loads_model_json",
+   "type": "function",
+   "name": "_loads_model_json",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Load JSON strictly, then retry with unescaped-quote repair; raises the original error when repair changes nothing or still fails.",
+   "tags": [
+    "json",
+    "parsing"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:generate_video_prompts",
+   "type": "function",
+   "name": "generate_video_prompts",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Generate video prompts from narrations with batching, retry per batch, count validation, and progress callback; returns base prompts without prefix.",
+   "tags": [
+    "video-prompts",
+    "llm",
+    "batching"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_narration_max_tokens",
+   "type": "function",
+   "name": "_narration_max_tokens",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Scale the completion token budget with item count (512 + n*120, clamped 1024-8192).",
+   "tags": [
+    "llm",
+    "tokens"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_request_narration_json",
+   "type": "function",
+   "name": "_request_narration_json",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Request narration JSON with up to 3 attempts (original/compact/retry prompts, thinking disabled, budgeted max_tokens) and layered recovery: strict parse, truncated-array recovery, plain-line fallback; returns best partial or raises.",
+   "tags": [
+    "llm",
+    "json",
+    "retry"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_recover_truncated_narration_json",
+   "type": "function",
+   "name": "_recover_truncated_narration_json",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Recover complete string items from a truncated narrations JSON array (marker or bare-array aware, unescaping values, skipping accidental keys).",
+   "tags": [
+    "json",
+    "recovery"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_extract_narrations_fallback",
+   "type": "function",
+   "name": "_extract_narrations_fallback",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Best-effort recovery of narrations from plain-line LLM output (skips JSON scaffolding); accepts partial lists for top-up.",
+   "tags": [
+    "narration",
+    "fallback"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/content_generators.py:_parse_json",
+   "type": "function",
+   "name": "_parse_json",
+   "filePath": "pixelle_video/utils/content_generators.py",
+   "summary": "Robust JSON parsing: normalizes smart quotes/BOM, strips markdown fences, prefers largest {..}/{..} span, trailing-comma repair, and raw_decode prefix scanning.",
+   "tags": [
+    "json",
+    "parsing"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:clamp_scene_count",
+   "type": "function",
+   "name": "clamp_scene_count",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Clamp an int to [1, 100] scene bounds with default on parse failure.",
+   "tags": [
+    "helper",
+    "clamp"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:split_draft_by_rule",
+   "type": "function",
+   "name": "split_draft_by_rule",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Split draft text by mode: auto -> auto_split_draft, paragraph -> double newline, sentence -> sentence-unit split, else line mode.",
+   "tags": [
+    "split",
+    "draft"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:_meaningful_length",
+   "type": "function",
+   "name": "_meaningful_length",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Character length ignoring whitespace.",
+   "tags": [
+    "helper"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:_split_sentence_units",
+   "type": "function",
+   "name": "_split_sentence_units",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Split at sentence punctuation without breaking decimals, dates, domains, or version tokens; newlines end units.",
+   "tags": [
+    "split",
+    "sentences"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:_split_long_sentence",
+   "type": "function",
+   "name": "_split_long_sentence",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Split a long sentence at pauses, then semantic joins, then a bounded rhythm fallback; merges tiny tails and re-falls back when any group still exceeds the rhythm cap.",
+   "tags": [
+    "split",
+    "long-sentence"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:_split_by_rhythm",
+   "type": "function",
+   "name": "_split_by_rhythm",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Guarantee bounded units for unpunctuated text: prefer pause/semantic-break cut points near 36 chars, else fixed-width CJK fallback moved off ASCII words; keeps meaningful tails.",
+   "tags": [
+    "split",
+    "rhythm"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:_minimum_tail_length",
+   "type": "function",
+   "name": "_minimum_tail_length",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Compute a tail size bound (>= AUTO_MIN, <= target window) without extra tuning params.",
+   "tags": [
+    "helper"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:_move_off_ascii_word",
+   "type": "function",
+   "name": "_move_off_ascii_word",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Adjust a cut position so it does not split an ASCII word, scanning backward then forward within bounds.",
+   "tags": [
+    "helper"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:auto_split_draft",
+   "type": "function",
+   "name": "auto_split_draft",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Create safe, duration-aware narration units: sentence units -> long-sentence splitting, without rewriting source text.",
+   "tags": [
+    "split",
+    "auto"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:rebalance_long_units",
+   "type": "function",
+   "name": "rebalance_long_units",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Re-split any packed unit still longer than the rhythm cap via _split_long_sentence.",
+   "tags": [
+    "split",
+    "rebalance"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:soft_expand_by_pause",
+   "type": "function",
+   "name": "soft_expand_by_pause",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Split units on ，； pauses only when both sides are substantial (>= 4 chars), keeping the pause on the left segment for natural TTS/hold boundaries.",
+   "tags": [
+    "split",
+    "pause"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:pack_semantic_units",
+   "type": "function",
+   "name": "pack_semantic_units",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Pack units to a target scene count via proportional chunking; never invents mid-sentence character cuts when there are fewer units than the target.",
+   "tags": [
+    "packing",
+    "scenes"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:heal_mid_cuts",
+   "type": "function",
+   "name": "heal_mid_cuts",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Merge adjacent segments that look like hard mid-word/mid-phrase cuts (e.g. '科学家发'+'现...'), respecting terminal/pause punctuation and ambiguous long-pair heuristics.",
+   "tags": [
+    "healing",
+    "merge"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:_should_merge_mid_cut",
+   "type": "function",
+   "name": "_should_merge_mid_cut",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "Heuristic deciding whether a left/right segment pair is a hard mid-cut that should merge (CJK/alnum continuity, punctuation absence, length rules).",
+   "tags": [
+    "heuristic",
+    "merge"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/storyboard_split.py:build_storyboard_narrations",
+   "type": "function",
+   "name": "build_storyboard_narrations",
+   "filePath": "pixelle_video/utils/storyboard_split.py",
+   "summary": "End-to-end storyboard narration builder: rule split -> optional soft-expand -> pack to target_count -> rebalance -> optional heal; mirrors frontend storyboardSplit.ts.",
+   "tags": [
+    "storyboard",
+    "pipeline"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:parse_template_size",
+   "type": "function",
+   "name": "parse_template_size",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Parse (width, height) from a template path's size directory (WIDTHxHEIGHT), validating bounds and format; raises ValueError with guidance.",
+   "tags": [
+    "templates",
+    "parse"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:list_available_sizes",
+   "type": "function",
+   "name": "list_available_sizes",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "List available template sizes merged from templates/ and data/templates/ via os_util, filtered to valid WIDTHxHEIGHT dir names, sorted.",
+   "tags": [
+    "templates",
+    "sizes"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:list_templates_for_size",
+   "type": "function",
+   "name": "list_templates_for_size",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "List .html template filenames for a size, merged from default and custom locations.",
+   "tags": [
+    "templates",
+    "listing"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:get_template_full_path",
+   "type": "function",
+   "name": "get_template_full_path",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Resolve a template's full path (custom first), raising FileNotFoundError listing available templates on miss.",
+   "tags": [
+    "templates",
+    "resolution"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:format_template_display_info",
+   "type": "function",
+   "name": "format_template_display_info",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Build TemplateDisplayInfo (name, size, orientation, is_standard for the 3 standard sizes) for the UI layer.",
+   "tags": [
+    "templates",
+    "display"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:get_all_templates_with_info",
+   "type": "function",
+   "name": "get_all_templates_with_info",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Collect TemplateInfo for every template across all sizes (path + display info).",
+   "tags": [
+    "templates",
+    "listing"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:get_templates_grouped_by_size",
+   "type": "function",
+   "name": "get_templates_grouped_by_size",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Group all templates by size, ordered by orientation priority portrait > landscape > square.",
+   "tags": [
+    "templates",
+    "grouping"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:resolve_template_path",
+   "type": "function",
+   "name": "resolve_template_path",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Resolve flexible template input (None default, bare name, size/name, legacy templates/ or data/templates/ paths) to a full path; migrates default.html -> image_default.html with fallback.",
+   "tags": [
+    "templates",
+    "resolution"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:get_template_type",
+   "type": "function",
+   "name": "get_template_type",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Detect template type from filename convention static_*/image_*/video_*, defaulting to image with a warning.",
+   "tags": [
+    "templates",
+    "type"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:filter_templates_by_type",
+   "type": "function",
+   "name": "filter_templates_by_type",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Filter TemplateInfo list by type (static/image/video).",
+   "tags": [
+    "templates",
+    "filter"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/template_util.py:get_templates_grouped_by_size_and_type",
+   "type": "function",
+   "name": "get_templates_grouped_by_size_and_type",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Group templates by size with optional type filter, orientation-ordered.",
+   "tags": [
+    "templates",
+    "grouping"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "class:pixelle_video/utils/template_util.py:TemplateDisplayInfo",
+   "type": "class",
+   "name": "TemplateDisplayInfo",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Pydantic model carrying template display info for the UI layer: name, size, width, height, orientation (portrait/landscape/square), is_standard.",
+   "tags": [
+    "templates",
+    "pydantic",
+    "model"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "class:pixelle_video/utils/template_util.py:TemplateInfo",
+   "type": "class",
+   "name": "TemplateInfo",
+   "filePath": "pixelle_video/utils/template_util.py",
+   "summary": "Pydantic model bundling a resolved template_path with its TemplateDisplayInfo.",
+   "tags": [
+    "templates",
+    "pydantic",
+    "model"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/tts_util.py:_get_request_semaphore",
+   "type": "function",
+   "name": "_get_request_semaphore",
+   "filePath": "pixelle_video/utils/tts_util.py",
+   "summary": "Get or create the per-event-loop asyncio semaphore limiting concurrent Edge TTS requests (max 3).",
+   "tags": [
+    "tts",
+    "rate-limit"
+   ],
+   "complexity": "simple",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/tts_util.py:edge_tts",
+   "type": "function",
+   "name": "edge_tts",
+   "filePath": "pixelle_video/utils/tts_util.py",
+   "summary": "Synthesize speech via Microsoft Edge TTS: semaphore-limited, rate-limited, retry with exponential backoff + jitter for 401/NoAudioReceived, collects word boundaries for subtitle alignment (edge_word_boundaries_to_cues + save_alignment), optionally saves audio to output_path, returns MP3 bytes.",
+   "tags": [
+    "tts",
+    "edge-tts",
+    "retry"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/tts_util.py:get_audio_duration",
+   "type": "function",
+   "name": "get_audio_duration",
+   "filePath": "pixelle_video/utils/tts_util.py",
+   "summary": "Get audio duration in seconds via ffmpeg probe, falling back to a file-size estimate (~2KB/s MP3) with a 1s floor.",
+   "tags": [
+    "audio",
+    "duration"
+   ],
+   "complexity": "moderate",
+   "language": "python"
+  },
+  {
+   "id": "function:pixelle_video/utils/tts_util.py:list_voices",
+   "type": "function",
+   "name": "list_voices",
+   "filePath": "pixelle_video/utils/tts_util.py",
+   "summary": "List Edge TTS voice ShortNames, optionally locale-filtered, with the same semaphore + retry strategy.",
+   "tags": [
+    "tts",
+    "voices"
+   ],
+   "complexity": "complex",
+   "language": "python"
+  }
+ ],
+ "edges": [
+  {
+   "source": "file:pixelle_video/utils/bookend.py",
+   "target": "function:pixelle_video/utils/bookend.py:_to_float",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/bookend.py",
+   "target": "function:pixelle_video/utils/bookend.py:_clamp",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/bookend.py",
+   "target": "function:pixelle_video/utils/bookend.py:normalize_bookend_config",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:clean_narration_text",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_clean_narrations",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:generate_title",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:generate_narrations_from_topic",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:generate_narrations_from_content",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_generate_narrations_batched",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_append_batch_context",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_generate_narration_chunk_with_topup",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_topup_narrations",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_coerce_narration_list",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:split_narration_script",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_normalize_segment_match",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:segment_narration_semantically",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:generate_highlight_keywords",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_heuristic_keywords",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_normalize_keyword_words",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_keyword_limit",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:generate_image_prompts",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_parse_image_prompt_response",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_repair_unescaped_json_quotes",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_loads_model_json",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:generate_video_prompts",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_narration_max_tokens",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_request_narration_json",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_recover_truncated_narration_json",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_extract_narrations_fallback",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "function:pixelle_video/utils/content_generators.py:_parse_json",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/ffmpeg_scratch.py",
+   "target": "function:pixelle_video/utils/ffmpeg_scratch.py:ffmpeg_scratch_dir",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/ffmpeg_scratch.py",
+   "target": "function:pixelle_video/utils/ffmpeg_scratch.py:cleanup_ffmpeg_scratch",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/llm_util.py",
+   "target": "function:pixelle_video/utils/llm_util.py:fetch_available_models",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/llm_util.py",
+   "target": "function:pixelle_video/utils/llm_util.py:test_llm_connection",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:get_pixelle_video_root_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:ensure_pixelle_video_root_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:get_root_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:get_temp_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:get_data_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:get_output_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:save_bytes_to_file",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:ensure_dir",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:create_task_id",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:create_task_output_dir",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:get_task_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:get_task_frame_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:get_task_final_video_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:get_resource_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:list_resource_files",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:list_resource_dirs",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/os_util.py",
+   "target": "function:pixelle_video/utils/os_util.py:resource_exists",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/project_config.py",
+   "target": "function:pixelle_video/utils/project_config.py:pick_config",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/project_config.py",
+   "target": "function:pixelle_video/utils/project_config.py:normalize_project_config",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/prompt_helper.py",
+   "target": "function:pixelle_video/utils/prompt_helper.py:normalize_prompt_text",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/prompt_helper.py",
+   "target": "function:pixelle_video/utils/prompt_helper.py:is_visual_prompt_same_as_narration",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/prompt_helper.py",
+   "target": "function:pixelle_video/utils/prompt_helper.py:build_image_prompt",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:clamp_scene_count",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:split_draft_by_rule",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_meaningful_length",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_split_sentence_units",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_split_long_sentence",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_split_by_rhythm",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_minimum_tail_length",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_move_off_ascii_word",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:auto_split_draft",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:rebalance_long_units",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:soft_expand_by_pause",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:pack_semantic_units",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:heal_mid_cuts",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_should_merge_mid_cut",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/storyboard_split.py",
+   "target": "function:pixelle_video/utils/storyboard_split.py:build_storyboard_narrations",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:parse_template_size",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:list_available_sizes",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:list_templates_for_size",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:get_template_full_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:format_template_display_info",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:get_all_templates_with_info",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:get_templates_grouped_by_size",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:resolve_template_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:get_template_type",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:filter_templates_by_type",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "function:pixelle_video/utils/template_util.py:get_templates_grouped_by_size_and_type",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "class:pixelle_video/utils/template_util.py:TemplateDisplayInfo",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "class:pixelle_video/utils/template_util.py:TemplateInfo",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/tts_audio_postprocess.py",
+   "target": "function:pixelle_video/utils/tts_audio_postprocess.py:with_speaker_lock",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/tts_audio_postprocess.py",
+   "target": "function:pixelle_video/utils/tts_audio_postprocess.py:_postprocess_timeout_seconds",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/tts_audio_postprocess.py",
+   "target": "function:pixelle_video/utils/tts_audio_postprocess.py:postprocess_tts_clip",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/tts_util.py",
+   "target": "function:pixelle_video/utils/tts_util.py:_get_request_semaphore",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/tts_util.py",
+   "target": "function:pixelle_video/utils/tts_util.py:edge_tts",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/tts_util.py",
+   "target": "function:pixelle_video/utils/tts_util.py:get_audio_duration",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/tts_util.py",
+   "target": "function:pixelle_video/utils/tts_util.py:list_voices",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/video_canvas.py",
+   "target": "function:pixelle_video/utils/video_canvas.py:_to_int",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/video_canvas.py",
+   "target": "function:pixelle_video/utils/video_canvas.py:normalize_video_canvas",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/video_canvas.py",
+   "target": "function:pixelle_video/utils/video_canvas.py:map_image_gen_size",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/video_canvas.py",
+   "target": "function:pixelle_video/utils/video_canvas.py:image_gen_size_from_config",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/video_canvas.py",
+   "target": "function:pixelle_video/utils/video_canvas.py:resolve_video_fps",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/workflow_util.py",
+   "target": "function:pixelle_video/utils/workflow_util.py:resolve_workflow_path",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/workflow_util.py",
+   "target": "function:pixelle_video/utils/workflow_util.py:get_default_source",
+   "type": "contains",
+   "weight": 1.0
+  },
+  {
+   "source": "file:pixelle_video/utils/template_util.py",
+   "target": "file:pixelle_video/utils/os_util.py",
+   "type": "imports",
+   "weight": 0.7
+  },
+  {
+   "source": "file:pixelle_video/utils/tts_audio_postprocess.py",
+   "target": "file:pixelle_video/utils/ffmpeg_scratch.py",
+   "type": "imports",
+   "weight": 0.7
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "file:pixelle_video/utils/storyboard_split.py",
+   "type": "imports",
+   "weight": 0.7
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "file:pixelle_video/prompts/__init__.py",
+   "type": "imports",
+   "weight": 0.7
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "file:pixelle_video/prompts/storyboard_segmentation.py",
+   "type": "imports",
+   "weight": 0.7
+  },
+  {
+   "source": "file:pixelle_video/utils/content_generators.py",
+   "target": "file:pixelle_video/prompts/video_generation.py",
+   "type": "imports",
+   "weight": 0.7
+  },
+  {
+   "source": "file:pixelle_video/utils/tts_util.py",
+   "target": "file:pixelle_video/services/subtitle_alignment.py",
+   "type": "imports",
+   "weight": 0.7
+  },
+  {
+   "source": "function:pixelle_video/utils/bookend.py:normalize_bookend_config",
+   "target": "function:pixelle_video/utils/bookend.py:_to_float",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/bookend.py:normalize_bookend_config",
+   "target": "function:pixelle_video/utils/bookend.py:_clamp",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_clean_narrations",
+   "target": "function:pixelle_video/utils/content_generators.py:clean_narration_text",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:generate_narrations_from_topic",
+   "target": "function:pixelle_video/utils/content_generators.py:_generate_narrations_batched",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:generate_narrations_from_content",
+   "target": "function:pixelle_video/utils/content_generators.py:_generate_narrations_batched",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_generate_narrations_batched",
+   "target": "function:pixelle_video/utils/content_generators.py:_append_batch_context",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_generate_narrations_batched",
+   "target": "function:pixelle_video/utils/content_generators.py:_generate_narration_chunk_with_topup",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_generate_narrations_batched",
+   "target": "function:pixelle_video/utils/content_generators.py:_topup_narrations",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_generate_narrations_batched",
+   "target": "function:pixelle_video/utils/content_generators.py:_clean_narrations",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_generate_narration_chunk_with_topup",
+   "target": "function:pixelle_video/utils/content_generators.py:_request_narration_json",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_generate_narration_chunk_with_topup",
+   "target": "function:pixelle_video/utils/content_generators.py:_coerce_narration_list",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_generate_narration_chunk_with_topup",
+   "target": "function:pixelle_video/utils/content_generators.py:_topup_narrations",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_topup_narrations",
+   "target": "function:pixelle_video/utils/content_generators.py:_request_narration_json",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_topup_narrations",
+   "target": "function:pixelle_video/utils/content_generators.py:_coerce_narration_list",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_topup_narrations",
+   "target": "function:pixelle_video/utils/content_generators.py:_clean_narrations",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:split_narration_script",
+   "target": "function:pixelle_video/utils/content_generators.py:_clean_narrations",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:segment_narration_semantically",
+   "target": "function:pixelle_video/utils/content_generators.py:_parse_json",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:segment_narration_semantically",
+   "target": "function:pixelle_video/utils/content_generators.py:_normalize_segment_match",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:generate_highlight_keywords",
+   "target": "function:pixelle_video/utils/content_generators.py:_keyword_limit",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:generate_highlight_keywords",
+   "target": "function:pixelle_video/utils/content_generators.py:_normalize_keyword_words",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:generate_highlight_keywords",
+   "target": "function:pixelle_video/utils/content_generators.py:_heuristic_keywords",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_heuristic_keywords",
+   "target": "function:pixelle_video/utils/content_generators.py:_normalize_keyword_words",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:generate_image_prompts",
+   "target": "function:pixelle_video/utils/content_generators.py:_parse_image_prompt_response",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_parse_image_prompt_response",
+   "target": "function:pixelle_video/utils/content_generators.py:_loads_model_json",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_loads_model_json",
+   "target": "function:pixelle_video/utils/content_generators.py:_repair_unescaped_json_quotes",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:generate_video_prompts",
+   "target": "function:pixelle_video/utils/content_generators.py:_parse_json",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_request_narration_json",
+   "target": "function:pixelle_video/utils/content_generators.py:_narration_max_tokens",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_request_narration_json",
+   "target": "function:pixelle_video/utils/content_generators.py:_parse_json",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_request_narration_json",
+   "target": "function:pixelle_video/utils/content_generators.py:_coerce_narration_list",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_request_narration_json",
+   "target": "function:pixelle_video/utils/content_generators.py:_recover_truncated_narration_json",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_request_narration_json",
+   "target": "function:pixelle_video/utils/content_generators.py:_extract_narrations_fallback",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_extract_narrations_fallback",
+   "target": "function:pixelle_video/utils/content_generators.py:clean_narration_text",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:_parse_json",
+   "target": "function:pixelle_video/utils/content_generators.py:_loads_model_json",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:split_narration_script",
+   "target": "function:pixelle_video/utils/storyboard_split.py:auto_split_draft",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/content_generators.py:split_narration_script",
+   "target": "function:pixelle_video/utils/storyboard_split.py:split_draft_by_rule",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/llm_util.py:test_llm_connection",
+   "target": "function:pixelle_video/utils/llm_util.py:fetch_available_models",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:ensure_pixelle_video_root_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_pixelle_video_root_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:get_root_path",
+   "target": "function:pixelle_video/utils/os_util.py:ensure_pixelle_video_root_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:get_temp_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_root_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:get_data_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_root_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:get_output_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_root_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:create_task_output_dir",
+   "target": "function:pixelle_video/utils/os_util.py:create_task_id",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:create_task_output_dir",
+   "target": "function:pixelle_video/utils/os_util.py:get_output_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:get_task_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_output_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:get_task_frame_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_task_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:get_task_final_video_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_task_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:get_resource_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_data_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:get_resource_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_root_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:list_resource_files",
+   "target": "function:pixelle_video/utils/os_util.py:get_root_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:list_resource_files",
+   "target": "function:pixelle_video/utils/os_util.py:get_data_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:list_resource_dirs",
+   "target": "function:pixelle_video/utils/os_util.py:get_root_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:list_resource_dirs",
+   "target": "function:pixelle_video/utils/os_util.py:get_data_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:resource_exists",
+   "target": "function:pixelle_video/utils/os_util.py:get_data_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/os_util.py:resource_exists",
+   "target": "function:pixelle_video/utils/os_util.py:get_root_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/prompt_helper.py:is_visual_prompt_same_as_narration",
+   "target": "function:pixelle_video/utils/prompt_helper.py:normalize_prompt_text",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:split_draft_by_rule",
+   "target": "function:pixelle_video/utils/storyboard_split.py:auto_split_draft",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:split_draft_by_rule",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_split_sentence_units",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:_split_long_sentence",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_meaningful_length",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:_split_long_sentence",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_split_by_rhythm",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:_split_by_rhythm",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_meaningful_length",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:_split_by_rhythm",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_minimum_tail_length",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:_split_by_rhythm",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_move_off_ascii_word",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:auto_split_draft",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_split_sentence_units",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:auto_split_draft",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_split_long_sentence",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:rebalance_long_units",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_split_long_sentence",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:rebalance_long_units",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_meaningful_length",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:pack_semantic_units",
+   "target": "function:pixelle_video/utils/storyboard_split.py:clamp_scene_count",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:heal_mid_cuts",
+   "target": "function:pixelle_video/utils/storyboard_split.py:_should_merge_mid_cut",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:build_storyboard_narrations",
+   "target": "function:pixelle_video/utils/storyboard_split.py:split_draft_by_rule",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:build_storyboard_narrations",
+   "target": "function:pixelle_video/utils/storyboard_split.py:soft_expand_by_pause",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:build_storyboard_narrations",
+   "target": "function:pixelle_video/utils/storyboard_split.py:pack_semantic_units",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:build_storyboard_narrations",
+   "target": "function:pixelle_video/utils/storyboard_split.py:rebalance_long_units",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/storyboard_split.py:build_storyboard_narrations",
+   "target": "function:pixelle_video/utils/storyboard_split.py:heal_mid_cuts",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:get_template_full_path",
+   "target": "function:pixelle_video/utils/template_util.py:list_templates_for_size",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:get_all_templates_with_info",
+   "target": "function:pixelle_video/utils/template_util.py:list_available_sizes",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:get_all_templates_with_info",
+   "target": "function:pixelle_video/utils/template_util.py:list_templates_for_size",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:get_all_templates_with_info",
+   "target": "function:pixelle_video/utils/template_util.py:format_template_display_info",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:get_templates_grouped_by_size",
+   "target": "function:pixelle_video/utils/template_util.py:get_all_templates_with_info",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:resolve_template_path",
+   "target": "function:pixelle_video/utils/template_util.py:list_available_sizes",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:filter_templates_by_type",
+   "target": "function:pixelle_video/utils/template_util.py:get_template_type",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:get_templates_grouped_by_size_and_type",
+   "target": "function:pixelle_video/utils/template_util.py:get_all_templates_with_info",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:get_templates_grouped_by_size_and_type",
+   "target": "function:pixelle_video/utils/template_util.py:filter_templates_by_type",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:get_template_full_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_resource_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:resolve_template_path",
+   "target": "function:pixelle_video/utils/os_util.py:get_resource_path",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:list_available_sizes",
+   "target": "function:pixelle_video/utils/os_util.py:list_resource_dirs",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/template_util.py:list_templates_for_size",
+   "target": "function:pixelle_video/utils/os_util.py:list_resource_files",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/tts_audio_postprocess.py:postprocess_tts_clip",
+   "target": "function:pixelle_video/utils/tts_audio_postprocess.py:_postprocess_timeout_seconds",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/tts_audio_postprocess.py:postprocess_tts_clip",
+   "target": "function:pixelle_video/utils/ffmpeg_scratch.py:ffmpeg_scratch_dir",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/tts_util.py:edge_tts",
+   "target": "function:pixelle_video/utils/tts_util.py:_get_request_semaphore",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/tts_util.py:list_voices",
+   "target": "function:pixelle_video/utils/tts_util.py:_get_request_semaphore",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/video_canvas.py:normalize_video_canvas",
+   "target": "function:pixelle_video/utils/video_canvas.py:_to_int",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/video_canvas.py:image_gen_size_from_config",
+   "target": "function:pixelle_video/utils/video_canvas.py:normalize_video_canvas",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/video_canvas.py:image_gen_size_from_config",
+   "target": "function:pixelle_video/utils/video_canvas.py:map_image_gen_size",
+   "type": "calls",
+   "weight": 0.8
+  },
+  {
+   "source": "function:pixelle_video/utils/video_canvas.py:resolve_video_fps",
+   "target": "function:pixelle_video/utils/video_canvas.py:normalize_video_canvas",
+   "type": "calls",
+   "weight": 0.8
+  }
+ ]
+}

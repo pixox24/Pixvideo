@@ -1,0 +1,150 @@
+{
+  "nodes": [
+    {
+      "id": "config:config.example.yaml",
+      "type": "config",
+      "name": "config.example.yaml",
+      "filePath": "config.example.yaml",
+      "summary": "Master configuration template for Pixelle-Video. Copy to config.yaml before use (never commit config.yaml). Defines sections: project_name, workbench (scene_concurrency), llm (OpenAI-compatible), image_generation (OpenAI Images-compatible API, defaults to 65535.space/gpt-image-2), comfyui (server URL, RunningHub/BizyAir API keys, tts/image/video workflow defaults incl. edge-tts, minimax, mimo, qwen_audio inference modes), template (default frame template 1080x1920/image_default.html, composition modes, motion/subtitle toggles), quick_create (BGM defaults), and subtitle (custom font folder, default style).",
+      "tags": ["config", "template", "llm", "image-generation", "comfyui", "tts", "video", "workbench", "subtitle"],
+      "complexity": "simple",
+      "language": "yaml"
+    },
+    {
+      "id": "file:docker-start.sh",
+      "type": "file",
+      "name": "docker-start.sh",
+      "filePath": "docker-start.sh",
+      "summary": "Docker quick-start launcher. Cleans up a config.yaml that was mounted as a directory (Docker mount pitfall), creates config.yaml from config.example.yaml when missing, detects docker-compose vs docker compose, then builds images and starts services (docker compose build && up -d). Prints service URLs (Web UI & API on :8000, /docs) and custom resource folders (data/bgm, data/templates, data/workflows).",
+      "tags": ["docker", "deployment", "launcher", "compose", "script", "bash"],
+      "complexity": "simple",
+      "language": "shell"
+    },
+    {
+      "id": "config:pyproject.toml",
+      "type": "config",
+      "name": "pyproject.toml",
+      "filePath": "pyproject.toml",
+      "summary": "Core Python package manifest for pixelle-video v0.1.15 (Apache-2.0, Python >=3.11, hatchling build). Runtime dependencies: fastmcp, pydantic, loguru, pyyaml, edge-tts, certifi, ffmpeg-python, httpx, pillow, openai, fastapi, uvicorn[standard], python-multipart, comfykit, beautifulsoup4, moviepy, playwright. Optional dev deps: pytest, pytest-asyncio, ruff. Also configures ruff (line-length 100, py311, E/F/I rules, per-file E402 ignores for api/app.py and generate_video.py) and pytest (asyncio_mode=auto, testpaths=tests).",
+      "tags": ["manifest", "python", "packaging", "dependencies", "fastapi", "ruff", "pytest", "hatchling"],
+      "complexity": "simple",
+      "language": "toml"
+    },
+    {
+      "id": "config:requirements-docs.txt",
+      "type": "config",
+      "name": "requirements-docs.txt",
+      "filePath": "requirements-docs.txt",
+      "summary": "Pip requirements for building the project documentation: mkdocs-material>=9.6.0, mkdocs-git-revision-date-localized-plugin>=1.5.0, mkdocs-static-i18n>=1.2.0. Installed via 'pip install -r requirements-docs.txt'.",
+      "tags": ["dependencies", "mkdocs", "documentation", "pip"],
+      "complexity": "simple",
+      "language": "txt"
+    },
+    {
+      "id": "file:start_web.bat",
+      "type": "file",
+      "name": "start_web.bat",
+      "filePath": "start_web.bat",
+      "summary": "Windows launcher for the Pixelle-Video React workbench. Creates a Python 3.12 .venv if missing, installs the package editable (pip install -e .) when fastapi/uvicorn are absent, copies config.example.yaml to config.yaml when missing, warns if FFmpeg is absent (.tools/ffmpeg), sets PATH/PYTHONPATH/PIXELLE_VIDEO_ROOT, runs npm ci + npm run build in frontend/, then starts the backend: python api/app.py --host 127.0.0.1 --port 8000.",
+      "tags": ["windows", "launcher", "script", "batch", "frontend", "venv", "react"],
+      "complexity": "simple",
+      "language": "batch"
+    },
+    {
+      "id": "file:start_web.sh",
+      "type": "file",
+      "name": "start_web.sh",
+      "filePath": "start_web.sh",
+      "summary": "macOS/Linux launcher for the Pixelle-Video React workbench. Prefers ffmpeg-full (libass) so ASS subtitle burn-in works, verifies ffmpeg has the 'subtitles' filter, requires npm and Node.js 22+, runs npm ci + npm run build in frontend/, then starts the backend with uv: uv run python api/app.py --host 127.0.0.1 --port 8000 (Web UI & API on :8000, docs at /docs).",
+      "tags": ["macos", "linux", "launcher", "script", "bash", "frontend", "ffmpeg", "uv"],
+      "complexity": "simple",
+      "language": "shell"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:docker-start.sh",
+      "target": "config:config.example.yaml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:docker-start.sh",
+      "target": "service:docker-compose.yml",
+      "type": "triggers",
+      "weight": 0.6
+    },
+    {
+      "source": "file:docker-start.sh",
+      "target": "service:Dockerfile",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:start_web.bat",
+      "target": "config:config.example.yaml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:start_web.bat",
+      "target": "config:pyproject.toml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:start_web.bat",
+      "target": "file:api/app.py",
+      "type": "triggers",
+      "weight": 0.6
+    },
+    {
+      "source": "file:start_web.sh",
+      "target": "config:pyproject.toml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "file:start_web.sh",
+      "target": "file:api/app.py",
+      "type": "triggers",
+      "weight": 0.6
+    },
+    {
+      "source": "file:start_web.sh",
+      "target": "file:Start Pixelle-Video.command",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:start_web.bat",
+      "target": "file:start_web.sh",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "config:pyproject.toml",
+      "target": "file:api/app.py",
+      "type": "configures",
+      "weight": 0.5
+    },
+    {
+      "source": "config:pyproject.toml",
+      "target": "file:generate_video.py",
+      "type": "configures",
+      "weight": 0.5
+    },
+    {
+      "source": "config:requirements-docs.txt",
+      "target": "config:pyproject.toml",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "file:pixelle_video/config/schema.py",
+      "target": "config:config.example.yaml",
+      "type": "validates",
+      "weight": 0.5
+    }
+  ]
+}

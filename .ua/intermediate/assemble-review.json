@@ -1,0 +1,25 @@
+{
+  "issues": [
+    {
+      "severity": "warning",
+      "message": "2 orphan file nodes have no incoming/outgoing edges: file:pixelle_video/utils/__init__.py, file:api/__init__.py. Both are empty package __init__ markers, so this is expected, but the dashboard will show them as disconnected."
+    },
+    {
+      "severity": "warning",
+      "message": "2 'configures' edges deviate from the schema weight convention (0.6): config:pyproject.toml -> file:api/app.py and config:pyproject.toml -> file:generate_video.py carry weight 0.5. Cosmetic only; edge thickness in the dashboard will render slightly off."
+    },
+    {
+      "severity": "warning",
+      "message": "batch-4.json emits 234 edges (contains/imports/exports/calls/inherits/depends_on/related) without a 'weight' field. The merge step backfills default weights in the assembled graph (verified: 0 edges missing weight in the final file), so no impact on the artifact, but batch-4 file-analyzer output is non-conformant and should emit weights directly."
+    },
+    {
+      "severity": "warning",
+      "message": "137 function nodes (class methods) are attached to the graph via class-level 'contains' edges (e.g. function:...HTMLFrameGenerator.generate_frame contained by class:...HTMLFrameGenerator) rather than direct file-level containment. The file -> class -> method chain is complete and all 596 function/class nodes are reachable, so this is a valid design choice, not a defect."
+    },
+    {
+      "severity": "warning",
+      "message": "2 nodes have very short summaries (<20 chars): class:api/schemas/resources.py:BGMListResponse ('BGM list response.') and class:api/schemas/resources.py:FontListResponse ('Font list response.'). Low informational value but not blocking."
+    }
+  ],
+  "summary": "Assembled graph quality is HIGH: 735 nodes / 1251 edges, 0 errors, 0 warnings from deterministic validation. All nodes have id/type/name/summary/tags; no duplicate node IDs; all edges have valid source/target/type/weight; 0 dangling edges, 0 duplicate (source,target,type) edges, 0 self-loops; every file-level node (139) has a filePath that exists on disk; file coverage vs scan inventory is exact (123/123 scan files mapped, 0 missing, 0 extra). Node types: 432 function, 164 class, 112 file, 13 endpoint, 8 config, 5 service, 1 document. Edge types: 612 contains, 249 calls, 234 imports, 52 exports, 36 depends_on, 22 related, 13 routes, 12 validates, 10 inherits, 4 triggers, 3 configures, 2 deploys, 1 reads_from, 1 documents. Only minor findings: 2 expected orphan __init__.py markers, 2 configures edges with weight 0.5 vs convention 0.6, batch-4 raw output missing weights (backfilled by merge), 137 class->method containment edges (valid), 2 short summaries. NOTE: assembled-graph.json was re-written by the pipeline at 21:14 mid-review (stale 21:12 version briefly showed 234 weightless edges from batch-4; the final version has all weights). No errors to fix; graph is ready for Phase 4 architecture analysis."
+}

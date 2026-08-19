@@ -1,0 +1,863 @@
+{
+  "nodes": [
+    {
+      "id": "config:.playwright-cli/page-2026-06-20T14-04-29-052Z.yml",
+      "type": "config",
+      "name": "page-2026-06-20T14-04-29-052Z.yml",
+      "filePath": ".playwright-cli/page-2026-06-20T14-04-29-052Z.yml",
+      "summary": "Playwright CLI accessibility-tree snapshot of the Pixelle-Video web UI captured on 2026-06-20. Shows the landing page with the app logo link (url '/'), a '立即登录' (login now) prompt, '模型详情加载中' (model details loading) status, feedback ('意见反馈') and help buttons, a close button, a Notifications (F8) region, and an alert element — evidence of the workbench's login/model-loading UX state.",
+      "tags": [
+        "snapshot",
+        "ui",
+        "playwright",
+        "login",
+        "frontend"
+      ],
+      "complexity": "simple",
+      "language": "yaml"
+    },
+    {
+      "id": "config:.playwright-cli/page-2026-06-21T07-52-00-196Z.yml",
+      "type": "config",
+      "name": "page-2026-06-21T07-52-00-196Z.yml",
+      "filePath": ".playwright-cli/page-2026-06-21T07-52-00-196Z.yml",
+      "summary": "Minimal Playwright CLI accessibility-tree snapshot captured on 2026-06-21, containing only a generic element and a banner region. Likely a truncated or early-state capture of the Pixelle-Video UI used for page-structure debugging.",
+      "tags": [
+        "snapshot",
+        "ui",
+        "playwright",
+        "banner"
+      ],
+      "complexity": "simple",
+      "language": "yaml"
+    },
+    {
+      "id": "config:.ua/.understandignore",
+      "type": "config",
+      "name": ".understandignore",
+      "filePath": ".ua/.understandignore",
+      "summary": "Ignore-rules file for the Understand-Anything analyzer. Mirrors .gitignore syntax and lists commented-out suggestions generated from the project's .gitignore (Python bytecode, venvs, IDE files, config.yaml, media outputs, test patterns) plus detected directories (docs/, tests/) and per-language test-file patterns that can be uncommented to exclude files from knowledge-graph analysis.",
+      "tags": [
+        "config",
+        "ignore",
+        "understand-anything",
+        "analysis"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:.ua/intermediate/scan-result.json",
+      "type": "config",
+      "name": "scan-result.json",
+      "filePath": ".ua/intermediate/scan-result.json",
+      "summary": "Phase-1 scan inventory produced by the Understand-Anything pipeline. Records contentDigest, the full project file list (123 files) with per-file path/language/sizeLines/fileCategory (code, config, docs, infra, data, script, markup), plus detected languages, frameworks, complexity estimate, and the pre-resolved import map used to construct analysis batches.",
+      "tags": [
+        "config",
+        "scan",
+        "understand-anything",
+        "inventory",
+        "import-map"
+      ],
+      "complexity": "moderate",
+      "language": "json"
+    },
+    {
+      "id": "document:NOTICE",
+      "type": "document",
+      "name": "NOTICE",
+      "filePath": "NOTICE",
+      "summary": "Third-party open-source attribution notice for Pixelle-Video. Lists bundled dependencies and their licenses: pillow 11.3.0 (MIT-CMU), httpx 0.28.1 (BSD-3-Clause), and openai 2.6.0, python-multipart 0.0.20, ffmpeg-python 0.2.0 (Apache-2.0), with full license texts.",
+      "tags": [
+        "license",
+        "attribution",
+        "third-party",
+        "legal"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:Start Pixelle-Video.command",
+      "type": "file",
+      "name": "Start Pixelle-Video.command",
+      "filePath": "Start Pixelle-Video.command",
+      "summary": "macOS Finder double-click launcher for the Pixelle-Video app. Prepends ffmpeg-full (/opt/homebrew/opt/ffmpeg-full/bin) to PATH for libass subtitle support, verifies uv/ffmpeg/npm availability (warns when the subtitles filter is missing), installs frontend deps (npm ci), builds the React workbench (npm run build), opens http://localhost:8000, then runs 'uv run python api/app.py --host 127.0.0.1 --port 8000' to start the FastAPI server.",
+      "tags": [
+        "script",
+        "launcher",
+        "macos",
+        "shell",
+        "ffmpeg",
+        "frontend"
+      ],
+      "complexity": "simple",
+      "language": "shell"
+    },
+    {
+      "id": "file:api/__init__.py",
+      "type": "file",
+      "name": "__init__.py",
+      "filePath": "api/__init__.py",
+      "summary": "Package initializer for the Pixelle-Video API layer. Contains only the Apache-2.0 copyright header and a module docstring describing the layer as a FastAPI-based REST API for video generation services.",
+      "tags": [
+        "package",
+        "python",
+        "api"
+      ],
+      "complexity": "simple",
+      "language": "python"
+    },
+    {
+      "id": "file:api/app.py",
+      "type": "file",
+      "name": "app.py",
+      "filePath": "api/app.py",
+      "summary": "FastAPI application entry point. Creates the 'Pixelle-Video API' app with an asynccontextmanager lifespan that starts the task manager, cleans ffmpeg scratch files, initializes PixelleVideoCore, resumes active project-generation runs and workbench exports (abandoning orphan scene jobs) on startup, and tears everything down on shutdown. Adds CORS middleware from api_config, includes 17 routers under /api (health without prefix), mounts frontend/dist as static files when built (else a dev fallback root route), and provides a uvicorn CLI runner (--host/--port/--reload).",
+      "tags": [
+        "fastapi",
+        "app",
+        "entrypoint",
+        "cors",
+        "lifespan",
+        "routers",
+        "uvicorn"
+      ],
+      "complexity": "moderate",
+      "language": "python"
+    },
+    {
+      "id": "file:api/config.py",
+      "type": "file",
+      "name": "config.py",
+      "filePath": "api/config.py",
+      "summary": "API configuration module. Defines the APIConfig pydantic BaseModel (host 127.0.0.1, port 8000, CORS origins for 4173/5173 dev servers, max_concurrent_tasks 5, task cleanup/retention intervals, 100MB upload cap, /api prefix, docs/redoc/openapi URLs) and instantiates the global api_config singleton consumed by app.py.",
+      "tags": [
+        "config",
+        "pydantic",
+        "api",
+        "settings"
+      ],
+      "complexity": "simple",
+      "language": "python"
+    },
+    {
+      "id": "file:api/dependencies.py",
+      "type": "file",
+      "name": "dependencies.py",
+      "filePath": "api/dependencies.py",
+      "summary": "FastAPI dependency-injection helpers. Provides get_pixelle_video() which lazily creates and initializes a global PixelleVideoCore instance, shutdown_pixelle_video() which cleans up the core and closes the HTMLFrameGenerator browser, and the PixelleVideoDep Annotated type alias used by router endpoints to receive the core instance.",
+      "tags": [
+        "dependency-injection",
+        "fastapi",
+        "pixelle-video-core",
+        "singleton"
+      ],
+      "complexity": "simple",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/__init__.py",
+      "type": "file",
+      "name": "__init__.py",
+      "filePath": "api/routers/__init__.py",
+      "summary": "Router barrel module. Re-exports 17 APIRouter instances from the router submodules (configuration, content, files, frame, health, history, image, llm, projects, resources, specialist, style_slots, tasks, tts, uploads, video, workbench) and declares them in __all__, giving app.py a single import surface.",
+      "tags": [
+        "package",
+        "barrel",
+        "routers",
+        "re-export"
+      ],
+      "complexity": "simple",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/configuration.py",
+      "type": "file",
+      "name": "configuration.py",
+      "filePath": "api/routers/configuration.py",
+      "summary": "Configuration endpoints (/config) for the React workbench. GET returns a sanitized view of the backend config (LLM, image generation, vision understanding, ComfyUI/RunningHub/BizyAir/MiniMax/Mimo/Qwen-audio API keys masked, service_status flags, quick_create/template presets); PUT persists config updates via config_manager; POST /test probes individual services (LLM connection, ComfyUI system_stats, image/vision completeness, API-key checks); GET/POST /presets load and save quick-create production defaults.",
+      "tags": [
+        "router",
+        "config",
+        "workbench",
+        "api-keys",
+        "service-test",
+        "presets"
+      ],
+      "complexity": "complex",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/content.py",
+      "type": "file",
+      "name": "content.py",
+      "filePath": "api/routers/content.py",
+      "summary": "Content generation endpoints (/content). POST /narration splits source text into narration segments, /keywords extracts highlight keywords with suggested colors, /image-prompt derives detailed image prompts from narrations, and /title generates a video title — all delegating to pixelle_video.utils.content_generators with the core LLM service.",
+      "tags": [
+        "router",
+        "content",
+        "llm",
+        "narration",
+        "keywords",
+        "image-prompt",
+        "title"
+      ],
+      "complexity": "moderate",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/files.py",
+      "type": "file",
+      "name": "files.py",
+      "filePath": "api/routers/files.py",
+      "summary": "File serving endpoint (/files/{path}). Serves generated files (output/), workflows/, templates/, bgm/, data/bgm, data/templates, data/uploads (blocking manifest.json), custom-bgm/ (resolved from the configured custom BGM folder), and resources/ — enforcing path-traversal protection, mapping extensions to media types, and returning inline FileResponses for browser preview.",
+      "tags": [
+        "router",
+        "files",
+        "static",
+        "security",
+        "media"
+      ],
+      "complexity": "moderate",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/frame.py",
+      "type": "file",
+      "name": "frame.py",
+      "filePath": "api/routers/frame.py",
+      "summary": "Frame/template rendering endpoints (/frame). POST /render renders a single frame image from an HTML template plus title/text/image via HTMLFrameGenerator, resolving template paths and parsing template size; GET /template/params returns custom template parameters ({{param:type=default}} syntax, types text/number/color/bool) and media dimensions for the workbench UI.",
+      "tags": [
+        "router",
+        "frame",
+        "template",
+        "html-rendering",
+        "preview"
+      ],
+      "complexity": "moderate",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/health.py",
+      "type": "file",
+      "name": "health.py",
+      "filePath": "api/routers/health.py",
+      "summary": "Health endpoints (no prefix). GET /health and GET /version return a HealthResponse (status 'healthy', version 0.1.0, service 'Pixelle-Video API'); defines HealthResponse and CapabilitiesResponse pydantic models.",
+      "tags": [
+        "router",
+        "health",
+        "version",
+        "liveness"
+      ],
+      "complexity": "simple",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/history.py",
+      "type": "file",
+      "name": "history.py",
+      "filePath": "api/routers/history.py",
+      "summary": "Persisted generation history endpoints (/history). GET lists tasks with pagination/status/sort filters, enriching each with stored request params and video URLs; GET /{task_id} returns metadata, result, and storyboard (converted via persistence); DELETE removes a task and its files; POST /{task_id}/resume resumes a failed/interrupted generation synchronously with a progress callback.",
+      "tags": [
+        "router",
+        "history",
+        "persistence",
+        "resume",
+        "tasks"
+      ],
+      "complexity": "moderate",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/image.py",
+      "type": "file",
+      "name": "image.py",
+      "filePath": "api/routers/image.py",
+      "summary": "Image generation endpoint (/image/generate). Accepts prompt/width/height/workflow and delegates to the core media service via PixelleVideoDep, rejecting video workflows with a 400 and returning the generated image path for backward compatibility with the legacy image API.",
+      "tags": [
+        "router",
+        "image",
+        "generation",
+        "comfyui"
+      ],
+      "complexity": "simple",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/llm.py",
+      "type": "file",
+      "name": "llm.py",
+      "filePath": "api/routers/llm.py",
+      "summary": "LLM chat endpoint (/llm/chat). Passes prompt/temperature/max_tokens to the core llm service and returns the generated text plus token usage; wraps failures in HTTP 500.",
+      "tags": [
+        "router",
+        "llm",
+        "chat",
+        "generation"
+      ],
+      "complexity": "simple",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/projects.py",
+      "type": "file",
+      "name": "projects.py",
+      "filePath": "api/routers/projects.py",
+      "summary": "Workbench project endpoints (/projects) — the largest router. Covers project CRUD (create with BGM validation, config-key allowlist, auto visual-prompt autofill and semantic scene segmentation; get/patch with optimistic concurrency), generation runs (start/pause/resume/cancel/retry-failed with status and allowed-actions), scene-level image/TTS/batch image generation jobs, asset version selection, scene reorder/timeline updates, uploads of scene images, from-history project creation with asset reuse, exports (create/cancel/retry with scene snapshots and ffmpeg process tracking), project media serving with Range support, and pipeline-progress observatory payloads (Chinese status summaries for the UI).",
+      "tags": [
+        "router",
+        "workbench",
+        "projects",
+        "scenes",
+        "generation",
+        "export",
+        "jobs",
+        "assets"
+      ],
+      "complexity": "complex",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/resources.py",
+      "type": "file",
+      "name": "resources.py",
+      "filePath": "api/routers/resources.py",
+      "summary": "Resource discovery endpoints (/resources). Lists TTS/media/image ComfyUI workflows (RunningHub + self-hosted), HTML templates grouped by size/orientation, BGM files merged from default/custom/custom-folder sources, and subtitle fonts discovered from project/data/system/user/custom folders (with Chinese-font prioritization and family collapsing); serves approved font files, persists custom font/BGM folder selection via macOS osascript dialogs, and opens the BGM folder.",
+      "tags": [
+        "router",
+        "resources",
+        "workflows",
+        "templates",
+        "bgm",
+        "fonts",
+        "discovery"
+      ],
+      "complexity": "complex",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/specialist.py",
+      "type": "file",
+      "name": "specialist.py",
+      "filePath": "api/routers/specialist.py",
+      "summary": "Async specialist generation endpoints (/specialist). POST /custom-media/generate/async runs the AssetBasedPipeline over uploaded assets, /image-to-video/generate/async and /action-transfer/generate/async execute I2V/workflow jobs, and /digital-human/generate/async runs digital-human videos — all enqueueing tasks on task_manager, streaming progress events, persisting results via persist_specialist_video, and returning VideoGenerateAsyncResponse task IDs.",
+      "tags": [
+        "router",
+        "specialist",
+        "async",
+        "digital-human",
+        "image-to-video",
+        "action-transfer",
+        "pipelines"
+      ],
+      "complexity": "complex",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/style_slots.py",
+      "type": "file",
+      "name": "style_slots.py",
+      "filePath": "api/routers/style_slots.py",
+      "summary": "Reference-image style analysis and reusable style-slot endpoints (/style-slots). POST /analyze extracts style (prefix/tags/visual features/negative constraints/confidence) from an uploaded JPG/PNG/WebP via vision understanding; CRUD endpoints persist slots with their reference image through StyleSlotRepository, and GET /{slot_id}/image serves the stored reference JPEG.",
+      "tags": [
+        "router",
+        "style-slots",
+        "vision",
+        "reference-image",
+        "style-analysis"
+      ],
+      "complexity": "moderate",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/tasks.py",
+      "type": "file",
+      "name": "tasks.py",
+      "filePath": "api/routers/tasks.py",
+      "summary": "Task management endpoints (/tasks). GET lists tasks with optional status filter and limit, GET /{task_id} returns task details (status, progress, result), DELETE /{task_id} cancels a running/pending task via task_manager.",
+      "tags": [
+        "router",
+        "tasks",
+        "async",
+        "status"
+      ],
+      "complexity": "simple",
+      "language": "python"
+    },
+    {
+      "id": "file:api/routers/tts.py",
+      "type": "file",
+      "name": "tts.py",
+      "filePath": "api/routers/tts.py",
+      "summary": "Text-to-speech endpoints (/tts). GET /qwen/capabilities lists Qwen TTS model modes (preset/instruct/design/clone, workspace-required models); POST /qwen/voice-design creates a reusable voice from a text description via the DashScope customization API and saves a preview wav; POST /qwen/voice-clone enrolls a cloned voice from an authorized 10-20s MP3/WAV/M4A sample; POST /synthesize renders speech through the core TTS service (workflow, ref_audio, legacy voice_id, speed, MiniMax/Mimo/Qwen-audio params) and returns the audio path plus duration.",
+      "tags": [
+        "router",
+        "tts",
+        "qwen",
+        "voice-design",
+        "voice-clone",
+        "synthesis",
+        "dashscope"
+      ],
+      "complexity": "complex",
+      "language": "python"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:api/app.py",
+      "target": "file:api/config.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/app.py",
+      "target": "file:api/dependencies.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/app.py",
+      "target": "file:api/routers/__init__.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/app.py",
+      "target": "file:api/tasks/__init__.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/configuration.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/content.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/files.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/frame.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/health.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/history.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/image.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/llm.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/projects.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/resources.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/specialist.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/style_slots.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/tasks.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/__init__.py",
+      "target": "file:api/routers/tts.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/llm.py",
+      "target": "file:api/dependencies.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/image.py",
+      "target": "file:api/dependencies.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/content.py",
+      "target": "file:api/dependencies.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/frame.py",
+      "target": "file:api/dependencies.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/history.py",
+      "target": "file:api/dependencies.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:api/dependencies.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/resources.py",
+      "target": "file:api/dependencies.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/specialist.py",
+      "target": "file:api/dependencies.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/tts.py",
+      "target": "file:api/dependencies.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/tasks.py",
+      "target": "file:api/tasks/__init__.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:api/tasks/__init__.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:api/tasks/models.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/specialist.py",
+      "target": "file:api/tasks/__init__.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/history.py",
+      "target": "file:api/routers/video.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/specialist.py",
+      "target": "file:api/routers/uploads.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/specialist.py",
+      "target": "file:api/routers/video.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/dependencies.py",
+      "target": "file:pixelle_video/service.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/dependencies.py",
+      "target": "file:pixelle_video/services/frame_html.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/configuration.py",
+      "target": "file:pixelle_video/config/__init__.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/files.py",
+      "target": "file:pixelle_video/config/__init__.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/resources.py",
+      "target": "file:pixelle_video/config/__init__.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/style_slots.py",
+      "target": "file:pixelle_video/config/__init__.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:pixelle_video/config/__init__.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/llm.py",
+      "target": "file:api/schemas/llm.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/image.py",
+      "target": "file:api/schemas/image.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/content.py",
+      "target": "file:api/schemas/content.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/frame.py",
+      "target": "file:api/schemas/frame.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/tts.py",
+      "target": "file:api/schemas/tts.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/resources.py",
+      "target": "file:api/schemas/resources.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/specialist.py",
+      "target": "file:api/schemas/specialist.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/specialist.py",
+      "target": "file:api/schemas/uploads.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/specialist.py",
+      "target": "file:api/schemas/video.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:api/schemas/workbench.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/frame.py",
+      "target": "file:pixelle_video/services/frame_html.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/frame.py",
+      "target": "file:pixelle_video/utils/template_util.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/resources.py",
+      "target": "file:pixelle_video/utils/os_util.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/resources.py",
+      "target": "file:pixelle_video/utils/template_util.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/resources.py",
+      "target": "file:pixelle_video/services/subtitle_renderer.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/style_slots.py",
+      "target": "file:pixelle_video/services/style_slot_repository.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/style_slots.py",
+      "target": "file:pixelle_video/services/vision_understanding.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/content.py",
+      "target": "file:pixelle_video/utils/content_generators.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/tts.py",
+      "target": "file:pixelle_video/utils/tts_util.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/specialist.py",
+      "target": "file:pixelle_video/pipelines/asset_based.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/specialist.py",
+      "target": "file:pixelle_video/services/specialist_video.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:pixelle_video/services/project_generation_service.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:pixelle_video/services/workbench_generation.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:pixelle_video/services/video.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:pixelle_video/models/workbench.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:pixelle_video/utils/content_generators.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:pixelle_video/utils/os_util.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:pixelle_video/utils/prompt_helper.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:api/routers/projects.py",
+      "target": "file:pixelle_video/utils/project_config.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:Start Pixelle-Video.command",
+      "target": "file:api/app.py",
+      "type": "triggers",
+      "weight": 0.6
+    },
+    {
+      "source": "file:Start Pixelle-Video.command",
+      "target": "config:pyproject.toml",
+      "type": "depends_on",
+      "weight": 0.6
+    },
+    {
+      "source": "config:.playwright-cli/page-2026-06-20T14-04-29-052Z.yml",
+      "target": "file:api/app.py",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "config:.playwright-cli/page-2026-06-20T14-04-29-052Z.yml",
+      "target": "config:.playwright-cli/page-2026-06-21T07-52-00-196Z.yml",
+      "type": "related",
+      "weight": 0.5
+    },
+    {
+      "source": "document:NOTICE",
+      "target": "config:pyproject.toml",
+      "type": "documents",
+      "weight": 0.5
+    },
+    {
+      "source": "config:.ua/.understandignore",
+      "target": "config:.ua/intermediate/scan-result.json",
+      "type": "related",
+      "weight": 0.5
+    }
+  ]
+}

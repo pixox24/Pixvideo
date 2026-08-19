@@ -1,0 +1,147 @@
+[
+  {
+    "order": 1,
+    "title": "项目概览：Pixvideo 是什么",
+    "description": "先建立全局认知：pyproject.toml 声明了包结构与依赖（FastAPI/OpenAI SDK/ComfyUI），pixelle_video/__init__.py 是核心包的入口，generate_video.py 是不经过 HTTP 的 CLI 演示入口，可以直接跑通一条最简单的生成链路。看完这三个文件你就能理解项目由「FastAPI 应用层 + pixelle_video 核心库」两部分组成。",
+    "nodeIds": [
+      "config:pyproject.toml",
+      "file:pixelle_video/__init__.py",
+      "file:generate_video.py"
+    ]
+  },
+  {
+    "order": 2,
+    "title": "API 入口与依赖注入",
+    "description": "api/app.py 是 FastAPI 装配点：lifespan 启动任务管理器、清理 ffmpeg 临时文件、初始化 PixelleVideoCore 并恢复未完成的生成任务。api/dependencies.py 提供 get_pixelle_video() 依赖注入，让所有路由共享同一个核心单例。routers/__init__.py 汇总注册全部路由；tasks/manager.py 是内存异步任务管理。可顺带看 video.py 的 generate_video_async 端点理解 HTTP 如何触发一条视频生成。",
+    "nodeIds": [
+      "file:api/app.py",
+      "file:api/dependencies.py",
+      "file:api/routers/__init__.py",
+      "file:api/tasks/manager.py",
+      "file:api/routers/video.py",
+      "endpoint:api/routers/video.py:generate_video_async",
+      "endpoint:api/routers/workbench.py:generate_script"
+    ]
+  },
+  {
+    "order": 3,
+    "title": "核心门面：PixelleVideoCore",
+    "description": "service.py 是整个系统的组合根（composition root）：全局单例，懒加载 ComfyKit 客户端，持有所有服务实例（LLM/TTS/Media/Video 等）和管线注册表（standard/custom/asset_based），并提供 generate_video 包装器。initialize() 完成启动装配，_create_generate_video_wrapper() 展示了如何把管线挂到核心上。理解它你就掌握了整个依赖图的中心。",
+    "nodeIds": [
+      "class:pixelle_video/service.py:PixelleVideoCore",
+      "function:pixelle_video/service.py:initialize",
+      "function:pixelle_video/service.py:_create_generate_video_wrapper"
+    ]
+  },
+  {
+    "order": 4,
+    "title": "管线基类：BasePipeline",
+    "description": "pipelines/base.py 定义所有视频生成管线的契约：BasePipeline 持有 PixelleVideoCore 引用和 llm/tts/media/video/image 便捷别名，抽象 __call__ 返回 VideoGenerationResult，_report_progress 负责向 UI 上报进度。先看契约，再看四个实现——linear.py（线性分段）、custom.py（自定义模板）、asset_based.py（素材驱动营销视频）——理解不同管线如何复用同一套服务。",
+    "nodeIds": [
+      "class:pixelle_video/pipelines/base.py:BasePipeline",
+      "file:pixelle_video/pipelines/__init__.py",
+      "file:pixelle_video/pipelines/linear.py",
+      "class:pixelle_video/pipelines/custom.py:CustomPipeline",
+      "class:pixelle_video/pipelines/asset_based.py:AssetBasedPipeline"
+    ]
+  },
+  {
+    "order": 5,
+    "title": "具体管线：StandardPipeline 全流程",
+    "description": "默认且最完整的管线，按阶段跟踪它的生命周期：setup_environment（环境准备）→ generate_content（解说词生成）→ plan_visuals（画面规划）→ produce_assets（逐帧 TTS+媒体+合成）→ post_production（拼接+BGM）→ finalize（收尾持久化）。每个函数对应标准视频生成的一个阶段，是理解整个系统数据流的最佳路径。",
+    "nodeIds": [
+      "class:pixelle_video/pipelines/standard.py:StandardPipeline",
+      "function:pixelle_video/pipelines/standard.py:setup_environment",
+      "function:pixelle_video/pipelines/standard.py:generate_content",
+      "function:pixelle_video/pipelines/standard.py:plan_visuals",
+      "function:pixelle_video/pipelines/standard.py:produce_assets",
+      "function:pixelle_video/pipelines/standard.py:post_production",
+      "function:pixelle_video/pipelines/standard.py:finalize"
+    ]
+  },
+  {
+    "order": 6,
+    "title": "LLM 服务与提示词模板",
+    "description": "LLMService 封装 OpenAI SDK：配置热重载、结构化输出（_call_with_structured_output）和思考控制，是解说词、分镜、画面提示词的统一出口。同时看 prompts/ 下的提示词模板——storyboard_segmentation.py（分镜切分）、image_generation.py（图片提示词）、content_narration.py（解说词）——理解提示工程如何驱动内容生成。",
+    "nodeIds": [
+      "class:pixelle_video/services/llm_service.py:LLMService",
+      "function:pixelle_video/services/llm_service.py:LLMService.__call__",
+      "function:pixelle_video/services/llm_service.py:LLMService._call_with_structured_output",
+      "file:pixelle_video/prompts/storyboard_segmentation.py",
+      "file:pixelle_video/prompts/image_generation.py",
+      "file:pixelle_video/prompts/content_narration.py"
+    ]
+  },
+  {
+    "order": 7,
+    "title": "TTS 服务：多后端语音合成",
+    "description": "TTSService 是语音合成门面，支持本地 Edge TTS、ComfyUI workflow、MiniMax、MiMo、Qwen Audio 五种后端（__call__ 分发，各自 _call_* 实现）。continuous_tts/assemble.py 实现跨场景连续解说词拼接（决定用连续 TTS 还是逐场景 TTS），tts_audio_postprocess.py 负责静音裁剪等后处理。",
+    "nodeIds": [
+      "class:pixelle_video/services/tts_service.py:TTSService",
+      "function:pixelle_video/services/tts_service.py:TTSService.__call__",
+      "file:pixelle_video/services/continuous_tts/assemble.py",
+      "file:pixelle_video/utils/tts_audio_postprocess.py"
+    ]
+  },
+  {
+    "order": 8,
+    "title": "媒体生成与视频合成服务",
+    "description": "这组服务负责「素材生产」：MediaService 基于 ComfyUI workflow 生成图像/视频（ComfyBaseService 提供公共基类，含 OpenAI/BizyAir 兜底）；VideoService 是 ffmpeg 合成器（拼接、音视频合并、BGM、书挡包装）；FrameProcessor 把单个分镜帧走完「TTS→媒体→HTML 合成字幕→编码」全流程；SubtitleRenderer 规划并烧录 ASS 字幕。",
+    "nodeIds": [
+      "class:pixelle_video/services/media.py:MediaService",
+      "class:pixelle_video/services/comfy_base_service.py:ComfyBaseService",
+      "class:pixelle_video/services/video.py:VideoService",
+      "class:pixelle_video/services/frame_processor.py:FrameProcessor",
+      "class:pixelle_video/services/subtitle_renderer.py:SubtitleRenderer"
+    ]
+  },
+  {
+    "order": 9,
+    "title": "数据模型：管线与 API 之间的数据契约",
+    "description": "models/ 定义贯穿全系统的数据结构：storyboard.py 是核心——StoryboardConfig（生成参数）、StoryboardFrame（单帧解说/音频/图像/视频状态）、Storyboard（分镜集合）、VideoGenerationResult（管线最终产物）；progress.py 的 ProgressEvent 是管线向 UI 汇报进度的结构化事件；media.py 的 MediaResult 描述 ComfyUI 产出的媒体文件；workbench.py 则是工作台项目的数据类（Project/Scene/GenerationRun 等）。",
+    "nodeIds": [
+      "class:pixelle_video/models/storyboard.py:StoryboardConfig",
+      "class:pixelle_video/models/storyboard.py:StoryboardFrame",
+      "class:pixelle_video/models/storyboard.py:Storyboard",
+      "class:pixelle_video/models/storyboard.py:VideoGenerationResult",
+      "class:pixelle_video/models/progress.py:ProgressEvent",
+      "class:pixelle_video/models/media.py:MediaResult",
+      "file:pixelle_video/models/workbench.py"
+    ]
+  },
+  {
+    "order": 10,
+    "title": "配置系统：单一事实来源",
+    "description": "config/schema.py 是配置的单一事实来源：17 个 Pydantic 模型（LLM、TTS 五种后端、ComfyUI、模板、字幕、工作台等），PixelleVideoConfig 是根配置。ConfigManager 是单例门面：深度合并更新、类型化 getter（get_llm_config 等）、setter 与持久化；loader.py 负责纯 YAML 读写。改配置行为先来这里。",
+    "nodeIds": [
+      "class:pixelle_video/config/schema.py:PixelleVideoConfig",
+      "class:pixelle_video/config/manager.py:ConfigManager",
+      "file:pixelle_video/config/loader.py"
+    ]
+  },
+  {
+    "order": 11,
+    "title": "工具函数与持久化",
+    "description": "utils/ 是被各层复用的共享工具：llm_util.py（模型发现与连接测试）、tts_util.py（Edge TTS 实现）、storyboard_split.py（语义化分镜打包，与前端 storyboardSplit.ts 对齐）、template_util.py（模板尺寸解析）、ffmpeg_scratch.py（ffmpeg 临时目录与 GC）。PersistenceService 用文件系统 JSON 持久化任务数据（断点恢复依赖它）。",
+    "nodeIds": [
+      "file:pixelle_video/utils/llm_util.py",
+      "file:pixelle_video/utils/tts_util.py",
+      "file:pixelle_video/utils/storyboard_split.py",
+      "file:pixelle_video/utils/template_util.py",
+      "file:pixelle_video/utils/ffmpeg_scratch.py",
+      "class:pixelle_video/services/persistence.py:PersistenceService"
+    ]
+  },
+  {
+    "order": 12,
+    "title": "工作台：可编辑项目的并发编排",
+    "description": "工作台是面向可编辑本地视频项目的子系统：ProjectGenerationService 负责并发、可暂停/恢复/取消的生成编排（run() 是主循环，按场景波浪处理）；ProjectGenerationPlanner 用 sha256 指纹生成确定性参数快照做新鲜度检查；WorkbenchRepository 用 SQLite 持久化项目/场景/素材版本/生成任务；WorkbenchJobService 管理异步作业。看完这层就理解了新版可编辑工作流与旧版一次性生成的区别。",
+    "nodeIds": [
+      "class:pixelle_video/services/project_generation_service.py:ProjectGenerationService",
+      "function:pixelle_video/services/project_generation_service.py:ProjectGenerationService.run",
+      "class:pixelle_video/services/workbench_generation.py:ProjectGenerationPlanner",
+      "class:pixelle_video/services/workbench_repository.py:WorkbenchRepository",
+      "class:pixelle_video/services/workbench_jobs.py:WorkbenchJobService"
+    ]
+  }
+]

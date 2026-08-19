@@ -69,6 +69,8 @@ _PROJECT_CONFIG_KEYS = {
     "ttsDelivery", "tts_delivery",
     "voice", "tts_voice", "speed", "tts_speed", "minimaxModel", "minimax_model",
     "emotion", "minimax_emotion", "mimoModel", "mimo_model", "mimoStyle", "mimo_style",
+    "qwenAudioModel", "qwen_audio_model", "qwenAudioMode", "qwen_audio_mode",
+    "qwenAudioInstruction", "qwen_audio_instruction", "qwenAudioRefAudio", "qwen_audio_ref_audio",
     "mediaWidth", "mediaHeight", "media_width", "media_height",
     "videoFps", "video_fps",
     # imageGenWidth/Height removed: gen size always maps from media canvas whitelist
@@ -82,6 +84,7 @@ _PROJECT_CONFIG_KEYS = {
     "tts_workflow", "ref_audio", "scenes", "n_scenes", "mode", "split_mode",
     "useApiImage", "use_api_image", "directorMode", "director_mode", "density", "storyboard_density",
     "targetSceneCount", "target_scene_count",
+    "styleSlotId", "style_slot_id", "stylePrefixSnapshot", "style_prefix_snapshot", "styleStrength", "style_strength",
 }
 _BGM_EXTENSIONS = {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg"}
 
@@ -598,7 +601,15 @@ async def _autofill_image_prompts(
             "Image prompt autofill skipped: LLM service unavailable; %d prompts remain empty",
             len(missing),
         )
-        return
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "visual_prompt_generation_failed",
+                "message": "分镜画面提示词生成失败：LLM 服务不可用，未保存空提示词项目。",
+                "sceneCount": len(missing),
+                "scenePositions": [getattr(scene, "position", index) + 1 for index, scene in enumerate(missing)],
+            },
+        )
 
     try:
         from pixelle_video.config import config_manager
@@ -609,7 +620,15 @@ async def _autofill_image_prompts(
                 "Image prompt autofill skipped: incomplete LLM configuration; %d prompts remain empty",
                 len(missing),
             )
-            return
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "visual_prompt_generation_failed",
+                    "message": "分镜画面提示词生成失败：LLM 配置不完整，未保存空提示词项目。",
+                    "sceneCount": len(missing),
+                    "scenePositions": [getattr(scene, "position", index) + 1 for index, scene in enumerate(missing)],
+                },
+            )
         prompts = await generate_image_prompts(
             llm,
             [scene.narration for scene in missing],
@@ -630,6 +649,18 @@ async def _autofill_image_prompts(
             "Image prompt autofill failed; leaving %d visual prompts empty: %s",
             len(missing),
             exc,
+        )
+
+    remaining = [scene for scene in missing if not _normalize_match_text(scene.visual_prompt)]
+    if remaining:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "visual_prompt_generation_failed",
+                "message": "分镜画面提示词生成失败，未保存空提示词项目。请检查 LLM 配置后重试。",
+                "sceneCount": len(remaining),
+                "scenePositions": [getattr(scene, "position", index) + 1 for index, scene in enumerate(remaining)],
+            },
         )
 
 
@@ -830,15 +861,26 @@ async def create_project(body: CreateProjectRequest, core: PixelleVideoDep, requ
             edited_fields=[str(value) for value in (getattr(item, "edited_fields", []) or [])],
             locked=bool(getattr(item, "locked", False)),
         ))
-    await _autofill_image_prompts(
-        core,
-        scenes,
-        style_prefix=str(
-            normalized_config.get("promptPrefix")
-            or normalized_config.get("prompt_prefix")
-            or ""
-        ),
+    # Quick Create image projects must have usable prompts before persistence.
+    # Draft-only/static workbench projects may intentionally leave them empty
+    # until their later media-generation step.
+    requires_visual_prompts = bool(
+        normalized_config.get("useApiImage")
+        or normalized_config.get("use_api_image")
+        or normalized_config.get("composition_mode") == "plain_image"
+        or normalized_config.get("workflowId")
+        or normalized_config.get("workflow")
     )
+    if requires_visual_prompts:
+        await _autofill_image_prompts(
+            core,
+            scenes,
+            style_prefix=str(
+                normalized_config.get("promptPrefix")
+                or normalized_config.get("prompt_prefix")
+                or ""
+            ),
+        )
     try:
         core.workbench_repository.create_project(project, scenes)
     except Exception as exc:

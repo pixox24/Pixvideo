@@ -35,6 +35,23 @@ class ImageGenerationConfig(BaseModel):
     model: str = Field(default="gpt-image-2", description="Image generation model name")
 
 
+class VisionUnderstandingConfig(BaseModel):
+    """OpenAI-compatible multimodal vision understanding configuration."""
+    enabled: bool = Field(default=False, description="Enable reference-image style analysis")
+    provider: str = Field(default="dashscope", description="Vision provider")
+    api_key: str = Field(default="", description="Vision API key")
+    base_url: str = Field(
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        description="OpenAI-compatible vision API base URL",
+    )
+    model: str = Field(default="qwen3.7-plus", description="Primary vision model")
+    fallback_model: str = Field(default="qwen3.7-flash", description="Fallback vision model")
+    timeout_seconds: int = Field(default=60, ge=10, le=180)
+    max_image_bytes: int = Field(default=10 * 1024 * 1024, ge=1_000_000)
+    max_image_pixels: int = Field(default=16_000_000, ge=1_000_000)
+    temperature: float = Field(default=0.2, ge=0.0, le=1.0)
+
+
 class TTSLocalConfig(BaseModel):
     """Local TTS configuration (Edge TTS)"""
     voice: str = Field(default="zh-CN-YunjianNeural", description="Edge TTS voice ID")
@@ -71,6 +88,10 @@ class TTSQwenAudioConfig(BaseModel):
     model: str = Field(default="qwen3-tts-flash", description="Qwen TTS model")
     voice_id: str = Field(default="Cherry", description="Qwen TTS voice ID")
     language_type: str = Field(default="Chinese", description="Qwen TTS language type")
+    mode: str = Field(default="preset", description="Qwen voice mode: preset, instruct, design, or clone")
+    instruction: str = Field(default="", description="Qwen natural-language voice instruction or design description")
+    ref_audio: str = Field(default="", description="Qwen voice-cloning reference audio key")
+    workspace_id: str = Field(default="", description="百炼业务空间 ID（Qwen-Audio-TTS 需要）")
     endpoint: str = Field(
         default="https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
         description="DashScope multimodal generation endpoint",
@@ -171,6 +192,7 @@ class PixelleVideoConfig(BaseModel):
     project_name: str = Field(default="Pixelle-Video", description="Project name")
     llm: LLMConfig = Field(default_factory=LLMConfig)
     image_generation: ImageGenerationConfig = Field(default_factory=ImageGenerationConfig)
+    vision_understanding: VisionUnderstandingConfig = Field(default_factory=VisionUnderstandingConfig)
     comfyui: ComfyUIConfig = Field(default_factory=ComfyUIConfig)
     template: TemplateConfig = Field(default_factory=TemplateConfig)
     quick_create: QuickCreateConfig = Field(default_factory=QuickCreateConfig)

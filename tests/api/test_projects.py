@@ -98,6 +98,10 @@ async def test_create_project_auto_expands_one_long_scene_with_validated_segment
         ]
 
     monkeypatch.setattr("api.routers.projects.segment_narration_semantically", fake_segment)
+    async def skip_autofill(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("api.routers.projects._autofill_image_prompts", skip_autofill)
     created = await create_project(
         CreateProjectRequest(
             title="自动分镜",
@@ -114,6 +118,30 @@ async def test_create_project_auto_expands_one_long_scene_with_validated_segment
         "并把每一个任务安排到准确的时间线上同时检查人员物料场地和最终确认清单确保发布当天万无一失",
     ]
     assert calls
+    core.workbench_repository.close()
+
+
+@pytest.mark.asyncio
+async def test_create_project_rejects_missing_visual_prompts(tmp_path, monkeypatch):
+    core = FakeCore(tmp_path)
+    monkeypatch.setattr(
+        "api.routers.projects.config_manager.get_llm_config",
+        lambda: {"api_key": "", "base_url": "", "model": ""},
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await create_project(
+            CreateProjectRequest(
+                title="禁止空提示词",
+                config={"useApiImage": True},
+                scenes=[{"narration": "旁白内容"}],
+            ),
+            core,
+            None,
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["code"] == "visual_prompt_generation_failed"
     core.workbench_repository.close()
 
 

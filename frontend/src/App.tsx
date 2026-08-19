@@ -121,7 +121,17 @@ export default function App() {
     bizyairKey: "",
     minimaxKey: "",
     mimoKey: "",
-    qwenAudioKey: ""
+    qwenAudioKey: "",
+    qwenAudioWorkspaceId: "",
+    visionUnderstanding: {
+      enabled: false,
+      provider: "dashscope",
+      apiKey: "",
+      baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      model: "qwen3.7-plus",
+      fallbackModel: "qwen3.7-flash",
+      timeoutSeconds: 60,
+    },
   });
 
   // Toaster helper — errors stay until dismissed; success/info auto-hide.

@@ -56,6 +56,7 @@ from api.routers import (
     projects_router,
     resources_router,
     specialist_router,
+    style_slots_router,
     tasks_router,
     tts_router,
     uploads_router,
@@ -179,6 +180,7 @@ app.include_router(workbench_router, prefix=api_config.api_prefix)
 app.include_router(projects_router, prefix=api_config.api_prefix)
 app.include_router(uploads_router, prefix=api_config.api_prefix)
 app.include_router(specialist_router, prefix=api_config.api_prefix)
+app.include_router(style_slots_router, prefix=api_config.api_prefix)
 
 
 _frontend_dist = _project_root / "frontend" / "dist"

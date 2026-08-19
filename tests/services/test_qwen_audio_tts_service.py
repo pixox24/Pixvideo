@@ -39,9 +39,51 @@ async def test_qwen_audio_tts_posts_dashscope_payload_and_decodes_audio(tmp_path
     assert output.read_bytes() == b"fake audio"
     assert captured["headers"]["Authorization"] == "Bearer env-key"
     assert captured["json"]["model"] == "qwen3-tts-flash"
-    assert captured["json"]["input"] == {"text": "你好"}
-    assert captured["json"]["parameters"]["voice"] == "Cherry"
+    assert captured["json"]["input"]["text"] == "你好"
+    assert captured["json"]["input"]["voice"] == "Cherry"
+    assert captured["json"]["input"]["language_type"] == "Chinese"
     assert captured["json"]["parameters"]["rate"] == 1.1
+
+
+@pytest.mark.asyncio
+async def test_qwen_instruct_sends_instruction(tmp_path, monkeypatch):
+    captured = {}
+
+    async def fake_post(self, url, *, json=None, headers=None):
+        captured.update(json=json)
+        return httpx.Response(
+            200,
+            json={"output": {"audio": {"data": base64.b64encode(b"fake audio").decode()}}},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "env-key")
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    service = TTSService({"qwen_audio": {}}, core=_Core())
+    await service(
+        text="你好",
+        inference_mode="qwen_audio",
+        voice="Cherry",
+        qwen_audio_model="qwen3-tts-instruct-flash",
+        qwen_audio_mode="instruct",
+        qwen_audio_instruction="温柔地说，语速稍慢",
+        output_path=str(tmp_path / "qwen.mp3"),
+    )
+    assert captured["json"]["input"]["instructions"] == "温柔地说，语速稍慢"
+    assert captured["json"]["input"]["optimize_instructions"] is True
+
+
+@pytest.mark.asyncio
+async def test_qwen_audio_requires_workspace_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "env-key")
+    service = TTSService({"qwen_audio": {}}, core=_Core())
+    with pytest.raises(ValueError, match="Workspace ID"):
+        await service(
+            text="你好",
+            inference_mode="qwen_audio",
+            qwen_audio_model="qwen-audio-3.0-tts-flash",
+            output_path=str(tmp_path / "qwen.wav"),
+        )
 
 
 @pytest.mark.asyncio

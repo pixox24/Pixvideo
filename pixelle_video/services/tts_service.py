@@ -330,17 +330,61 @@ class TTSService(ComfyBaseService):
 
         config = self.config.get("qwen_audio", {})
         key = self._resolve_qwen_audio_api_key(api_key)
-        model = params.get("qwen_audio_model") or config.get("model", "qwen3-tts-flash")
+        model = str(params.get("qwen_audio_model") or config.get("model", "qwen3-tts-flash")).strip()
         final_voice = voice or config.get("voice_id", "Cherry")
         language = params.get("qwen_audio_language_type") or config.get("language_type", "Chinese")
-        endpoint = params.get("qwen_audio_endpoint") or config.get("endpoint", "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation")
+        mode = str(params.get("qwen_audio_mode") or config.get("mode", "preset")).strip().lower()
+        instruction = params.get("qwen_audio_instruction")
+        if instruction is None:
+            instruction = config.get("instruction", "")
+        instruction = str(instruction or "").strip()
+        is_qwen_audio = model.lower().startswith("qwen-audio-")
+        is_instruct = "instruct" in model.lower()
+        is_voice_design = mode == "design" or "-vd-" in model.lower() or model.lower().endswith("-vd")
+        is_voice_clone = mode == "clone" or "-vc-" in model.lower() or model.lower().endswith("-vc")
+        if mode not in {"preset", "instruct", "design", "clone"}:
+            raise ValueError("Qwen voice mode must be preset, instruct, design, or clone")
+        if is_voice_design and not final_voice:
+            raise ValueError("Qwen 声音设计合成需要先创建并选择 voice ID")
+        if (mode == "instruct" or is_instruct) and not instruction:
+            raise ValueError("Qwen 指令控制模式需要填写自然语言指令")
+        if is_voice_clone and not final_voice:
+            raise ValueError("Qwen 音色克隆合成需要先创建并选择 voice ID")
+        if (mode == "design" and "-vd-" not in model.lower() and "-vd" not in model.lower()
+                and not is_qwen_audio):
+            raise ValueError("Qwen 声音设计请使用 qwen3-tts-vd-2026-01-26 或先创建 Qwen-Audio 设计音色")
+        workspace_id = str(params.get("qwen_audio_workspace_id") or config.get("workspace_id", "")).strip()
+        configured_endpoint = params.get("qwen_audio_endpoint") or config.get("endpoint")
+        if is_qwen_audio:
+            if configured_endpoint and "dashscope.aliyuncs.com" not in configured_endpoint:
+                endpoint = configured_endpoint
+            elif workspace_id:
+                endpoint = f"https://{workspace_id}.cn-beijing.maas.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer"
+            else:
+                raise ValueError("Qwen-Audio-TTS 需要在后台配置百炼 Workspace ID")
+        else:
+            endpoint = configured_endpoint or "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
         output_path = output_path or f"output/{uuid.uuid4().hex}.mp3"
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        parameters = {"voice": final_voice, "language_type": language, "response_format": params.get("qwen_audio_format", "mp3")}
+        if is_qwen_audio:
+            input_payload = {
+                "text": text,
+                "voice": final_voice,
+                "format": params.get("qwen_audio_format", "wav"),
+                "sample_rate": params.get("qwen_audio_sample_rate", 24000),
+            }
+            if instruction:
+                input_payload["instruction"] = instruction
+            payload = {"model": model, "input": input_payload}
+        else:
+            input_payload = {"text": text, "voice": final_voice, "language_type": language}
+            if instruction and (is_instruct or mode == "instruct"):
+                input_payload["instructions"] = instruction
+                input_payload["optimize_instructions"] = bool(params.get("qwen_audio_optimize_instructions", True))
+            payload = {"model": model, "input": input_payload}
         if speed is not None:
-            parameters["rate"] = speed
-        payload = {"model": model, "input": {"text": text}, "parameters": parameters}
+            payload.setdefault("parameters", {})["rate"] = speed
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
         try:
             async with _async_http_client(timeout=params.get("qwen_audio_timeout", 120.0)) as client:

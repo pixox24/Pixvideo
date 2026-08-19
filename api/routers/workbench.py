@@ -141,6 +141,9 @@ PRESET_FIELDS = {
     "emotion",
     "mimoModel",
     "mimoStyle",
+    "qwenAudioModel",
+    "qwenAudioMode",
+    "qwenAudioInstruction",
     "sceneCount",
     "copyCharCount",
     "copyCharCountMode",
@@ -171,6 +174,9 @@ PRESET_DEFAULTS = {
     "emotion": "",
     "mimoModel": "mimo-v2.5-tts",
     "mimoStyle": "",
+    "qwenAudioModel": "qwen3-tts-flash",
+    "qwenAudioMode": "preset",
+    "qwenAudioInstruction": "",
     "sceneCount": 5,
     "copyCharCount": 100,
     "copyCharCountMode": "around",
@@ -520,6 +526,7 @@ def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = 
     normalized["density"] = _normalize_storyboard_density(str(normalized.get("density") or "standard"))
     normalized["copyCharCountMode"] = _normalize_char_count_mode(str(normalized.get("copyCharCountMode") or "around"))
     normalized["copyDraftMode"] = _normalize_draft_mode(str(normalized.get("copyDraftMode") or "full"))
+    normalized["qwenAudioMode"] = normalized.get("qwenAudioMode") if normalized.get("qwenAudioMode") in {"preset", "instruct", "design", "clone"} else "preset"
     normalized["speed"] = _coerce_float(normalized.get("speed"), 1.0, 0.5, 2.0)
     normalized["bgmVolume"] = _coerce_int(normalized.get("bgmVolume"), 30, 0, 100)
     normalized["sceneCount"] = _coerce_int(normalized.get("sceneCount"), 5, 1, 100)
@@ -536,7 +543,7 @@ def _normalize_preset(preset: dict[str, Any], existing: dict[str, Any] | None = 
     normalized["enableSubtitles"] = bool(normalized.get("enableSubtitles", True))
     normalized["subtitleStyle"] = _normalize_subtitle_style(normalized.get("subtitleStyle"))
 
-    for key in ["voice", "workflow", "bgm", "promptPrefix", "minimaxModel", "emotion", "mimoModel", "mimoStyle", "qwenAudioModel", "imageAspectRatio"]:
+    for key in ["voice", "workflow", "bgm", "promptPrefix", "minimaxModel", "emotion", "mimoModel", "mimoStyle", "qwenAudioModel", "qwenAudioInstruction", "imageAspectRatio"]:
         normalized[key] = str(normalized.get(key) or "")
 
     if not normalized["imageAspectRatio"]:
@@ -700,6 +707,7 @@ def _service_test_request(request: TestConnectionRequest) -> ServiceTestRequest:
         "comfyui": "comfyui",
         "llm": "llm",
         "image_generation": "image_generation",
+        "vision_understanding": "vision_understanding",
         "runninghub": "runninghub",
         "bizyair": "bizyair",
         "minimax": "minimax",

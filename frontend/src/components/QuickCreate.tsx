@@ -31,7 +31,11 @@ import { DirectorMode, Preset, QuickCreateInput, StoryboardDensity, SubtitleStyl
 import { VOICE_OPTIONS } from "../data";
 import {
   extractHighlightKeywords,
+  analyzeStyleReference,
+  fetchStyleSlots,
+  saveStyleSlot,
   formatApiErrorValue,
+  type StyleSlot,
   type KeywordExtractionDensity,
   type KeywordExtractionStyle,
 } from "../lib/api";
@@ -384,6 +388,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [minimaxModel, setMinimaxModel] = useState("speech-2.8-turbo");
   const [mimoModel, setMimoModel] = useState("mimo-v2.5-tts");
   const [mimoStyle, setMimoStyle] = useState("");
+  const [qwenAudioModel, setQwenAudioModel] = useState("qwen3-tts-flash");
+  const [qwenAudioMode, setQwenAudioMode] = useState<"preset" | "instruct" | "design" | "clone">("preset");
+  const [qwenAudioInstruction, setQwenAudioInstruction] = useState("");
+  const [qwenVoiceBusy, setQwenVoiceBusy] = useState(false);
+  const [qwenVoicePreviewUrl, setQwenVoicePreviewUrl] = useState<string | null>(null);
+  const [qwenCloneConsent, setQwenCloneConsent] = useState(false);
   const [customAudioFile, setCustomAudioFile] = useState<string | null>(null);
   const [previewingTts, setPreviewingTts] = useState(false);
   const [previewTtsText, setPreviewTtsText] = useState(DEFAULT_PREVIEW_TTS_TEXT);
@@ -414,6 +424,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [workflowId, setWorkflowId] = useState("");
   const [workflowsCollapsed, setWorkflowsCollapsed] = useState(true);
   const [promptPrefix, setPromptPrefix] = useState("");
+  const [styleSlots, setStyleSlots] = useState<StyleSlot[]>([]);
+  const [selectedStyleSlotId, setSelectedStyleSlotId] = useState<string | null>(null);
+  const [styleAnalysis, setStyleAnalysis] = useState<any | null>(null);
+  const [styleReferenceFile, setStyleReferenceFile] = useState<File | null>(null);
+  const [styleSlotName, setStyleSlotName] = useState("");
+  const [styleBusy, setStyleBusy] = useState(false);
   const [testImagePrompt, setTestImagePrompt] = useState("a futuristic robot walking through a warm cinematic city street");
   const [testImageUrl, setTestImageUrl] = useState<string | null>(null);
   const [testImageError, setTestImageError] = useState<string | null>(null);
@@ -589,10 +605,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           if (typeof draft.minimaxModel === "string") setMinimaxModel(draft.minimaxModel);
           if (typeof draft.mimoModel === "string") setMimoModel(draft.mimoModel);
           if (typeof draft.mimoStyle === "string") setMimoStyle(draft.mimoStyle);
+          if (typeof draft.qwenAudioModel === "string") setQwenAudioModel(draft.qwenAudioModel);
+          if (["preset", "instruct", "design", "clone"].includes(draft.qwenAudioMode)) setQwenAudioMode(draft.qwenAudioMode);
+          if (typeof draft.qwenAudioInstruction === "string") setQwenAudioInstruction(draft.qwenAudioInstruction);
           if (typeof draft.emotion === "string") setEmotion(draft.emotion);
           if (typeof draft.bgm === "string") setBgm(draft.bgm);
           if (typeof draft.volume === "number") setVolume(draft.volume);
           if (typeof draft.promptPrefix === "string") setPromptPrefix(draft.promptPrefix);
+          if (typeof draft.styleSlotId === "string") setSelectedStyleSlotId(draft.styleSlotId);
           if (typeof draft.enableMotion === "boolean") setEnableMotion(draft.enableMotion);
           if (typeof draft.enableSubtitles === "boolean") setEnableSubtitles(draft.enableSubtitles);
           if (typeof draft.useApiImage === "boolean") setUseApiImage(draft.useApiImage);
@@ -660,9 +680,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         emotion,
         mimoModel,
         mimoStyle,
+        qwenAudioModel,
+        qwenAudioMode,
+        qwenAudioInstruction,
         bgm,
         volume,
         promptPrefix,
+        styleSlotId: selectedStyleSlotId,
         enableMotion,
         enableSubtitles,
         useApiImage,
@@ -677,7 +701,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setDraftSavedAt(savedAt);
     }, 500);
     return () => window.clearTimeout(timeoutId);
-  }, [mode, title, aiTopic, aiSceneCount, aiSceneCountTouched, directorMode, storyboardDensity, suggestedSceneCount, actualStoryboardSceneCount, estimatedStoryboardSeconds, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, useApiImage, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, reuseAssetsEnabled, keywordPreferences]);
+  }, [mode, title, aiTopic, aiSceneCount, aiSceneCountTouched, directorMode, storyboardDensity, suggestedSceneCount, actualStoryboardSceneCount, estimatedStoryboardSeconds, copyDraft, copyDraftMode, copyCharCount, copyCharCountMode, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, qwenAudioModel, qwenAudioMode, qwenAudioInstruction, bgm, volume, promptPrefix, selectedStyleSlotId, enableMotion, enableSubtitles, useApiImage, imageAspectRatio, imageWidth, imageHeight, subtitleStyle, reuseSourceTaskId, reuseAssetsEnabled, keywordPreferences]);
 
   // Invalidate the review whenever a submitted production setting changes.
   React.useEffect(() => {
@@ -690,7 +714,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       return;
     }
     setReviewConfirmed(false);
-  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, directorMode, storyboardDensity, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, bgm, volume, promptPrefix, enableMotion, enableSubtitles, useApiImage, imageWidth, imageHeight, subtitleStyle]);
+  }, [mode, title, copyDraft, copyDraftMode, aiSceneCount, directorMode, storyboardDensity, splitType, batchInput, scenes, workflowId, ttsMode, ttsDelivery, voice, speed, minimaxModel, emotion, mimoModel, mimoStyle, qwenAudioModel, qwenAudioMode, qwenAudioInstruction, bgm, volume, promptPrefix, enableMotion, enableSubtitles, useApiImage, imageWidth, imageHeight, subtitleStyle]);
 
   React.useEffect(() => {
     if (!copyCharCountTouched) {
@@ -1095,6 +1119,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           minimax_emotion: ttsMode === "minimax" ? emotion || undefined : undefined,
           mimo_model: ttsMode === "mimo" ? mimoModel : undefined,
           mimo_style: ttsMode === "mimo" ? mimoStyle || undefined : undefined,
+          qwen_audio_model: ttsMode === "qwen_audio" ? qwenAudioModel : undefined,
+          qwen_audio_mode: ttsMode === "qwen_audio" ? qwenAudioMode : undefined,
+          qwen_audio_instruction: ttsMode === "qwen_audio" ? qwenAudioInstruction || undefined : undefined,
         }),
       });
       const data = await response.json();
@@ -1177,6 +1204,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           minimax_emotion: ttsMode === "minimax" ? emotion || undefined : undefined,
           mimo_model: ttsMode === "mimo" ? mimoModel : undefined,
           mimo_style: ttsMode === "mimo" ? mimoStyle || undefined : undefined,
+          qwen_audio_model: ttsMode === "qwen_audio" ? qwenAudioModel : undefined,
+          qwen_audio_mode: ttsMode === "qwen_audio" ? qwenAudioMode : undefined,
+          qwen_audio_instruction: ttsMode === "qwen_audio" ? qwenAudioInstruction || undefined : undefined,
         }),
       });
       const data = await response.json();
@@ -1219,6 +1249,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setBgm(activePreset.bgm);
       setVolume(activePreset.bgmVolume);
       setPromptPrefix(activePreset.promptPrefix);
+      setSelectedStyleSlotId(null);
       setSplitType(activePreset.splitType);
       setDirectorMode(activePreset.directorMode || (activePreset.sceneCount ? "custom" : "auto"));
       setStoryboardDensity(activePreset.density || "standard");
@@ -1230,6 +1261,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setEmotion(activePreset.emotion || "");
       setMimoModel(activePreset.mimoModel || "mimo-v2.5-tts");
       setMimoStyle(activePreset.mimoStyle || "");
+      setQwenAudioModel(activePreset.qwenAudioModel || "qwen3-tts-flash");
+      setQwenAudioMode(activePreset.qwenAudioMode || "preset");
+      setQwenAudioInstruction(activePreset.qwenAudioInstruction || "");
       if (activePreset.sceneCount) {
         setAiSceneCount(clampSceneCount(activePreset.sceneCount));
         setAiSceneCountTouched(activePreset.directorMode === "custom" || !activePreset.directorMode);
@@ -1317,6 +1351,43 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       }
     }
     return analysis;
+  };
+
+  React.useEffect(() => {
+    void fetchStyleSlots().then(setStyleSlots).catch(() => undefined);
+  }, []);
+
+  const handleAnalyzeStyle = async (file: File) => {
+    setStyleReferenceFile(file);
+    setStyleBusy(true);
+    try {
+      const result = await analyzeStyleReference(file);
+      setStyleAnalysis(result.style);
+      setStyleSlotName(result.style.style_name || "");
+      addToast("画风分析完成，请确认后保存或应用。", "success");
+    } catch (error) {
+      addToast(formatApiErrorValue(error) || "画风分析失败，请检查百炼视觉理解配置。", "error");
+    } finally {
+      setStyleBusy(false);
+    }
+  };
+
+  const handleSaveAnalyzedStyle = async () => {
+    if (!styleReferenceFile || !styleAnalysis?.style_prefix?.trim()) {
+      addToast("请先上传并成功分析参考图。", "error");
+      return;
+    }
+    setStyleBusy(true);
+    try {
+      const slot = await saveStyleSlot(styleReferenceFile, styleAnalysis, styleSlotName);
+      setStyleSlots((current) => [...current, slot]);
+      setStyleAnalysis(null);
+      addToast("画风已保存到卡槽。", "success");
+    } catch (error) {
+      addToast(formatApiErrorValue(error) || "保存画风卡槽失败。", "error");
+    } finally {
+      setStyleBusy(false);
+    }
   };
 
   /**
@@ -1628,6 +1699,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
     } else if (renderScenes.length === 0) {
       errors.content = "没有可用于生成的文案内容";
     }
+    const missingVisualPrompts = renderScenes.filter((scene) => !scene.visualPrompt.trim());
+    if (missingVisualPrompts.length > 0) {
+      errors.content = mode === "ai"
+        ? "请先点击“按当前导演设置生成分镜”，为每个旁白生成画面提示词"
+        : `还有 ${missingVisualPrompts.length} 个分镜缺少画面提示词，请补充后再提交`;
+    }
     if (ttsMode === "minimax" && serviceReady && !serviceReady.minimax) {
       errors.tts = "MiniMax 未配置，请前往设置填写 Key，或改用 Edge 配音";
     }
@@ -1646,6 +1723,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       !String(mimoStyle || "").trim()
     ) {
       errors.tts = "Voice Design 模式请填写音色设计描述（全片共用）";
+    }
+    if (ttsMode === "qwen_audio" && qwenAudioMode === "instruct" && !qwenAudioInstruction.trim()) {
+      errors.tts = "Qwen 指令控制模式请填写自然语言表达指令";
+    }
+    if (ttsMode === "qwen_audio" && qwenAudioMode === "design" && !voice.trim()) {
+      errors.tts = "Qwen 声音设计请先创建并选择 voice ID";
     }
     if (!reviewConfirmed) {
       errors.review = "请勾选下方确认项后再提交";
@@ -1722,12 +1805,20 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         emotion: emotion || undefined,
         mimoModel,
         mimoStyle: mimoStyle || undefined,
+        qwenAudioModel,
+        qwenAudioMode,
+        qwenAudioInstruction: qwenAudioInstruction || undefined,
         mediaWidth: imageWidth,
         mediaHeight: imageHeight,
         videoFps,
         bgm,
         bgmVolume: volume,
         promptPrefix,
+        styleSlotId: selectedStyleSlotId,
+        stylePrefixSnapshot: promptPrefix,
+        styleStrength: selectedStyleSlotId
+          ? styleSlots.find((slot) => slot.id === selectedStyleSlotId)?.strength ?? null
+          : null,
         enableMotion,
         enableSubtitles,
         useApiImage,
@@ -1827,6 +1918,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       emotion: emotion || undefined,
       mimoModel,
       mimoStyle: mimoStyle || undefined,
+      qwenAudioModel,
+      qwenAudioMode,
+      qwenAudioInstruction: qwenAudioInstruction || undefined,
       sceneCount: aiSceneCount,
       copyCharCount,
       copyCharCountMode,
@@ -3002,27 +3096,26 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             </div>
 
             {/* MiniMax custom voice_id (clone / design / unlisted system IDs) */}
-            {ttsMode === "minimax" && !isKnownVoiceOption("minimax", voice) && (
+            {(ttsMode === "minimax" && !isKnownVoiceOption("minimax", voice)) || (ttsMode === "qwen_audio" && (qwenAudioMode === "design" || qwenAudioMode === "clone")) ? (
               <div className="space-y-1.5 rounded border border-amber-500/20 bg-amber-500/5 p-2">
                 <label className="block text-[9px] text-amber-400/90 font-mono uppercase tracking-wider">
-                  自定义 Voice ID
+                  {ttsMode === "qwen_audio" ? "已创建的 Qwen Voice ID" : "自定义 Voice ID"}
                 </label>
                 <input
                   type="text"
                   value={voice}
                   onChange={(e) => setVoice(e.target.value.trimStart())}
                   onBlur={() => setVoice(voice.trim())}
-                  placeholder="例如复刻后的 my_brand_voice_01"
+                  placeholder={ttsMode === "qwen_audio" ? "创建声音设计/克隆后粘贴 voice ID" : "例如复刻后的 my_brand_voice_01"}
                   spellCheck={false}
                   autoComplete="off"
                   className="w-full bg-[#101114] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 font-mono placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
                 />
                 <p className="text-[10px] text-zinc-500 leading-relaxed">
-                  填入 MiniMax 账号下已存在的音色 ID（系统 / 复刻 / 文生）。需先在 MiniMax
-                  控制台或 API 完成音色复刻/设计；未注册的 ID 合成会失败。建议 8–256 字符、字母开头。
+                  {ttsMode === "qwen_audio" ? "必须是百炼已创建且与当前模型匹配的 voice ID。" : "填入 MiniMax 账号下已存在的音色 ID（系统 / 复刻 / 文生）。未注册的 ID 合成会失败。"}
                 </p>
               </div>
-            )}
+            ) : null}
 
             {/* Sub options if MiniMax */}
             {ttsMode === "minimax" && (
@@ -3120,6 +3213,88 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     </button>
                   )}
                 </div>
+              </div>
+            )}
+
+            {ttsMode === "qwen_audio" && (
+              <div className="space-y-2 rounded border border-amber-500/20 bg-amber-500/5 p-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[9px] text-zinc-500 mb-0.5">Qwen 模型</label>
+                    <Select value={qwenAudioModel} onChange={(e) => setQwenAudioModel(e.target.value)} className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300">
+                      <option value="qwen3-tts-flash">qwen3-tts-flash · 预置</option>
+                      <option value="qwen3-tts-instruct-flash">qwen3-tts-instruct-flash · 指令控制</option>
+                      <option value="qwen3-tts-vd-2026-01-26">qwen3-tts-vd · 声音设计</option>
+                      <option value="qwen3-tts-vc-2026-01-22">qwen3-tts-vc · 音色克隆</option>
+                      <option value="qwen-audio-3.0-tts-flash">qwen-audio-3.0-tts-flash · 综合能力</option>
+                      <option value="qwen-audio-3.0-tts-plus">qwen-audio-3.0-tts-plus · 高质量</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-[9px] text-zinc-500 mb-0.5">能力模式</label>
+                    <Select value={qwenAudioMode} onChange={(e) => {
+                      const next = e.target.value as typeof qwenAudioMode;
+                      setQwenAudioMode(next);
+                      if (next === "instruct") setQwenAudioModel("qwen3-tts-instruct-flash");
+                      if (next === "design") setQwenAudioModel("qwen3-tts-vd-2026-01-26");
+                      if (next === "clone") setQwenAudioModel("qwen3-tts-vc-2026-01-22");
+                    }} className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300">
+                      <option value="preset">预置音色</option>
+                      <option value="instruct">预置音色 + 表达指令</option>
+                      <option value="design">已创建的声音设计音色</option>
+                      <option value="clone">已创建的克隆音色</option>
+                    </Select>
+                  </div>
+                </div>
+                {(qwenAudioMode === "instruct" || qwenAudioMode === "design") && (
+                  <div>
+                    <label className="block text-[9px] text-zinc-500 mb-0.5">{qwenAudioMode === "design" ? "声音设计记录（用于留档）" : "自然语言表达指令"}</label>
+                    <textarea value={qwenAudioInstruction} onChange={(e) => setQwenAudioInstruction(e.target.value)} rows={2} maxLength={qwenAudioMode === "design" ? 2048 : 1600} placeholder={qwenAudioMode === "design" ? "例如：沉稳的中年男性，音色低沉有磁性，语速平稳，适合纪录片解说。创建后将 voice ID 填入音色栏。" : "例如：用温柔的语气，语速稍慢，带有克制的叙事感。"} className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 resize-none" />
+                  </div>
+                )}
+                {qwenAudioMode === "design" && (
+                  <button type="button" disabled={qwenVoiceBusy} onClick={async () => {
+                    if (!qwenAudioInstruction.trim()) { addToast("请先填写声音设计描述。", "error"); return; }
+                    setQwenVoiceBusy(true); setQwenVoicePreviewUrl(null);
+                    try {
+                      const res = await fetch("/api/tts/qwen/voice-design", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ voice_prompt: qwenAudioInstruction.trim(), target_model: qwenAudioModel.includes("qwen3-tts-vd") ? qwenAudioModel : "qwen3-tts-vd-2026-01-26" }) });
+                      const data = await res.json();
+                      if (!res.ok || !data.voice_id) throw new Error(data.detail || "Qwen 声音设计创建失败");
+                      setVoice(data.voice_id); setQwenAudioModel(data.target_model || "qwen3-tts-vd-2026-01-26");
+                      if (data.preview_audio_path) setQwenVoicePreviewUrl(audioPathToUrl(data.preview_audio_path));
+                      addToast(`声音设计已创建：${data.voice_id}`, "success");
+                    } catch (err: any) { addToast(err.message || "Qwen 声音设计创建失败", "error"); }
+                    finally { setQwenVoiceBusy(false); }
+                  }} className="ui-btn ui-btn-secondary text-[10px]">{qwenVoiceBusy ? "创建中..." : "创建 Qwen 声音并绑定 Voice ID"}</button>
+                )}
+                {qwenAudioMode === "clone" && (
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-2 text-[10px] text-zinc-400">
+                      <input type="checkbox" checked={qwenCloneConsent} onChange={(e) => setQwenCloneConsent(e.target.checked)} className="mt-0.5" />
+                      <span>我确认拥有该参考音频及声音的合法使用授权，并同意创建可用于本项目的克隆音色。</span>
+                    </label>
+                    <label className={`ui-btn ui-btn-secondary text-[10px] inline-flex ${qwenCloneConsent ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
+                    {qwenVoiceBusy ? "上传并创建中..." : "上传 10-20 秒音频并创建克隆音色"}
+                    <input type="file" accept="audio/mpeg,audio/wav,audio/mp4,.mp3,.wav,.m4a" className="hidden" disabled={qwenVoiceBusy || !qwenCloneConsent} onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 10 * 1024 * 1024) { addToast("参考音频不能超过 10 MB。", "error"); return; }
+                      setQwenVoiceBusy(true);
+                      try {
+                        const form = new FormData(); form.append("file", file); form.append("target_model", "qwen3-tts-vc-2026-01-22"); form.append("preferred_name", "pixelle_voice"); form.append("consent", String(qwenCloneConsent));
+                        const res = await fetch("/api/tts/qwen/voice-clone", { method: "POST", body: form });
+                        const data = await res.json();
+                        if (!res.ok || !data.voice_id) throw new Error(data.detail || "Qwen 音色克隆创建失败");
+                        setVoice(data.voice_id); setQwenAudioModel(data.target_model || "qwen3-tts-vc-2026-01-22");
+                        addToast(`音色克隆已创建：${data.voice_id}`, "success");
+                      } catch (err: any) { addToast(err.message || "Qwen 音色克隆创建失败", "error"); }
+                      finally { setQwenVoiceBusy(false); e.currentTarget.value = ""; }
+                    }} />
+                  </label>
+                  </div>
+                )}
+                {qwenVoicePreviewUrl && <audio controls src={qwenVoicePreviewUrl} className="w-full h-8" />}
+                <p className="text-[10px] text-zinc-500 leading-relaxed">声音设计按百炼官方流程先创建音色，再将 voice ID 固定到全片；创建音色可能产生费用。音色克隆请先在百炼完成合规授权与创建。</p>
               </div>
             )}
 
@@ -3414,11 +3589,65 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             </div>
             <textarea
               value={promptPrefix}
-              onChange={(e) => setPromptPrefix(e.target.value)}
+              onChange={(e) => { setPromptPrefix(e.target.value); setSelectedStyleSlotId(null); }}
               rows={3}
               className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 font-mono resize-none leading-relaxed"
               placeholder="例：紫色夜景叙事插画，细密黑色线稿，颗粒纸张质感，单一暖黄色灯光，高对比硬边阴影"
             />
+            <div className="mt-3 border-t border-zinc-800 pt-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">参考图画风卡槽</span>
+                <label className="ui-btn ui-btn-secondary ui-btn-sm cursor-pointer">
+                  {styleBusy ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  上传参考图并分析
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={styleBusy}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void handleAnalyzeStyle(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {styleSlots.map((slot) => (
+                  <button
+                    type="button"
+                    key={slot.id}
+                    onClick={() => {
+                      setPromptPrefix(slot.stylePrefix);
+                      setSelectedStyleSlotId(slot.id);
+                      addToast(`已应用画风：${slot.name}`, "success");
+                    }}
+                    className={`w-36 shrink-0 overflow-hidden rounded border bg-[#17181c] text-left transition-colors hover:border-amber-500/60 ${selectedStyleSlotId === slot.id ? "border-amber-500" : "border-zinc-800"}`}
+                    title={`应用：${slot.name}`}
+                  >
+                    <img src={slot.thumbnailUrl} alt="" className="h-14 w-full object-cover" />
+                    <span className="block truncate px-2 pt-1.5 text-[11px] text-zinc-200">{slot.name}</span>
+                    <span className="block truncate px-2 pb-1.5 text-[9px] text-zinc-500">{slot.styleTags.slice(0, 2).join(" · ") || "自定义画风"}</span>
+                  </button>
+                ))}
+                {styleSlots.length === 0 && !styleAnalysis && <span className="py-3 text-[11px] text-zinc-500">上传参考图后，可保存 1-12 个可复用画风。</span>}
+              </div>
+              {styleAnalysis && (
+                <div className="mt-2 space-y-2 rounded border border-amber-500/25 bg-amber-500/5 p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-amber-200">分析结果，尚未覆盖当前画风</span>
+                    <span className="text-[10px] text-zinc-500">置信度 {Math.round(Number(styleAnalysis.confidence || 0) * 100)}%</span>
+                  </div>
+                  <input className="ui-input text-xs" value={styleSlotName} onChange={(e) => setStyleSlotName(e.target.value)} placeholder="画风名称" />
+                  <textarea className="ui-input min-h-20 text-xs" value={styleAnalysis.style_prefix || ""} onChange={(e) => setStyleAnalysis((current: any) => ({ ...current, style_prefix: e.target.value }))} />
+                  <div className="flex justify-end gap-2">
+                    <button type="button" className="ui-btn ui-btn-secondary ui-btn-sm" onClick={() => { setPromptPrefix(styleAnalysis.style_prefix || ""); setSelectedStyleSlotId(null); addToast("已应用分析出的画风前缀。", "success"); }}>仅应用</button>
+                    <button type="button" className="ui-btn ui-btn-primary ui-btn-sm" disabled={styleBusy} onClick={() => void handleSaveAnalyzedStyle()}>保存到卡槽</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-3">

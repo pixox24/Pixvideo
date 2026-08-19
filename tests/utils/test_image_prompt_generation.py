@@ -2,6 +2,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from pydantic import BaseModel
 
 from api.routers.projects import _autofill_image_prompts, is_visual_prompt_same_as_narration
@@ -12,6 +13,7 @@ from pixelle_video.prompts.image_generation import (
 from pixelle_video.services.llm_service import LLMService
 from pixelle_video.utils.content_generators import (
     _parse_image_prompt_response,
+    _parse_json,
     generate_image_prompts,
 )
 
@@ -75,6 +77,18 @@ def test_empty_style_prefix_keeps_director_style_neutral():
 
     assert "If it is absent, remain style-neutral" in system_prompt
     assert "User style lock" not in system_prompt
+
+
+def test_image_prompt_parser_repairs_unescaped_quotes_inside_prompt_text():
+    payload = '{"image_prompts":["Calendar marked "MONDAY" in red, hard light"]}'
+    parsed = _parse_image_prompt_response(payload)
+    assert parsed["image_prompts"] == ['Calendar marked "MONDAY" in red, hard light']
+
+
+def test_generic_model_json_parser_repairs_unescaped_quotes_in_segmentation_payload():
+    payload = '{"segments":[{"text":"星期一的早晨","visual_focus":"calendar marked "MONDAY""}]}'
+    parsed = _parse_json(payload)
+    assert parsed["segments"][0]["visual_focus"] == 'calendar marked "MONDAY"'
 
 
 @pytest.mark.asyncio
@@ -158,10 +172,13 @@ def test_narration_equals_visual_prompt_is_legacy_contamination():
 
 
 @pytest.mark.asyncio
-async def test_autofill_failure_leaves_visual_prompt_empty():
+async def test_autofill_failure_is_explicit_and_never_silent():
     scene = SimpleNamespace(narration="Narration", visual_prompt="Narration")
     core = SimpleNamespace(llm=None)
 
-    await _autofill_image_prompts(core, [scene])
+    with pytest.raises(HTTPException) as exc_info:
+        await _autofill_image_prompts(core, [scene])
 
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["code"] == "visual_prompt_generation_failed"
     assert scene.visual_prompt == ""

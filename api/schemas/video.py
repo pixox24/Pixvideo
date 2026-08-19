@@ -78,6 +78,8 @@ class VideoSceneInput(BaseModel):
 
     narration: str = Field(..., min_length=1, description="Narration for this scene")
     visual_prompt: Optional[str] = Field(None, description="Optional media prompt for this scene")
+    visual_focus: Optional[str] = Field(None, alias="visualFocus", description="Semantic visual focus for this scene")
+    text_anchors: list[str] = Field(default_factory=list, alias="textAnchors", description="Exact factual text anchors for this scene")
 
     @field_validator("narration")
     @classmethod
@@ -176,6 +178,10 @@ class VideoGenerateRequest(BaseModel):
     minimax_emotion: Optional[str] = Field(None, description="MiniMax TTS emotion")
     mimo_model: Optional[str] = Field(None, description="MiMo TTS model")
     mimo_style: Optional[str] = Field(None, description="MiMo natural-language style instruction (optional)")
+    qwen_audio_model: Optional[str] = Field(None, description="Qwen TTS model")
+    qwen_audio_mode: Optional[Literal["preset", "instruct", "design", "clone"]] = Field(None, description="Qwen voice capability mode")
+    qwen_audio_instruction: Optional[str] = Field(None, max_length=2048, description="Qwen voice instruction or design description")
+    qwen_audio_ref_audio: Optional[str] = Field(None, description="Qwen voice-cloning reference audio key")
     
     # === LLM Parameters ===
     min_narration_words: int = Field(5, ge=1, le=100, description="Min narration words")

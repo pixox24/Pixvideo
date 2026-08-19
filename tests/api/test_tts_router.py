@@ -99,3 +99,30 @@ async def test_tts_synthesize_passes_mimo_model_voice_speed_and_style(monkeypatc
     }
     assert response.audio_path == "output/preview.mp3"
     assert response.duration == 1.5
+
+
+@pytest.mark.asyncio
+async def test_tts_synthesize_passes_qwen_model_mode_and_instruction(monkeypatch):
+    monkeypatch.setattr("api.routers.tts.get_audio_duration", lambda path: 1.5)
+    pixelle_video = DummyPixelleVideo()
+
+    await tts_synthesize(
+        TTSSynthesizeRequest(
+            text="这是一段 Qwen 试听文案",
+            inference_mode="qwen_audio",
+            voice_id="Cherry",
+            qwen_audio_model="qwen3-tts-instruct-flash",
+            qwen_audio_mode="instruct",
+            qwen_audio_instruction="温柔地说，语速稍慢",
+        ),
+        pixelle_video=pixelle_video,
+    )
+
+    assert pixelle_video.tts.params == {
+        "text": "这是一段 Qwen 试听文案",
+        "inference_mode": "qwen_audio",
+        "voice": "Cherry",
+        "qwen_audio_model": "qwen3-tts-instruct-flash",
+        "qwen_audio_mode": "instruct",
+        "qwen_audio_instruction": "温柔地说，语速稍慢",
+    }

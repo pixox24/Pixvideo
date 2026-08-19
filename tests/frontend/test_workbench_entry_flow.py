@@ -9,7 +9,11 @@ def test_quick_create_exposes_project_entry_callback():
     assert "onGenerateTask" in source
     assert 'handleTriggerRender(true)' in source
     assert "onCreateProject({" in source
-    assert "visualPrompt: scene.visualPrompt.trim() || scene.ttsText" in source
+    # Visual prompts must be explicit; narration must never be used as a
+    # silent fallback because that produces semantically unrelated imagery.
+    assert "const missingVisualPrompts = renderScenes.filter" in source
+    assert "请先点击“按当前导演设置生成分镜”" in source
+    assert "visualPrompt: scene.visualPrompt.trim()" in source
     # Labels may live in CreateStickyFooter (PR-C)
     footer = (ROOT / "frontend/src/components/quickCreate/CreateStickyFooter.tsx").read_text(encoding="utf-8")
     assert "仅生成成片" in source or "仅生成成片" in footer

@@ -161,6 +161,15 @@ export function buildConfigPayload(settings: SystemSettings) {
       base_url: settings.imageGeneration.baseUrl || undefined,
       model: settings.imageGeneration.model || undefined,
     },
+    vision_understanding: {
+      enabled: settings.visionUnderstanding.enabled,
+      provider: settings.visionUnderstanding.provider,
+      api_key: settings.visionUnderstanding.apiKey || undefined,
+      base_url: settings.visionUnderstanding.baseUrl || undefined,
+      model: settings.visionUnderstanding.model || undefined,
+      fallback_model: settings.visionUnderstanding.fallbackModel || undefined,
+      timeout_seconds: settings.visionUnderstanding.timeoutSeconds,
+    },
     comfyui: {
       comfyui_url: settings.comfy.url || undefined,
       comfyui_api_key: settings.comfy.apiKey || undefined,
@@ -171,6 +180,7 @@ export function buildConfigPayload(settings: SystemSettings) {
       minimax_api_key: settings.minimaxKey || undefined,
       mimo_api_key: settings.mimoKey || undefined,
       qwen_audio_api_key: settings.qwenAudioKey || undefined,
+      qwen_audio_workspace_id: settings.qwenAudioWorkspaceId || undefined,
     },
   };
 }
@@ -193,6 +203,17 @@ export function mapBackendConfigToSettings(data: any, fallback: SystemSettings):
       baseUrl: data.image_generation?.base_url || fallback.imageGeneration.baseUrl,
       model: data.image_generation?.model || fallback.imageGeneration.model,
     },
+    visionUnderstanding: {
+      ...fallback.visionUnderstanding,
+      enabled: Boolean(data.vision_understanding?.enabled ?? fallback.visionUnderstanding.enabled),
+      provider: data.vision_understanding?.provider || fallback.visionUnderstanding.provider,
+      apiKey: data.vision_understanding?.api_key_set ? fallback.visionUnderstanding.apiKey : "",
+      apiKeyMasked: data.vision_understanding?.api_key_masked || "",
+      baseUrl: data.vision_understanding?.base_url || fallback.visionUnderstanding.baseUrl,
+      model: data.vision_understanding?.model || fallback.visionUnderstanding.model,
+      fallbackModel: data.vision_understanding?.fallback_model || fallback.visionUnderstanding.fallbackModel,
+      timeoutSeconds: data.vision_understanding?.timeout_seconds || fallback.visionUnderstanding.timeoutSeconds,
+    },
     comfy: {
       ...fallback.comfy,
       url: data.comfyui?.comfyui_url || fallback.comfy.url,
@@ -214,7 +235,41 @@ export function mapBackendConfigToSettings(data: any, fallback: SystemSettings):
     mimoKeyMasked: data.comfyui?.mimo_api_key_masked || "",
     qwenAudioKey: data.comfyui?.qwen_audio_api_key_set ? fallback.qwenAudioKey : "",
     qwenAudioKeyMasked: data.comfyui?.qwen_audio_api_key_masked || "",
+    qwenAudioWorkspaceId: data.comfyui?.qwen_audio_workspace_id || fallback.qwenAudioWorkspaceId || "",
   };
+}
+
+export type StyleSlot = {
+  id: string;
+  name: string;
+  sourceImageUrl: string;
+  thumbnailUrl: string;
+  stylePrefix: string;
+  styleTags: string[];
+  visualFeatures: Record<string, unknown>;
+  negativeConstraints: string[];
+  confidence?: number;
+  strength: number;
+  locked: boolean;
+};
+
+export async function fetchStyleSlots(): Promise<StyleSlot[]> {
+  const data = await fetchJson<{ slots?: StyleSlot[] }>("/api/style-slots");
+  return data.slots || [];
+}
+
+export async function analyzeStyleReference(file: File): Promise<{ style: any }> {
+  const form = new FormData();
+  form.append("file", file);
+  return fetchJson<{ style: any }>("/api/style-slots/analyze", { method: "POST", body: form });
+}
+
+export async function saveStyleSlot(file: File, style: any, name: string, strength = 70): Promise<StyleSlot> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("style_json", JSON.stringify({ ...style, name, strength }));
+  const data = await fetchJson<{ slot: StyleSlot }>("/api/style-slots", { method: "POST", body: form });
+  return data.slot;
 }
 
 export type KeywordExtractionStyle = "balanced" | "concept" | "selling_point" | "emotion" | "numeric" | "action";
@@ -300,6 +355,10 @@ function buildVideoPayload(input: any) {
     scenes: scenes.map((scene: any) => ({
       narration: String(scene.ttsText || "").trim(),
       visual_prompt: String(scene.visualPrompt || "").trim(),
+      visualFocus: String(scene.visualFocus || "").trim(),
+      textAnchors: Array.isArray(scene.textAnchors)
+        ? scene.textAnchors.map((value: unknown) => String(value).trim()).filter(Boolean)
+        : [],
     })),
     client_request_key: input.clientRequestKey || undefined,
     reuse_assets_from_task_id: input.reuseTaskId || undefined,
@@ -317,6 +376,10 @@ function buildVideoPayload(input: any) {
     minimax_emotion: input.emotion || undefined,
     mimo_model: input.mimoModel || undefined,
     mimo_style: input.mimoStyle || undefined,
+    qwen_audio_model: input.qwenAudioModel || undefined,
+    qwen_audio_mode: input.qwenAudioMode || undefined,
+    qwen_audio_instruction: input.qwenAudioInstruction || undefined,
+    qwen_audio_ref_audio: input.qwenAudioRefAudio || undefined,
     media_width: input.mediaWidth || undefined,
     media_height: input.mediaHeight || undefined,
     video_fps: input.videoFps || undefined,

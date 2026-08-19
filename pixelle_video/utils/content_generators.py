@@ -873,7 +873,7 @@ def _parse_image_prompt_response(text: str) -> dict[str, List[str]]:
     fenced = re.fullmatch(r"```(?:json)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
     if fenced:
         raw = fenced.group(1).strip()
-    payload = json.loads(raw)
+    payload = _loads_model_json(raw)
     if not isinstance(payload, dict):
         raise ValueError("image prompt response must be a JSON object")
     prompts = payload.get("image_prompts")
@@ -882,6 +882,66 @@ def _parse_image_prompt_response(text: str) -> dict[str, List[str]]:
     if any(not isinstance(item, str) or not item.strip() for item in prompts):
         raise ValueError("image_prompts must contain only non-empty strings")
     return {"image_prompts": [item.strip() for item in prompts]}
+
+
+def _repair_unescaped_json_quotes(text: str) -> str:
+    """Repair quotes inside model-generated JSON string values.
+
+    Image prompts often contain short quoted evidence such as ``"MONDAY"``.
+    Models occasionally omit the backslash, making otherwise recoverable JSON
+    fail with ``Expecting ',' delimiter``. A quote is a string terminator only
+    when the next significant character is valid JSON structure; otherwise it
+    is treated as literal prompt text and escaped.
+    """
+    source = str(text or "")
+    output: list[str] = []
+    in_string = False
+    escaped = False
+    for index, char in enumerate(source):
+        if not in_string:
+            output.append(char)
+            if char == '"':
+                in_string = True
+            continue
+        if escaped:
+            output.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            output.append(char)
+            escaped = True
+            continue
+        if char != '"':
+            output.append(char)
+            continue
+        remainder = source[index + 1 :]
+        # A structural quote is followed by JSON punctuation and, for a
+        # comma/colon, another JSON token. This avoids mistaking prose such as
+        # ``marked "MONDAY", then`` for the end of the surrounding string.
+        structural = bool(
+            re.match(r'\s*(?:[}\]]|,\s*(?:["}\]])|:\s*(?:["\d{\[]))', remainder)
+        )
+        if structural:
+            output.append(char)
+            in_string = False
+        else:
+            output.append("\\\"")
+    return "".join(output)
+
+
+def _loads_model_json(text: str):
+    """Load strict JSON first, then recover common LLM quoting mistakes."""
+    raw = str(text or "").strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as strict_error:
+        repaired = _repair_unescaped_json_quotes(raw)
+        if repaired == raw:
+            raise strict_error
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            raise strict_error
 
 
 async def generate_video_prompts(
@@ -1169,14 +1229,14 @@ def _parse_json(text: str):
             continue
         seen.add(candidate)
         try:
-            return json.loads(candidate)
+            return _loads_model_json(candidate)
         except json.JSONDecodeError:
             pass
         # Trailing-comma repair (common model glitch)
         repaired = re.sub(r",\s*([}\]])", r"\1", candidate)
         if repaired != candidate:
             try:
-                return json.loads(repaired)
+                return _loads_model_json(repaired)
             except json.JSONDecodeError:
                 pass
         for index, char in enumerate(candidate):

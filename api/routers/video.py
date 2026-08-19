@@ -120,9 +120,15 @@ def _build_video_params(request_body: VideoGenerateRequest, progress_callback=No
         "target_scene_count": request_body.target_scene_count,
         "title": request_body.title,
         "n_scenes": request_body.n_scenes,
-        "scenes": [scene.model_dump() for scene in request_body.scenes]
-        if request_body.scenes
-        else None,
+        "scenes": [
+            {
+                "narration": scene.narration,
+                "visual_prompt": scene.visual_prompt,
+                **({"visual_focus": scene.visual_focus} if scene.visual_focus else {}),
+                **({"text_anchors": scene.text_anchors} if scene.text_anchors else {}),
+            }
+            for scene in request_body.scenes
+        ] if request_body.scenes else None,
         "reuse_assets_from_task_id": request_body.reuse_assets_from_task_id,
         "min_narration_words": request_body.min_narration_words,
         "max_narration_words": request_body.max_narration_words,
@@ -158,6 +164,10 @@ def _build_video_params(request_body: VideoGenerateRequest, progress_callback=No
         video_params["tts_workflow"] = request_body.tts_workflow
     if request_body.ref_audio:
         video_params["ref_audio"] = request_body.ref_audio
+    for key in ("qwen_audio_model", "qwen_audio_mode", "qwen_audio_instruction", "qwen_audio_ref_audio"):
+        value = getattr(request_body, key, None)
+        if value is not None:
+            video_params[key] = value
     if request_body.voice_id:
         logger.warning("voice_id parameter is deprecated; mapping it to tts_voice")
         video_params["tts_voice"] = request_body.voice_id

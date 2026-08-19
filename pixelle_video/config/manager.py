@@ -124,6 +124,18 @@ class ConfigManager:
             "base_url": self.config.image_generation.base_url,
             "model": self.config.image_generation.model,
         }
+
+    def get_vision_understanding_config(self) -> dict:
+        """Get multimodal vision understanding configuration as dict."""
+        return self.config.vision_understanding.model_dump()
+
+    def set_vision_understanding_config(self, **values: Any) -> None:
+        """Update vision understanding settings while preserving omitted values."""
+        allowed = {
+            "enabled", "provider", "api_key", "base_url", "model", "fallback_model",
+            "timeout_seconds", "max_image_bytes", "max_image_pixels", "temperature",
+        }
+        self.update({"vision_understanding": {key: value for key, value in values.items() if key in allowed and value is not None}})
     
     def set_llm_config(self, api_key: str, base_url: str, model: str):
         """Set LLM configuration"""
@@ -187,9 +199,13 @@ class ConfigManager:
                 "qwen_audio": {
                     "api_key": self.config.comfyui.tts.qwen_audio.api_key,
                     "model": self.config.comfyui.tts.qwen_audio.model,
-                    "voice_id": self.config.comfyui.tts.qwen_audio.voice_id,
-                    "language_type": self.config.comfyui.tts.qwen_audio.language_type,
-                    "endpoint": self.config.comfyui.tts.qwen_audio.endpoint,
+                "voice_id": self.config.comfyui.tts.qwen_audio.voice_id,
+                "language_type": self.config.comfyui.tts.qwen_audio.language_type,
+                "mode": self.config.comfyui.tts.qwen_audio.mode,
+                "instruction": self.config.comfyui.tts.qwen_audio.instruction,
+                "ref_audio": self.config.comfyui.tts.qwen_audio.ref_audio,
+                "workspace_id": self.config.comfyui.tts.qwen_audio.workspace_id,
+                "endpoint": self.config.comfyui.tts.qwen_audio.endpoint,
                 },
             },
             "image": {
@@ -213,6 +229,7 @@ class ConfigManager:
         minimax_api_key: Optional[str] = None,
         mimo_api_key: Optional[str] = None,
         qwen_audio_api_key: Optional[str] = None,
+        qwen_audio_workspace_id: Optional[str] = None,
     ):
         """Set ComfyUI global configuration"""
         updates = {}
@@ -235,6 +252,8 @@ class ConfigManager:
             updates.setdefault("tts", {}).setdefault("mimo", {})["api_key"] = mimo_api_key
         if qwen_audio_api_key is not None:
             updates.setdefault("tts", {}).setdefault("qwen_audio", {})["api_key"] = qwen_audio_api_key
+        if qwen_audio_workspace_id is not None:
+            updates.setdefault("tts", {}).setdefault("qwen_audio", {})["workspace_id"] = qwen_audio_workspace_id.strip()
         
         if updates:
             self.update({"comfyui": updates})
@@ -311,6 +330,9 @@ class ConfigManager:
                 qwen_updates["voice_id"] = video_params["tts_voice"]
             if video_params.get("qwen_audio_language_type"):
                 qwen_updates["language_type"] = video_params["qwen_audio_language_type"]
+            for key in ("qwen_audio_mode", "qwen_audio_instruction", "qwen_audio_ref_audio"):
+                if key in video_params:
+                    qwen_updates[key.removeprefix("qwen_audio_")] = video_params.get(key)
             if qwen_updates:
                 comfyui_updates["tts"]["qwen_audio"] = qwen_updates
 

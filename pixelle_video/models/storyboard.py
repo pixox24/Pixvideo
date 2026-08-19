@@ -50,6 +50,9 @@ class StoryboardConfig:
     mimo_model: Optional[str] = None           # MiMo model name (MiMo mode only)
     mimo_style: Optional[str] = None           # MiMo natural-language style instruction (MiMo mode only)
     qwen_audio_model: Optional[str] = None     # Qwen Audio model name (Qwen Audio mode only)
+    qwen_audio_mode: Optional[str] = None      # Qwen voice capability mode
+    qwen_audio_instruction: Optional[str] = None  # Qwen voice expression instruction
+    qwen_audio_ref_audio: Optional[str] = None # Qwen cloned voice reference
 
     # Media workflow
     media_workflow: Optional[str] = None       # Media workflow filename (image or video, None = use default)

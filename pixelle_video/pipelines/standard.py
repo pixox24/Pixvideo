@@ -397,15 +397,21 @@ class StandardPipeline(LinearVideoPipeline):
                     )
                 
                 explicit_scenes = ctx.params.get("scenes") or []
+                # Keep semantic metadata aligned with the filtered narration list.
+                # Empty client rows must not shift focus/anchor hints to the next shot.
+                semantic_scenes = [
+                    scene for scene in explicit_scenes
+                    if str(scene.get("narration") or "").strip()
+                ]
                 provided_prompts = [
                     ""
                     if index < len(ctx.narrations)
                     and is_visual_prompt_same_as_narration(
-                        scene.get("visual_prompt"),
+                        semantic_scenes[index].get("visual_prompt"),
                         ctx.narrations[index],
                     )
-                    else str(scene.get("visual_prompt") or "").strip()
-                    for index, scene in enumerate(explicit_scenes)
+                    else str(semantic_scenes[index].get("visual_prompt") or "").strip()
+                    for index in range(min(len(semantic_scenes), len(ctx.narrations)))
                 ]
                 if len(provided_prompts) < len(ctx.narrations):
                     provided_prompts.extend([""] * (len(ctx.narrations) - len(provided_prompts)))
@@ -427,6 +433,14 @@ class StandardPipeline(LinearVideoPipeline):
                         min_words=min_words,
                         max_words=max_words,
                         style_prefix=style_prefix_for_llm,
+                        visual_focuses=[
+                            str(semantic_scenes[index].get("visual_focus") or "").strip()
+                            for index in missing_indices
+                        ],
+                        text_anchors=[
+                            [str(value).strip() for value in (semantic_scenes[index].get("text_anchors") or []) if str(value).strip()]
+                            for index in missing_indices
+                        ],
                         progress_callback=image_prompt_progress,
                     )
 
@@ -520,6 +534,9 @@ class StandardPipeline(LinearVideoPipeline):
             mimo_model=ctx.params.get("mimo_model"),
             mimo_style=ctx.params.get("mimo_style"),
             qwen_audio_model=ctx.params.get("qwen_audio_model"),
+            qwen_audio_mode=ctx.params.get("qwen_audio_mode"),
+            qwen_audio_instruction=ctx.params.get("qwen_audio_instruction"),
+            qwen_audio_ref_audio=ctx.params.get("qwen_audio_ref_audio"),
             media_width=ctx.params.get("media_width"),
             media_height=ctx.params.get("media_height"),
             media_workflow=ctx.params.get("media_workflow"),

@@ -63,6 +63,10 @@ export interface Preset {
   emotion?: string;
   mimoModel?: string;
   mimoStyle?: string;
+  qwenAudioModel?: string;
+  qwenAudioMode?: "preset" | "instruct" | "design" | "clone";
+  qwenAudioInstruction?: string;
+  qwenAudioRefAudio?: string;
   sceneCount?: number;
   copyCharCount?: number;
   copyCharCountMode?: "around" | "within";
@@ -122,6 +126,17 @@ export interface ImageGenerationConfig {
   model: string;
 }
 
+export interface VisionUnderstandingConfig {
+  enabled: boolean;
+  provider: string;
+  apiKey: string;
+  apiKeyMasked?: string;
+  baseUrl: string;
+  model: string;
+  fallbackModel: string;
+  timeoutSeconds: number;
+}
+
 export interface ComfyConfig {
   url: string;
   apiKey: string;
@@ -148,6 +163,8 @@ export interface SystemSettings {
   mimoKeyMasked?: string;
   qwenAudioKey: string;
   qwenAudioKeyMasked?: string;
+  qwenAudioWorkspaceId: string;
+  visionUnderstanding: VisionUnderstandingConfig;
 }
 
 export interface WorkflowOption {

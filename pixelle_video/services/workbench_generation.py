@@ -200,6 +200,9 @@ def build_parameter_snapshot(
         "mimo_style",
         ("comfyui", "tts", "mimo", "style"),
     )
+    qwen_audio_mode = _lookup(merged, "qwenAudioMode", "qwen_audio_mode", ("comfyui", "tts", "qwen_audio", "mode"))
+    qwen_audio_instruction = _lookup(merged, "qwenAudioInstruction", "qwen_audio_instruction", ("comfyui", "tts", "qwen_audio", "instruction"))
+    qwen_audio_ref_audio = _lookup(merged, "qwenAudioRefAudio", "qwen_audio_ref_audio", ("comfyui", "tts", "qwen_audio", "ref_audio"))
     tts_workflow = _lookup(
         merged,
         "ttsWorkflow",
@@ -256,6 +259,9 @@ def build_parameter_snapshot(
             "emotion": str(emotion).strip() if emotion not in (None, "") else None,
             "model": str(tts_model).strip() if tts_model not in (None, "") else None,
             "style": str(mimo_style).strip() if mimo_style not in (None, "") else None,
+            "qwen_mode": str(qwen_audio_mode).strip() if qwen_audio_mode not in (None, "") else None,
+            "qwen_instruction": str(qwen_audio_instruction).strip() if qwen_audio_instruction not in (None, "") else None,
+            "qwen_ref_audio": str(qwen_audio_ref_audio).strip() if qwen_audio_ref_audio not in (None, "") else None,
             "workflow": str(tts_workflow).strip() if tts_workflow not in (None, "") else None,
             "delivery": tts_delivery,
         },

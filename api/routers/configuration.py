@@ -37,6 +37,7 @@ def _sanitized_config() -> dict:
     """Build sanitized config for frontend display."""
     llm = config_manager.get_llm_config()
     image_generation = config_manager.get_image_generation_config()
+    vision = config_manager.get_vision_understanding_config()
     comfyui = config_manager.get_comfyui_config()
     minimax = comfyui.get("tts", {}).get("minimax", {})
     mimo = comfyui.get("tts", {}).get("mimo", {})
@@ -59,6 +60,11 @@ def _sanitized_config() -> dict:
             "base_url": image_generation.get("base_url", ""),
             "model": image_generation.get("model", ""),
         },
+        "vision_understanding": {
+            **{key: vision.get(key) for key in ("enabled", "provider", "base_url", "model", "fallback_model", "timeout_seconds", "max_image_bytes", "max_image_pixels", "temperature")},
+            "api_key_set": bool(vision.get("api_key")),
+            "api_key_masked": _mask_secret(vision.get("api_key")),
+        },
         "comfyui": {
             "comfyui_url": comfyui.get("comfyui_url", ""),
             "comfyui_api_key_set": bool(comfyui.get("comfyui_api_key")),
@@ -75,6 +81,7 @@ def _sanitized_config() -> dict:
             "mimo_api_key_masked": _mask_secret(mimo.get("api_key")),
             "qwen_audio_api_key_set": bool(qwen_audio_key),
             "qwen_audio_api_key_masked": _mask_secret(qwen_audio_key),
+            "qwen_audio_workspace_id": qwen_audio.get("workspace_id", ""),
         },
         "quick_create": config_manager.get("quick_create", {}),
         "template": config_manager.get("template", {}),
@@ -85,6 +92,7 @@ def _sanitized_config() -> dict:
                 and image_generation.get("base_url")
                 and image_generation.get("model")
             ),
+            "vision_understanding": bool(vision.get("enabled") and vision.get("api_key") and vision.get("base_url") and vision.get("model")),
             "comfyui": bool(comfyui.get("comfyui_url")),
             "runninghub": bool(comfyui.get("runninghub_api_key")),
             "bizyair": bool(comfyui.get("bizyair_api_key")),
@@ -133,6 +141,12 @@ async def update_config(request: ConfigUpdateRequest):
             )
             config_manager.set_image_generation_config(api_key, base_url, model)
 
+        if request.vision_understanding:
+            current = config_manager.get_vision_understanding_config()
+            values = request.vision_understanding.model_dump(exclude_none=True)
+            values["api_key"] = values.get("api_key", current.get("api_key", ""))
+            config_manager.set_vision_understanding_config(**values)
+
         if request.comfyui:
             config_manager.set_comfyui_config(
                 comfyui_url=request.comfyui.comfyui_url,
@@ -144,6 +158,7 @@ async def update_config(request: ConfigUpdateRequest):
                 minimax_api_key=request.comfyui.minimax_api_key,
                 mimo_api_key=request.comfyui.mimo_api_key,
                 qwen_audio_api_key=request.comfyui.qwen_audio_api_key,
+                qwen_audio_workspace_id=request.comfyui.qwen_audio_workspace_id,
             )
 
         config_manager.save()
@@ -202,6 +217,12 @@ async def test_service(request: ServiceTestRequest):
                 if not missing
                 else f"image_generation missing: {', '.join(missing)}",
             }
+
+        if request.service == "vision_understanding":
+            vision = config_manager.get_vision_understanding_config()
+            values = {**vision, **request.config}
+            missing = [key for key in ("api_key", "base_url", "model") if not values.get(key)]
+            return {"success": not missing, "message": "vision_understanding configuration is complete" if not missing else f"vision_understanding missing: {', '.join(missing)}"}
 
         key_names = {
             "runninghub": "runninghub_api_key",

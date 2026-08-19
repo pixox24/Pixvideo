@@ -71,6 +71,10 @@ comfyui:
       model: qwen3-tts-flash
       voice_id: Cherry
       language_type: Chinese
+      mode: preset
+      instruction: ""
+      ref_audio: ""
+      workspace_id: ""  # Qwen-Audio-TTS only; use a DashScope workspace ID
       endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
   
   # Image-specific configuration

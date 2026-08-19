@@ -474,6 +474,13 @@ class WorkbenchJobService:
             project_config = (project.config if project else {}) or {}
             model = project_config.get("qwenAudioModel") or project_config.get("qwen_audio_model") or tts.get("model") or "qwen3-tts-flash"
             kwargs["qwen_audio_model"] = model
+            kwargs["qwen_audio_mode"] = project_config.get("qwenAudioMode") or project_config.get("qwen_audio_mode") or tts.get("qwen_mode") or "preset"
+            instruction = project_config.get("qwenAudioInstruction") or project_config.get("qwen_audio_instruction") or tts.get("qwen_instruction")
+            if instruction:
+                kwargs["qwen_audio_instruction"] = instruction
+            ref_audio = project_config.get("qwenAudioRefAudio") or project_config.get("qwen_audio_ref_audio") or tts.get("qwen_ref_audio")
+            if ref_audio:
+                kwargs["qwen_audio_ref_audio"] = ref_audio
         elif mode == "comfyui" and tts.get("workflow"):
             kwargs["workflow"] = tts.get("workflow")
         # Drop only missing keys; keep explicit None for emotion lock path handled above.

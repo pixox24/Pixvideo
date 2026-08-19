@@ -62,6 +62,15 @@ class TTSSynthesizeRequest(BaseModel):
     )
     qwen_audio_model: Optional[str] = Field(None, description="Qwen Audio TTS model override")
     qwen_audio_language_type: Optional[str] = Field(None, description="Qwen Audio language type override")
+    qwen_audio_mode: Optional[Literal["preset", "instruct", "design", "clone"]] = Field(
+        None, description="Qwen voice capability mode"
+    )
+    qwen_audio_instruction: Optional[str] = Field(
+        None, max_length=2048, description="Natural-language voice instruction or design description"
+    )
+    qwen_audio_ref_audio: Optional[str] = Field(
+        None, description="Server-owned reference audio key for voice cloning"
+    )
     
     class Config:
         json_schema_extra = {
@@ -86,3 +95,17 @@ class TTSSynthesizeResponse(BaseModel):
     message: str = "Success"
     audio_path: str = Field(..., description="Path to generated audio file")
     duration: float = Field(..., description="Audio duration in seconds")
+
+
+class QwenVoiceDesignRequest(BaseModel):
+    voice_prompt: str = Field(..., min_length=3, max_length=2048)
+    preview_text: str = Field(default="大家好，欢迎来到我们的频道。", min_length=1, max_length=500)
+    preferred_name: str = Field(default="pixelle_voice", min_length=1, max_length=64)
+    target_model: str = Field(default="qwen3-tts-vd-2026-01-26", min_length=1, max_length=100)
+
+
+class QwenVoiceDesignResponse(BaseModel):
+    success: bool = True
+    voice_id: str
+    target_model: str
+    preview_audio_path: Optional[str] = None

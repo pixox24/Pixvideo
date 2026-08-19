@@ -25,6 +25,19 @@ class ImageGenerationConfigPayload(BaseModel):
     model: Optional[str] = None
 
 
+class VisionUnderstandingConfigPayload(BaseModel):
+    enabled: Optional[bool] = None
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    fallback_model: Optional[str] = None
+    timeout_seconds: Optional[int] = Field(default=None, ge=10, le=180)
+    max_image_bytes: Optional[int] = Field(default=None, ge=1_000_000)
+    max_image_pixels: Optional[int] = Field(default=None, ge=1_000_000)
+    temperature: Optional[float] = Field(default=None, ge=0, le=1)
+
+
 class ComfyUIConfigPayload(BaseModel):
     comfyui_url: Optional[str] = None
     comfyui_api_key: Optional[str] = None
@@ -35,16 +48,18 @@ class ComfyUIConfigPayload(BaseModel):
     minimax_api_key: Optional[str] = None
     mimo_api_key: Optional[str] = None
     qwen_audio_api_key: Optional[str] = None
+    qwen_audio_workspace_id: Optional[str] = None
 
 
 class ConfigUpdateRequest(BaseModel):
     llm: Optional[LLMConfigPayload] = None
     image_generation: Optional[ImageGenerationConfigPayload] = None
+    vision_understanding: Optional[VisionUnderstandingConfigPayload] = None
     comfyui: Optional[ComfyUIConfigPayload] = None
 
 
 class ServiceTestRequest(BaseModel):
-    service: Literal["llm", "image_generation", "comfyui", "runninghub", "bizyair", "minimax", "mimo", "qwen_audio"]
+    service: Literal["llm", "image_generation", "vision_understanding", "comfyui", "runninghub", "bizyair", "minimax", "mimo", "qwen_audio"]
     config: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -271,6 +271,12 @@ class FrameProcessor:
                 tts_params["speed"] = config.tts_speed
             if getattr(config, "qwen_audio_model", None):
                 tts_params["qwen_audio_model"] = config.qwen_audio_model
+            if getattr(config, "qwen_audio_mode", None):
+                tts_params["qwen_audio_mode"] = config.qwen_audio_mode
+            if getattr(config, "qwen_audio_instruction", None):
+                tts_params["qwen_audio_instruction"] = config.qwen_audio_instruction
+            if getattr(config, "qwen_audio_ref_audio", None):
+                tts_params["qwen_audio_ref_audio"] = config.qwen_audio_ref_audio
         else:  # comfyui
             # ComfyUI mode: pass workflow, voice, speed, and ref_audio
             if config.tts_workflow:

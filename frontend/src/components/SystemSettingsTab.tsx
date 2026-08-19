@@ -39,6 +39,8 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
       updated.comfy = { ...updated.comfy, [field]: value };
     } else if (section === "runninghub") {
       updated.runninghub = { ...updated.runninghub, [field]: value };
+    } else if (section === "visionUnderstanding") {
+      updated.visionUnderstanding = { ...updated.visionUnderstanding, [field]: value };
     } else {
       (updated as any)[section] = value;
     }
@@ -218,6 +220,46 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
 
         <div className="flex justify-end pt-1">
           <TestBtn service="llm" label="测试 LLM 连接" onClick={() => testConnection("llm", settings.llm)} />
+        </div>
+      </section>
+
+      <section className="ui-card space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-display flex items-center gap-2 text-sm font-semibold text-zinc-100">
+            <Cpu className="h-4 w-4 text-amber-500" />
+            阿里百炼视觉理解（参考图提取画风）
+          </h3>
+          <label className="flex items-center gap-2 text-xs text-zinc-300">
+            <input
+              type="checkbox"
+              checked={settings.visionUnderstanding.enabled}
+              onChange={(e) => handleFieldChange("visionUnderstanding", "enabled", e.target.checked)}
+            />
+            启用
+          </label>
+        </div>
+        <p className="text-xs leading-relaxed text-zinc-400">参考图会发送至阿里百炼，仅提取色彩、材质、线条、构图和光影，不复制原图主体。</p>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className={fieldLabel}>API Key</label>
+            <input type="password" value={settings.visionUnderstanding.apiKey} onChange={(e) => handleFieldChange("visionUnderstanding", "apiKey", e.target.value)} className="ui-input" placeholder="请输入百炼 API Key" />
+            {settings.visionUnderstanding.apiKeyMasked && !settings.visionUnderstanding.apiKey && <span className={savedHint}>已保存：{settings.visionUnderstanding.apiKeyMasked}，输入新值可替换</span>}
+          </div>
+          <div className="md:col-span-2">
+            <label className={fieldLabel}>Base URL</label>
+            <input type="text" value={settings.visionUnderstanding.baseUrl} onChange={(e) => handleFieldChange("visionUnderstanding", "baseUrl", e.target.value)} className="ui-input" />
+          </div>
+          <div>
+            <label className={fieldLabel}>主模型</label>
+            <input type="text" value={settings.visionUnderstanding.model} onChange={(e) => handleFieldChange("visionUnderstanding", "model", e.target.value)} className="ui-input" />
+          </div>
+          <div>
+            <label className={fieldLabel}>降级模型</label>
+            <input type="text" value={settings.visionUnderstanding.fallbackModel} onChange={(e) => handleFieldChange("visionUnderstanding", "fallbackModel", e.target.value)} className="ui-input" />
+          </div>
+        </div>
+        <div className="flex justify-end pt-1">
+          <TestBtn service="vision_understanding" label="测试百炼视觉配置" onClick={() => testConnection("vision_understanding", settings.visionUnderstanding)} />
         </div>
       </section>
 
@@ -423,7 +465,7 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
               )}
             </div>
             <div>
-              <label className={fieldLabel}>DashScope API Key（Qwen Audio）</label>
+              <label className={fieldLabel}>DashScope API Key（Qwen TTS / Qwen Audio）</label>
               <input
                 type="password"
                 placeholder="请输入 DashScope API Key，或使用 DASHSCOPE_API_KEY"
@@ -434,6 +476,17 @@ export const SystemSettingsTab: React.FC<SystemSettingsProps> = ({
               {settings.qwenAudioKeyMasked && !settings.qwenAudioKey && (
                 <span className={savedHint}>已保存：{settings.qwenAudioKeyMasked}，输入新值可替换</span>
               )}
+            </div>
+            <div>
+              <label className={fieldLabel}>百炼 Workspace ID（Qwen-Audio-TTS）</label>
+              <input
+                type="text"
+                placeholder="用于 qwen-audio-3.0-tts-*，例如 ws_xxx"
+                value={settings.qwenAudioWorkspaceId}
+                onChange={(e) => handleFieldChange("qwenAudioWorkspaceId", "", e.target.value)}
+                className="ui-input"
+              />
+              <span className="mt-1 block text-caption text-zinc-500">Qwen3-TTS（qwen3-tts-*）无需填写；Qwen-Audio-TTS 的百炼 HTTP 端点需要 Workspace ID。</span>
             </div>
             <div className="grid grid-cols-4 gap-2">
               <TestBtn

@@ -32,6 +32,10 @@ export const VOICE_OPTIONS = {
     { id: "Cherry", name: "Cherry（中文女声）", desc: "Qwen3-TTS 默认音色" },
     { id: "Serena", name: "Serena（英文女声）", desc: "Qwen3-TTS 英文音色" },
     { id: "Ethan", name: "Ethan（男声）", desc: "Qwen3-TTS 男声音色" },
+    { id: "Chelsie", name: "Chelsie（活力女声）", desc: "Qwen3-TTS 系统音色" },
+    { id: "Aiden", name: "Aiden（沉稳男声）", desc: "Qwen3-TTS 系统音色" },
+    { id: "Momo", name: "Momo（亲和女声）", desc: "Qwen3-TTS 系统音色" },
+    { id: "Eric", name: "Eric（清晰男声）", desc: "Qwen3-TTS 系统音色" },
   ],
   comfyui: [
     { id: "comfy-custom-voice1", name: "自定义参考音频 (根据上传克隆)", desc: "由 ComfyUI Audio-Prompt 提取特征" },

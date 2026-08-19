@@ -36,6 +36,9 @@ _CONFIG_KEY_PAIRS: tuple[tuple[str, str], ...] = (
     ("directorMode", "director_mode"),
     ("density", "storyboard_density"),
     ("targetSceneCount", "target_scene_count"),
+    ("styleSlotId", "style_slot_id"),
+    ("stylePrefixSnapshot", "style_prefix_snapshot"),
+    ("styleStrength", "style_strength"),
 )
 
 

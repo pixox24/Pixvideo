@@ -112,9 +112,11 @@ async def test_standard_pipeline_uses_scene_narrations_without_resplitting():
 @pytest.mark.asyncio
 async def test_standard_pipeline_preserves_provided_prompts_and_generates_only_missing(monkeypatch):
     generated_for = []
+    generated_kwargs = {}
 
     async def fake_generate_image_prompts(_llm, narrations, **_kwargs):
         generated_for.extend(narrations)
+        generated_kwargs.update(_kwargs)
         return ["generated missing visual"]
 
     monkeypatch.setattr(
@@ -128,7 +130,12 @@ async def test_standard_pipeline_preserves_provided_prompts_and_generates_only_m
             "composition_mode": "plain_image",
             "scenes": [
                 {"narration": "第一段", "visual_prompt": "provided visual"},
-                {"narration": "第二段", "visual_prompt": ""},
+                {
+                    "narration": "第二段",
+                    "visual_prompt": "",
+                    "visual_focus": "日历特写",
+                    "text_anchors": ["星期一"],
+                },
             ],
         },
     )
@@ -137,5 +144,7 @@ async def test_standard_pipeline_preserves_provided_prompts_and_generates_only_m
     await pipeline.plan_visuals(ctx)
 
     assert generated_for == ["第二段"]
+    assert generated_kwargs["visual_focuses"] == ["日历特写"]
+    assert generated_kwargs["text_anchors"] == [["星期一"]]
     assert "provided visual" in ctx.image_prompts[0]
     assert "generated missing visual" in ctx.image_prompts[1]

@@ -6,6 +6,7 @@ import {
   buildStoryboardNarrations,
   healMidCuts,
   packSemanticUnits,
+  rebalanceLongUnits,
   softExpandByPause,
   splitDraftByRule,
   suggestRhythmSceneCount,
@@ -131,6 +132,19 @@ test("auto split uses pause boundaries for long sentences", () => {
   assert.ok(scenes.length >= 2);
   assert.equal(scenes.join(""), text);
   assert.ok(scenes.every((scene) => scene.replace(/\s+/g, "").length >= 12));
+});
+
+test("auto split bounds an unpunctuated long copy at a rhythm boundary", () => {
+  const text = "今天我们从日历开始规划发布会倒计时并把每一个任务安排到准确的时间线上同时检查人员物料场地和最终确认清单确保发布当天万无一失";
+  const scenes = autoSplitDraft(text);
+  assert.equal(scenes.length, 2);
+  assert.ok(scenes.every((scene) => scene.replace(/\s+/g, "").length <= 52));
+  assert.deepEqual(analyzeStoryboardRecommendation(text, "auto").warnings, []);
+  assert.equal(scenes.join(""), text);
+});
+
+test("custom packing cannot reintroduce an overlong scene", () => {
+  assert.ok(rebalanceLongUnits(["甲".repeat(60)]).every((scene) => scene.length <= 52));
 });
 
 test("auto and sentence split keep decimal dates and versions intact", () => {

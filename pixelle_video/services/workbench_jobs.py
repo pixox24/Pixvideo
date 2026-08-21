@@ -16,6 +16,7 @@ from pixelle_video.services.continuous_tts import (
     extract_audio_segments,
     plan_scene_slices,
 )
+from pixelle_video.services.generation_core import generate_scene_image, synthesize_speech
 from pixelle_video.services.workbench_generation import (
     build_parameter_snapshot,
     normalize_tts_inference_mode,
@@ -107,7 +108,6 @@ class WorkbenchJobService:
             or project_config.get("prompt_prefix")
             or ""
         ).strip()
-        full_prompt = f"{prefix}, {prompt_snapshot}".strip(", ") if prefix else prompt_snapshot
         workflow = (
             project_config.get("workflowId")
             or project_config.get("workflow")
@@ -121,9 +121,10 @@ class WorkbenchJobService:
             use_api_image = use_api_raw.strip().lower() in {"1", "true", "yes", "on", "api"}
         else:
             use_api_image = bool(use_api_raw)
-        result = await self.core.media(
-            prompt=full_prompt,
-            media_type="image",
+        result = await generate_scene_image(
+            self.core,
+            prompt=prompt_snapshot,
+            prefix=prefix,
             workflow=workflow,
             width=gen_w,
             height=gen_h,
@@ -203,35 +204,13 @@ class WorkbenchJobService:
         audio_path = self.media_store.resolve(project_id, audio_relative)
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         tts_kwargs = self._tts_kwargs_for_project(project_id)
-        try:
-            result = await self.core.tts(
-                text=narration_snapshot,
-                output_path=str(audio_path),
-                scene_id=scene_id,
-                **tts_kwargs,
-            )
-        except Exception as exc:
-            # ComfyUI often unavailable in local installs; fall back to Edge TTS.
-            if tts_kwargs.get("inference_mode") == "comfyui":
-                logger.warning(
-                    "ComfyUI TTS failed for project {}, falling back to Edge TTS: {}",
-                    project_id,
-                    exc,
-                )
-                result = await self.core.tts(
-                    text=narration_snapshot,
-                    output_path=str(audio_path),
-                    scene_id=scene_id,
-                    inference_mode="local",
-                    voice="zh-CN-YunjianNeural",
-                    speed=1.0,
-                )
-            else:
-                raise
-        if result and Path(str(result)).resolve() != audio_path.resolve() and Path(str(result)).is_file():
-            shutil.copyfile(result, audio_path)
-        if not audio_path.is_file():
-            raise FileNotFoundError("TTS provider did not create an audio file")
+        await synthesize_speech(
+            self.core,
+            text=narration_snapshot,
+            output_path=str(audio_path),
+            scene_id=scene_id,
+            **tts_kwargs,
+        )
         # TTS providers already post-process; keep a thread-offloaded pass for
         # paths that skip provider postprocess (e.g. copied external files).
         # Never block the asyncio event loop with sync ffmpeg.
@@ -279,35 +258,13 @@ class WorkbenchJobService:
             len(assembled.segments),
             len(assembled.full_text),
         )
-        try:
-            result = await self.core.tts(
-                text=assembled.full_text,
-                output_path=str(continuous_path),
-                scene_id=anchor_scene_id,
-                **tts_kwargs,
-            )
-        except Exception as exc:
-            if tts_kwargs.get("inference_mode") == "comfyui":
-                logger.warning(
-                    "ComfyUI continuous TTS failed for project {}, falling back to Edge: {}",
-                    project_id,
-                    exc,
-                )
-                result = await self.core.tts(
-                    text=assembled.full_text,
-                    output_path=str(continuous_path),
-                    scene_id=anchor_scene_id,
-                    inference_mode="local",
-                    voice="zh-CN-YunjianNeural",
-                    speed=1.0,
-                )
-            else:
-                raise
-
-        if result and Path(str(result)).resolve() != continuous_path.resolve() and Path(str(result)).is_file():
-            shutil.copyfile(result, continuous_path)
-        if not continuous_path.is_file():
-            raise FileNotFoundError("Continuous TTS provider did not create an audio file")
+        await synthesize_speech(
+            self.core,
+            text=assembled.full_text,
+            output_path=str(continuous_path),
+            scene_id=anchor_scene_id,
+            **tts_kwargs,
+        )
 
         # Do NOT re-run loudnorm on the full continuous track here:
         # - Edge / MiniMax / MiMo already post-process the file they write

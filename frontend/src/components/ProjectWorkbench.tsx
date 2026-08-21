@@ -972,6 +972,12 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
             <span className="text-caption">{project.scenes.length} 个分镜</span>
             {statusLabel && <span className="ui-chip ui-chip-brand !py-0">{statusLabel}</span>}
+            {exportCompleted && (
+              <span className="ui-chip ui-chip-success !py-0">
+                {exportIsInitial ? "初稿已导出" : "成片已导出"}
+                {latestExportActive ? " · 新任务进行中" : ""}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -1006,15 +1012,24 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
             </button>
           )}
           {exportCompleted && (
-            <a
-              href={project.latestExport!.outputUrl!}
-              target="_blank"
-              rel="noreferrer"
-              className="ui-btn ui-btn-secondary ui-btn-sm"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              {exportIsInitial ? "打开初稿" : "打开成片"}
-            </a>
+            <>
+              <a
+                href={project.latestExport!.outputUrl!}
+                target="_blank"
+                rel="noreferrer"
+                className="ui-btn ui-btn-secondary ui-btn-sm"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {exportIsInitial ? "打开初稿" : "打开成片"}
+              </a>
+              <a
+                href={project.latestExport!.outputUrl!}
+                download
+                className="ui-btn ui-btn-ghost ui-btn-sm"
+              >
+                下载
+              </a>
+            </>
           )}
           <button
             type="button"
@@ -1055,32 +1070,6 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
         </div>
       </div>
 
-      {exportCompleted && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/15 bg-emerald-500/5 px-3 py-2">
-          <p className="text-xs text-emerald-200">
-            {exportIsInitial ? "初稿已导出完成" : "成片导出完成"}
-            {latestExportActive ? " · 有新的导出任务进行中" : ""}
-          </p>
-          <div className="flex gap-2">
-            <a
-              href={project.latestExport!.outputUrl!}
-              target="_blank"
-              rel="noreferrer"
-              className="ui-btn ui-btn-secondary ui-btn-sm"
-            >
-              打开{exportIsInitial ? "初稿" : "成片"}
-            </a>
-            <a
-              href={project.latestExport!.outputUrl!}
-              download
-              className="ui-btn ui-btn-secondary ui-btn-sm text-emerald-200"
-            >
-              下载
-            </a>
-          </div>
-        </div>
-      )}
-
       {showKeysTip && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/15 bg-amber-500/5 px-3 py-1.5 animate-fade-in">
           <p className="text-caption text-amber-100/80">
@@ -1117,7 +1106,7 @@ export const ProjectWorkbench: React.FC<{ projectId: string; resources?: Workben
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)_minmax(260px,320px)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)_minmax(240px,280px)]">
         <SceneList
           className={mobilePanel === "scenes" ? "flex" : "hidden lg:flex"}
           scenes={project.scenes}

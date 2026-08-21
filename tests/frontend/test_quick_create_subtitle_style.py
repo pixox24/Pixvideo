@@ -55,7 +55,9 @@ def test_quick_create_exposes_dynamic_highlight_controls():
     assert "高亮词" in component
     assert "高亮样式" in component
     assert "高亮缩放" in component
-    assert 'value="word-pop"' in component
+    assert 'value="pop"' in component
     assert "highlightWords" in types
     assert "highlightStyle" in types
     assert "backgroundOpacity" in types
+    assert "底色透明度" in component
+    assert "去内容里改词" in component

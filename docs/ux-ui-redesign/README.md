@@ -1,8 +1,8 @@
 # PixVideo UX/UI 纯界面改造文档包
 
-**日期**：2026-08-10  
+**日期**：2026-08-10（执行叠加层 05：2026-08-20）  
 **范围**：**不改业务功能与 API 契约**，仅优化信息架构呈现、布局、视觉层级与交互质感。  
-**目标气质**：流程清晰 · 布局合理 · 层级明确 · **圆润轻盈（Soft Dark）**。
+**目标气质**：流程清晰 · 布局合理 · 层级明确 · **圆润轻盈（Soft Dark）** · 舞台优先。
 
 ---
 
@@ -13,7 +13,8 @@
 | 1 | [01-design-principles.md](./01-design-principles.md) | 设计原则、视觉 token、文案与动效准则（落地 CSS/Tailwind 的唯一真相源） |
 | 2 | [02-wireframes-create-edit.md](./02-wireframes-create-edit.md) | 生成台 / 精修台文字线框、区块职责、响应式断点、DOM 结构建议 |
 | 3 | [03-component-spec.md](./03-component-spec.md) | 组件规范：按钮/卡片/输入/步骤条/时间线/导航/空状态等（含 class 映射） |
-| 4 | [04-implementation-plan.md](./04-implementation-plan.md) | 分 PR 实施计划、文件清单、验收标准、风险与回滚 |
+| 4 | [04-implementation-plan.md](./04-implementation-plan.md) | 分 PR 实施计划、文件清单、验收标准、风险与回滚（PR-A–G 骨架） |
+| 5 | [05-stage-first-execution.md](./05-stage-first-execution.md) | Stage First 缺口收口执行计划（P0–P2，对照现网代码；A–F 之后的叠加层） |
 
 **关联文档**（业务向，勿与本包混淆）：
 
@@ -62,4 +63,4 @@
 
 ## 建议阅读顺序
 
-1. 原则 → 2. 线框 → 3. 组件 → 4. 实施计划 → 按 PR 开工。
+1. 原则 → 2. 线框 → 3. 组件 → 4. 实施计划（A–F 骨架）→ 5. Stage First 收口执行 → 按 PR-H 起开工。

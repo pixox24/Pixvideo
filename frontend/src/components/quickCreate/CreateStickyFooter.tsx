@@ -71,7 +71,17 @@ export const CreateStickyFooter: React.FC<CreateStickyFooterProps> = ({
             </button>
           )}
           {!expertMode && wizardStep !== "review" && (
-            <button type="button" onClick={onNext} className="ui-btn ui-btn-primary">
+            <button
+              type="button"
+              onClick={onNext}
+              className={`ui-btn ${
+                wizardStep === "content"
+                  ? contentReady
+                    ? "ui-btn-primary"
+                    : "ui-btn-secondary"
+                  : "ui-btn-primary"
+              }`}
+            >
               下一步
             </button>
           )}

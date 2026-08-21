@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Sparkles,
+  Clapperboard,
   History,
   Settings as SettingsIcon,
   Cpu,
@@ -16,6 +17,7 @@ import {
 import { ActiveTab, Preset, QuickCreateInput, Task, SystemSettings } from "./types";
 import { Toast, ToastMessage } from "./components/Toast";
 import { QuickCreate } from "./components/QuickCreate";
+import { ImageToVideo } from "./components/ImageToVideo";
 import { HistoryList } from "./components/HistoryList";
 import { SystemSettingsTab } from "./components/SystemSettingsTab";
 import { ConsolePanel } from "./components/ConsolePanel";
@@ -545,6 +547,25 @@ export default function App() {
     }
   };
 
+  const handleImageToVideoSubmitted = (taskId: string, title: string) => {
+    const task: Task = {
+      id: taskId,
+      title,
+      tabType: "image-to-video",
+      status: "generating",
+      progress: 5,
+      currentStep: "图生视频任务已提交",
+      sceneCount: 1,
+      createdTime: new Date().toLocaleString(),
+      configSummary: "image-to-video",
+      scenes: [],
+    };
+    setTasks((prev) => [task, ...prev]);
+    setActiveTask(task);
+    setConsoleOpen(true);
+    void pollBackendTask(taskId, task);
+  };
+
   // Resume or Retry failed task
   const handleResumeTask = async (task: Task) => {
     if (isPendingTaskId(task.id)) {
@@ -678,6 +699,7 @@ export default function App() {
 
   const tabTitle: Record<ActiveTab, string> = {
     "quick-create": "开始创作",
+    "image-to-video": "图生视频",
     "project-workbench": currentProjectTitle ? `精修 · ${currentProjectTitle}` : "精修",
     history: "作品库",
     settings: "设置",
@@ -773,13 +795,6 @@ export default function App() {
               <Sparkles className="h-4 w-4" />
               <span>开始创作</span>
             </button>
-
-            <div className="pb-1 pt-4">
-              <span className="text-caption mb-1.5 block px-3 font-semibold uppercase tracking-wider">
-                项目
-              </span>
-            </div>
-
             <button
               type="button"
               onClick={() => setActiveTab("project-workbench")}
@@ -788,6 +803,20 @@ export default function App() {
               <FolderOpen className="h-4 w-4" />
               <span>精修</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("image-to-video")}
+              className={`${navBtn("image-to-video", activeTab === "image-to-video")} hidden`}
+            >
+              <Clapperboard className="h-4 w-4" />
+              <span>图生视频</span>
+            </button>
+
+            <div className="pb-1 pt-4">
+              <span className="text-caption mb-1.5 block px-3 font-semibold uppercase tracking-wider">
+                作品
+              </span>
+            </div>
 
             <button
               type="button"
@@ -797,6 +826,12 @@ export default function App() {
               <History className="h-4 w-4" />
               <span>作品库</span>
             </button>
+
+            <div className="pb-1 pt-4">
+              <span className="text-caption mb-1.5 block px-3 font-semibold uppercase tracking-wider">
+                设置
+              </span>
+            </div>
 
             <button
               type="button"
@@ -864,7 +899,7 @@ export default function App() {
 
       <div className="flex h-full min-w-0 flex-1 justify-center bg-[var(--color-surface-0)]">
         <div
-          className={`flex h-full w-full min-w-0 ${
+          className={`h-full flex min-w-0 w-full ${
             activeTab === "project-workbench" && activeProjectId ? "max-w-none" : "max-w-[1680px]"
           }`}
         >
@@ -889,10 +924,11 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            {(!hasLlm || !hasImageGeneration) && (
             <button
               type="button"
               onClick={() => setActiveTab("settings")}
-              className="hidden items-center gap-2 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:border-[var(--color-border-strong)] hover:text-zinc-300 sm:flex"
+              className="hidden items-center gap-2 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] px-2.5 py-1 text-caption text-zinc-500 transition-colors hover:border-[var(--color-border-strong)] hover:text-zinc-300 sm:flex"
               title="查看服务配置"
             >
               <span className={`flex items-center gap-1 ${hasLlm ? "text-emerald-400" : "text-amber-400"}`}>
@@ -913,6 +949,7 @@ export default function App() {
                 图像
               </span>
             </button>
+            )}
 
             {!(activeTab === "project-workbench" && activeProjectId) && (
               <button
@@ -940,9 +977,20 @@ export default function App() {
               : "flex-1 overflow-y-auto p-3 sm:p-5 xl:p-6"
           }
         >
+          {activeTab === "image-to-video" && (
+            <ImageToVideo
+              workflows={resources.workflows}
+              addToast={addToast}
+              onSubmitted={handleImageToVideoSubmitted}
+              onOpenConsole={() => setConsoleOpen(true)}
+              onBackToCreate={() => setActiveTab("quick-create")}
+            />
+          )}
+
           {activeTab === "quick-create" && (
             <QuickCreate
               onGenerateTask={handleGenerateTask}
+              onOpenImageToVideo={() => setActiveTab("image-to-video")}
               latestCompletedTaskId={latestCompletedQuickCreateTask?.id || null}
               latestCompletedTaskTitle={latestCompletedQuickCreateTask?.title || null}
               presets={presets}

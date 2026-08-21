@@ -35,10 +35,10 @@ def test_quick_create_exposes_total_copy_length_controls_using_storyboards():
     assert "文案总字数" in component
     assert "字左右" in component
     assert "字以内" in component
-    assert "每分镜约" in component
-    assert "预计口播" in component
-    assert "分镜数量" in component
-    assert "根据文案语义建议" in component
+    assert "当前目标每镜约" in component
+    assert "预计" in component
+    assert "目标分镜数量" in component
+    assert "采用语义" in component
     assert "buildStoryboardNarrations" in component
     assert "aiSceneCountTouched" in component
     assert 'type="number"' in component

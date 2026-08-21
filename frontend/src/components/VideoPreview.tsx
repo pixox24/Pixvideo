@@ -10,7 +10,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({ src, poster, classNa
   return (
     <div
       className={[
-        "aspect-square w-full overflow-hidden rounded border border-zinc-800 bg-black flex items-center justify-center",
+        "ui-stage aspect-square w-full",
         className,
       ]
         .filter(Boolean)

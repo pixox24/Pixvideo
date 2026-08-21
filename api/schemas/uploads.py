@@ -8,12 +8,7 @@ from pydantic import BaseModel, Field
 class UploadPurpose(str, Enum):
     """The specialist workflow that owns an uploaded file."""
 
-    CUSTOM_MEDIA = "custom-media"
     IMAGE_TO_VIDEO = "image-to-video"
-    ACTION_TRANSFER_VIDEO = "action-transfer-video"
-    ACTION_TRANSFER_IMAGE = "action-transfer-image"
-    DIGITAL_HUMAN_CHARACTER = "digital-human-character"
-    DIGITAL_HUMAN_PRODUCT = "digital-human-product"
 
 
 class UploadedFile(BaseModel):

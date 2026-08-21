@@ -12,7 +12,8 @@ export interface CreateStepperProps {
   styleReady: boolean;
   voiceReady: boolean;
   reviewConfirmed: boolean;
-  draftSavedAt: number | null;
+  draftSavedAt: string | null;
+  presetSlot?: React.ReactNode;
   onGoStep: (step: WizardStepId) => void;
   onRequestNext: () => void;
   onToggleExpert: () => void;
@@ -26,6 +27,7 @@ export const CreateStepper: React.FC<CreateStepperProps> = ({
   voiceReady,
   reviewConfirmed,
   draftSavedAt,
+  presetSlot,
   onGoStep,
   onRequestNext,
   onToggleExpert,
@@ -96,7 +98,7 @@ export const CreateStepper: React.FC<CreateStepperProps> = ({
                 }`}
               >
                 <span
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-caption font-semibold ${
                     current
                       ? "bg-amber-500 text-black"
                       : completed
@@ -120,13 +122,16 @@ export const CreateStepper: React.FC<CreateStepperProps> = ({
             : `步骤 ${stepIndex + 1}/${WIZARD_STEPS.length} · ${WIZARD_STEP_HINT[wizardStep]}`}
           {draftSavedAt ? ` · 草稿 ${new Date(draftSavedAt).toLocaleTimeString()}` : ""}
         </p>
-        <button
-          type="button"
-          onClick={onToggleExpert}
-          className="text-xs text-zinc-400 underline-offset-2 hover:text-amber-300 hover:underline"
-        >
-          {expertMode ? "退出专家模式" : "专家模式（展开全部）"}
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {presetSlot}
+          <button
+            type="button"
+            onClick={onToggleExpert}
+            className="text-xs text-zinc-400 underline-offset-2 hover:text-amber-300 hover:underline"
+          >
+            {expertMode ? "退出专家模式" : "专家模式（展开全部）"}
+          </button>
+        </div>
       </div>
     </nav>
   );

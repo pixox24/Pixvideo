@@ -21,14 +21,8 @@ MAX_FILES_PER_REQUEST = 20
 CHUNK_SIZE_BYTES = 1024 * 1024
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 PURPOSE_EXTENSIONS = {
-    UploadPurpose.CUSTOM_MEDIA: IMAGE_EXTENSIONS | VIDEO_EXTENSIONS,
     UploadPurpose.IMAGE_TO_VIDEO: IMAGE_EXTENSIONS - {".gif"},
-    UploadPurpose.ACTION_TRANSFER_VIDEO: {".mp4", ".mkv", ".mov"},
-    UploadPurpose.ACTION_TRANSFER_IMAGE: IMAGE_EXTENSIONS - {".gif"},
-    UploadPurpose.DIGITAL_HUMAN_CHARACTER: IMAGE_EXTENSIONS - {".gif"},
-    UploadPurpose.DIGITAL_HUMAN_PRODUCT: IMAGE_EXTENSIONS - {".gif"},
 }
 
 

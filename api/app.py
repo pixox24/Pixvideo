@@ -48,11 +48,9 @@ from api.routers import (
     configuration_router,
     content_router,
     files_router,
-    frame_router,
     health_router,
     history_router,
     image_router,
-    llm_router,
     projects_router,
     resources_router,
     specialist_router,
@@ -132,15 +130,13 @@ app = FastAPI(
     - 📝 **Content**: Automated content generation
     - 🎬 **Video**: End-to-end video generation
     
-    ### Video Generation Modes
-    - **Sync**: `/api/video/generate/sync` - For small videos (< 30s)
-    - **Async**: `/api/video/generate/async` - For large videos with task tracking
+    ### Video Generation
+    - **Async**: `/api/video/generate/async` — submit a generation task and poll progress
     
     ### Getting Started
     1. Check health: `GET /health`
-    2. Generate narrations: `POST /api/content/narration`
-    3. Generate video: `POST /api/video/generate/sync` or `/async`
-    4. Track task progress: `GET /api/tasks/{task_id}`
+    2. Generate video: `POST /api/video/generate/async`
+    3. Track task progress: `GET /api/tasks/{task_id}`
     """,
     version="0.1.0",
     docs_url=api_config.docs_url,
@@ -165,7 +161,6 @@ if api_config.cors_enabled:
 app.include_router(health_router)
 
 # API routers (with /api prefix)
-app.include_router(llm_router, prefix=api_config.api_prefix)
 app.include_router(tts_router, prefix=api_config.api_prefix)
 app.include_router(image_router, prefix=api_config.api_prefix)
 app.include_router(content_router, prefix=api_config.api_prefix)
@@ -173,7 +168,6 @@ app.include_router(video_router, prefix=api_config.api_prefix)
 app.include_router(tasks_router, prefix=api_config.api_prefix)
 app.include_router(files_router, prefix=api_config.api_prefix)
 app.include_router(resources_router, prefix=api_config.api_prefix)
-app.include_router(frame_router, prefix=api_config.api_prefix)
 app.include_router(configuration_router, prefix=api_config.api_prefix)
 app.include_router(history_router, prefix=api_config.api_prefix)
 app.include_router(workbench_router, prefix=api_config.api_prefix)

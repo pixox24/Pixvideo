@@ -867,23 +867,76 @@ async def generate_image_prompts(
     return all_prompts
 
 
+def _stringify_image_prompt_items(items: list) -> Optional[List[str]]:
+    prompts: List[str] = []
+    for item in items:
+        if isinstance(item, str) and item.strip():
+            prompts.append(item.strip())
+            continue
+        if isinstance(item, dict):
+            for key in ("image_prompt", "prompt", "visual_prompt", "text"):
+                value = item.get(key)
+                if isinstance(value, str) and value.strip():
+                    prompts.append(value.strip())
+                    break
+            else:
+                return None
+            continue
+        return None
+    return prompts or None
+
+
+def _coerce_image_prompt_list(payload) -> Optional[List[str]]:
+    """Accept both ``{"image_prompts":[...]}`` and a bare JSON string array."""
+    if isinstance(payload, list):
+        return _stringify_image_prompt_items(payload)
+    if not isinstance(payload, dict):
+        return None
+    for key in ("image_prompts", "prompts", "data", "images"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return _stringify_image_prompt_items(value)
+    return None
+
+
 def _parse_image_prompt_response(text: str) -> dict[str, List[str]]:
-    """Parse an object-shaped JSON response with non-empty string prompts."""
+    """Parse model output into ``{"image_prompts": [...]}``.
+
+    Models frequently return a bare JSON array, omit commas between prompts,
+    or wrap a valid array in a broken object. All of those must still work.
+    """
     raw = str(text or "").strip()
     if not raw:
         raise ValueError("empty image prompt response")
     fenced = re.fullmatch(r"```(?:json)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
     if fenced:
         raw = fenced.group(1).strip()
-    payload = _loads_model_json(raw)
-    if not isinstance(payload, dict):
-        raise ValueError("image prompt response must be a JSON object")
-    prompts = payload.get("image_prompts")
-    if not isinstance(prompts, list):
-        raise ValueError("image_prompts must be a JSON array")
-    if any(not isinstance(item, str) or not item.strip() for item in prompts):
-        raise ValueError("image_prompts must contain only non-empty strings")
-    return {"image_prompts": [item.strip() for item in prompts]}
+
+    payload = None
+    parse_error: Exception | None = None
+    try:
+        payload = _loads_model_json(raw)
+    except json.JSONDecodeError as exc:
+        parse_error = exc
+        try:
+            payload = _parse_json(raw)
+        except json.JSONDecodeError:
+            payload = None
+
+    prompts = _coerce_image_prompt_list(payload)
+    if not prompts:
+        prompts = _recover_image_prompts(raw)
+    if not prompts:
+        logger.warning(
+            "Image prompt JSON parse failed ({}); payload_type={}: {}",
+            parse_error,
+            type(payload).__name__,
+            raw[:800],
+        )
+        raise ValueError(
+            "画面提示词 JSON 无法解析。模型输出不是可用的提示词列表，请再试一次。"
+        ) from parse_error
+    return {"image_prompts": prompts}
 
 
 def _repair_unescaped_json_quotes(text: str) -> str:
@@ -920,7 +973,18 @@ def _repair_unescaped_json_quotes(text: str) -> str:
         # A structural quote is followed by JSON punctuation and, for a
         # comma/colon, another JSON token. This avoids mistaking prose such as
         # ``marked "MONDAY", then`` for the end of the surrounding string.
-        structural = bool(
+        # Adjacent long quoted spans ("prompt one"\n"prompt two") are also
+        # structural: models often omit the comma between array strings.
+        next_string = re.match(r'\s*"((?:\\.|[^"\\])*)"', remainder)
+        next_looks_like_value = bool(
+            next_string
+            and (
+                " " in next_string.group(1)
+                or "," in next_string.group(1)
+                or len(next_string.group(1)) >= 20
+            )
+        )
+        structural = next_looks_like_value or bool(
             re.match(r'\s*(?:[}\]]|,\s*(?:["}\]])|:\s*(?:["\d{\[]))', remainder)
         )
         if structural:
@@ -931,19 +995,119 @@ def _repair_unescaped_json_quotes(text: str) -> str:
     return "".join(output)
 
 
+def _escape_control_chars_in_json_strings(text: str) -> str:
+    """Escape raw newlines/tabs that models drop inside JSON string values."""
+    output: list[str] = []
+    in_string = False
+    escaped = False
+    for char in str(text or ""):
+        if not in_string:
+            output.append(char)
+            if char == '"':
+                in_string = True
+            continue
+        if escaped:
+            output.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            output.append(char)
+            escaped = True
+            continue
+        if char == '"':
+            output.append(char)
+            in_string = False
+            continue
+        if char == "\n":
+            output.append("\\n")
+            continue
+        if char == "\r":
+            output.append("\\r")
+            continue
+        if char == "\t":
+            output.append("\\t")
+            continue
+        if ord(char) < 32:
+            output.append(f"\\u{ord(char):04x}")
+            continue
+        output.append(char)
+    return "".join(output)
+
+
+def _insert_missing_commas_between_json_values(text: str) -> str:
+    """Insert commas between adjacent JSON values, e.g. ``"a"\\n"b"`` -> ``"a","b"``.
+
+    Some models pretty-print ``image_prompts`` one string per line and omit the
+    comma. That surfaces as ``Expecting ',' delimiter: line N column 1``.
+    """
+    output: list[str] = []
+    in_string = False
+    escaped = False
+    for char in str(text or ""):
+        if in_string:
+            output.append(char)
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            index = len(output) - 1
+            while index >= 0 and output[index] in " \t\n\r":
+                index -= 1
+            if index >= 0 and output[index] in '"]}':
+                output.append(",")
+            in_string = True
+            output.append(char)
+            continue
+        output.append(char)
+    return "".join(output)
+
+
+def _repair_model_json(text: str) -> str:
+    repaired = _repair_unescaped_json_quotes(text)
+    repaired = _escape_control_chars_in_json_strings(repaired)
+    repaired = _insert_missing_commas_between_json_values(repaired)
+    return re.sub(r",\s*([}\]])", r"\1", repaired)
+
+
+def _recover_image_prompts(text: str) -> Optional[List[str]]:
+    """Pull complete prompt strings out of a broken ``image_prompts`` array."""
+    repaired = _repair_model_json(str(text or ""))
+    marker = re.search(r'"image_prompts"\s*:\s*\[', repaired)
+    if not marker:
+        return None
+    items: List[str] = []
+    for match in re.finditer(r'"((?:\\.|[^"\\])*)"', repaired[marker.end() :]):
+        value = match.group(1)
+        try:
+            value = json.loads(f'"{value}"')
+        except json.JSONDecodeError:
+            value = value.replace('\\"', '"').replace("\\n", "\n")
+        value = str(value).strip()
+        if not value or value == "image_prompts":
+            continue
+        items.append(value)
+    return items or None
+
+
 def _loads_model_json(text: str):
     """Load strict JSON first, then recover common LLM quoting mistakes."""
     raw = str(text or "").strip()
     try:
         return json.loads(raw)
     except json.JSONDecodeError as strict_error:
-        repaired = _repair_unescaped_json_quotes(raw)
-        if repaired == raw:
-            raise strict_error
-        try:
-            return json.loads(repaired)
-        except json.JSONDecodeError:
-            raise strict_error
+        repaired = _repair_model_json(raw)
+        if repaired != raw:
+            try:
+                return json.loads(repaired)
+            except json.JSONDecodeError:
+                pass
+        raise strict_error
 
 
 async def generate_video_prompts(

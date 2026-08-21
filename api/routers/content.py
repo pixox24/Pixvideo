@@ -10,72 +10,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Content generation endpoints
-
-Endpoints for generating narrations, image prompts, and titles.
-"""
+"""Content generation endpoints used by the React workbench."""
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 
 from api.dependencies import PixelleVideoDep
-from api.schemas.content import (
-    ImagePromptGenerateRequest,
-    ImagePromptGenerateResponse,
-    KeywordExtractRequest,
-    KeywordExtractResponse,
-    NarrationGenerateRequest,
-    NarrationGenerateResponse,
-    TitleGenerateRequest,
-    TitleGenerateResponse,
-)
-from pixelle_video.utils.content_generators import (
-    generate_highlight_keywords,
-    generate_image_prompts,
-    generate_narrations_from_topic,
-    generate_title,
-)
+from api.schemas.content import KeywordExtractRequest, KeywordExtractResponse
+from pixelle_video.utils.content_generators import generate_highlight_keywords
 
 router = APIRouter(prefix="/content", tags=["Content Generation"])
-
-
-@router.post("/narration", response_model=NarrationGenerateResponse)
-async def generate_narration(
-    request: NarrationGenerateRequest,
-    pixelle_video: PixelleVideoDep
-):
-    """
-    Generate narrations from text
-    
-    Uses LLM to break down text into multiple narration segments.
-    
-    - **text**: Source text
-    - **n_scenes**: Number of narrations to generate
-    - **min_words**: Minimum words per narration
-    - **max_words**: Maximum words per narration
-    
-    Returns list of narration strings.
-    """
-    try:
-        logger.info(f"Generating {request.n_scenes} narrations from text")
-        
-        # Call narration generator utility function
-        narrations = await generate_narrations_from_topic(
-            llm_service=pixelle_video.llm,
-            topic=request.text,
-            n_scenes=request.n_scenes,
-            min_words=request.min_words,
-            max_words=request.max_words
-        )
-        
-        return NarrationGenerateResponse(
-            narrations=narrations
-        )
-        
-    except Exception as e:
-        logger.error(f"Narration generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/keywords", response_model=KeywordExtractResponse)
@@ -83,9 +27,7 @@ async def extract_keywords(
     request: KeywordExtractRequest,
     pixelle_video: PixelleVideoDep,
 ):
-    """
-    Extract highlight keywords (with suggested colors) from narration text.
-    """
+    """Extract highlight keywords (with suggested colors) from narration text."""
     try:
         logger.info(f"Extracting up to {request.max_keywords} highlight keywords")
         keywords = await generate_highlight_keywords(
@@ -99,74 +41,4 @@ async def extract_keywords(
         return KeywordExtractResponse(keywords=keywords)
     except Exception as e:
         logger.error(f"Keyword extraction error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/image-prompt", response_model=ImagePromptGenerateResponse)
-async def generate_image_prompt(
-    request: ImagePromptGenerateRequest,
-    pixelle_video: PixelleVideoDep
-):
-    """
-    Generate image prompts from narrations
-    
-    Uses LLM to create detailed image generation prompts.
-    
-    - **narrations**: List of narration texts
-    - **min_words**: Minimum words per prompt
-    - **max_words**: Maximum words per prompt
-    
-    Returns list of image prompts.
-    """
-    try:
-        logger.info(f"Generating image prompts for {len(request.narrations)} narrations")
-        
-        # Call image prompt generator utility function
-        image_prompts = await generate_image_prompts(
-            llm_service=pixelle_video.llm,
-            narrations=request.narrations,
-            min_words=request.min_words,
-            max_words=request.max_words
-        )
-        
-        return ImagePromptGenerateResponse(
-            image_prompts=image_prompts
-        )
-        
-    except Exception as e:
-        logger.error(f"Image prompt generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/title", response_model=TitleGenerateResponse)
-async def generate_title_endpoint(
-    request: TitleGenerateRequest,
-    pixelle_video: PixelleVideoDep
-):
-    """
-    Generate video title from text
-    
-    Uses LLM to create an engaging title.
-    
-    - **text**: Source text
-    - **style**: Optional title style hint
-    
-    Returns generated title.
-    """
-    try:
-        logger.info("Generating title from text")
-        
-        # Call title generator utility function
-        title = await generate_title(
-            llm_service=pixelle_video.llm,
-            content=request.text,
-            strategy="llm"
-        )
-        
-        return TitleGenerateResponse(
-            title=title
-        )
-        
-    except Exception as e:
-        logger.error(f"Title generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

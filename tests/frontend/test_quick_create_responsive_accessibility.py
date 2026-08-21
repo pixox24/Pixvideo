@@ -24,13 +24,13 @@ def test_tab_changes_reset_the_workspace_scroll_position():
 def test_service_status_is_truthful_and_fake_language_toggle_is_removed():
     app = Path("frontend/src/App.tsx").read_text(encoding="utf-8")
 
-    assert "settings.llm.provider" in app
+    assert "settings.llm.apiKey" in app
     assert "serviceStatus.llm" in app
     assert "LLM Connected" not in app
     assert "BizyAir Ready" not in app
     assert "setLang" not in app
     assert "serviceStatus.minimax" in app
-    assert "MiniMax TTS" in app
+    assert "MiniMax 配音" in app
 
 
 def test_changed_form_controls_have_associated_labels_and_visible_delete_action():

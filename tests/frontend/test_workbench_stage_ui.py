@@ -34,3 +34,14 @@ def test_run_panel_uses_ui_buttons():
     assert "ui-btn-primary" in RUN
     assert "配音" in RUN and "画面" in RUN and "编码" in RUN
     assert "ProgressObservatory" in WB or "progress" in WB.lower()
+
+
+def test_export_complete_lives_in_topbar_not_second_full_width_bar():
+    assert "成片已导出" in WB or "初稿已导出" in WB
+    assert "bg-emerald-500/5 px-3 py-2" not in WB
+    assert "成片导出完成" not in WB
+    assert "showKeysTip" in WB
+    assert "audioRef" in WB
+    assert "bgmAudioRef" in WB
+    assert "togglePlay" in WB
+    assert "minmax(240px,280px)" in WB

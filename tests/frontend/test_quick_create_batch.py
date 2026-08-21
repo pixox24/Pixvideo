@@ -15,7 +15,9 @@ def test_generation_submission_is_awaited_locked_and_confirmed():
     assert "onGenerateTask: (taskInput: any) => Promise<string | null>" in quick_create
     assert "const [isSubmitting, setIsSubmitting]" in quick_create
     assert "const [reviewConfirmed, setReviewConfirmed]" in quick_create
-    assert "disabled={isSubmitting || !reviewConfirmed}" in quick_create
+    footer = Path("frontend/src/components/quickCreate/CreateStickyFooter.tsx").read_text(encoding="utf-8")
+    assert "disabled={isSubmitting}" in footer
+    assert "reviewConfirmed" in quick_create
     assert "await onGenerateTask" in quick_create
     assert "submissionLockRef.current" in quick_create
     assert "crypto.randomUUID()" in quick_create

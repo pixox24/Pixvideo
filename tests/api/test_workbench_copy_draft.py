@@ -3,6 +3,8 @@ from types import SimpleNamespace
 import pytest
 
 from api.routers import workbench
+from api.routers import workbench_script
+from api.routers import workbench_support
 
 
 def _valid_llm_config():
@@ -15,7 +17,7 @@ async def test_generate_copy_draft_returns_segmented_editable_text(monkeypatch):
     async def fake_narrations(**_kwargs):
         return ["第一段旁白", "第二段旁白"]
 
-    monkeypatch.setattr(workbench, "generate_narrations_from_topic", fake_narrations)
+    monkeypatch.setattr(workbench_script, "generate_narrations_from_topic", fake_narrations)
 
     request = workbench.GenerateCopyDraftRequest(
         topic="未来城市",
@@ -71,8 +73,8 @@ async def test_generate_script_uses_confirmed_segmented_copy_without_regeneratin
     async def fake_image_prompts(**kwargs):
         return [f"visual {index + 1}" for index, _ in enumerate(kwargs["narrations"])]
 
-    monkeypatch.setattr(workbench, "generate_narrations_from_topic", fail_if_topic_generation_is_used)
-    monkeypatch.setattr(workbench, "generate_image_prompts", fake_image_prompts)
+    monkeypatch.setattr(workbench_script, "generate_narrations_from_topic", fail_if_topic_generation_is_used)
+    monkeypatch.setattr(workbench_script, "generate_image_prompts", fake_image_prompts)
 
     request = workbench.GenerateScriptRequest(
         topic="未来城市",
@@ -107,8 +109,8 @@ async def test_generate_script_passes_semantic_visual_focus_to_image_prompts(mon
         captured["visual_focuses"] = kwargs["visual_focuses"]
         return ["visual 1", "visual 2"]
 
-    monkeypatch.setattr(workbench, "segment_narration_semantically", fake_segment)
-    monkeypatch.setattr(workbench, "generate_image_prompts", fake_image_prompts)
+    monkeypatch.setattr(workbench_support, "segment_narration_semantically", fake_segment)
+    monkeypatch.setattr(workbench_script, "generate_image_prompts", fake_image_prompts)
 
     result = await workbench.generate_script(
         workbench.GenerateScriptRequest(

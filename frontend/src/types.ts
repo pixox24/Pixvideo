@@ -1,5 +1,6 @@
 export type ActiveTab =
   | "quick-create"
+  | "image-to-video"
   | "project-workbench"
   | "history"
   | "settings";

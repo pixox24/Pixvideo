@@ -3,6 +3,7 @@ import json
 import pytest
 
 from api.routers import workbench
+from api.routers import workbench_support
 
 
 def test_quick_create_preset_excludes_template_mode(monkeypatch):
@@ -23,7 +24,7 @@ def test_quick_create_preset_excludes_template_mode(monkeypatch):
             "template": {"composition_mode": "template"},
         }.get(key, default),
     )
-    monkeypatch.setattr(workbench, "resource_exists", lambda *_args: False)
+    monkeypatch.setattr(workbench_support, "resource_exists", lambda *_args: False)
 
     preset = workbench._preset_from_config()
 
@@ -84,9 +85,9 @@ def _fallback_preset():
 @pytest.mark.asyncio
 async def test_quick_create_presets_can_create_update_set_default_and_delete(monkeypatch, tmp_path):
     preset_path = tmp_path / "quick_create_presets.json"
-    monkeypatch.setattr(workbench, "QUICK_CREATE_PRESETS_PATH", preset_path, raising=False)
+    monkeypatch.setattr(workbench_support, "QUICK_CREATE_PRESETS_PATH", preset_path)
     monkeypatch.setattr(workbench.config_manager, "save_quick_create_config", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(workbench, "_preset_from_config", lambda *_args, **_kwargs: _fallback_preset())
+    monkeypatch.setattr(workbench_support, "_preset_from_config", lambda *_args, **_kwargs: _fallback_preset())
 
     created_response = await workbench.save_preset(_preset_payload("小红书竖屏口播"))
     created = created_response["preset"]
@@ -126,9 +127,9 @@ async def test_quick_create_presets_can_create_update_set_default_and_delete(mon
 @pytest.mark.asyncio
 async def test_quick_create_preset_preserves_global_workbench_fields(monkeypatch, tmp_path):
     preset_path = tmp_path / "quick_create_presets.json"
-    monkeypatch.setattr(workbench, "QUICK_CREATE_PRESETS_PATH", preset_path, raising=False)
+    monkeypatch.setattr(workbench_support, "QUICK_CREATE_PRESETS_PATH", preset_path)
     monkeypatch.setattr(workbench.config_manager, "save_quick_create_config", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(workbench, "_preset_from_config", lambda *_args, **_kwargs: _fallback_preset())
+    monkeypatch.setattr(workbench_support, "_preset_from_config", lambda *_args, **_kwargs: _fallback_preset())
 
     response = await workbench.save_preset(_preset_payload())
     preset = response["preset"]
@@ -186,10 +187,10 @@ def test_quick_create_preset_normalizes_subtitle_values_at_storage_boundary():
 @pytest.mark.asyncio
 async def test_prompt_prefix_save_updates_selected_quick_create_preset(monkeypatch, tmp_path):
     preset_path = tmp_path / "quick_create_presets.json"
-    monkeypatch.setattr(workbench, "QUICK_CREATE_PRESETS_PATH", preset_path, raising=False)
+    monkeypatch.setattr(workbench_support, "QUICK_CREATE_PRESETS_PATH", preset_path)
     monkeypatch.setattr(workbench.config_manager, "save_quick_create_config", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(workbench.config_manager, "set_prompt_prefix", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(workbench, "_preset_from_config", lambda *_args, **_kwargs: _fallback_preset())
+    monkeypatch.setattr(workbench_support, "_preset_from_config", lambda *_args, **_kwargs: _fallback_preset())
 
     created_response = await workbench.save_preset(_preset_payload("竖屏默认工作台"))
     created = created_response["preset"]

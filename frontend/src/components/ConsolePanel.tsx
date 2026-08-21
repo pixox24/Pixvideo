@@ -1,5 +1,5 @@
 import React from "react";
-import { Sliders, RefreshCw, FileText, CheckCircle2, XCircle, Play, Download, Settings, ChevronRight } from "lucide-react";
+import { XCircle, Download, ChevronRight } from "lucide-react";
 import { Task } from "../types";
 import { VideoPreview } from "./VideoPreview";
 
@@ -137,10 +137,14 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
         <span className="text-xs font-semibold tracking-wide text-zinc-300">
           任务进度
         </span>
-        <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
-        </span>
+        {activeTask?.status === "generating" ? (
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+          </span>
+        ) : (
+          <span className="h-2 w-2" />
+        )}
         <button
           type="button"
           onClick={onClose}
@@ -154,122 +158,100 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
       {/* 2. Active Run Monitor or Config Summary */}
       <div className="space-y-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-2)]/60 p-4">
         {activeTask ? (
-          <div className="space-y-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] text-amber-500 font-mono uppercase tracking-wider block font-bold">
-                  {activeTask.status === "completed" ? "●成片已就绪" : activeTask.status === "cancelled" ? "●任务已取消" : activeTask.status === "failed" ? "●任务失败" : "●正在生成视频..."}
-                </span>
-                <h4 className="text-sm font-semibold text-zinc-100 mt-1 line-clamp-1">{activeTask.title}</h4>
-              </div>
-              <span className="text-xs font-mono font-semibold text-amber-400">{activeTask.progress}%</span>
+          <div className="ui-card space-y-3 !p-4">
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="min-w-0 flex-1 text-sm font-semibold text-zinc-100 line-clamp-1">{activeTask.title}</h4>
+              <span className="shrink-0 text-caption font-medium text-zinc-400">{activeTask.progress}%</span>
+            </div>
+            <div>
+              {activeTask.status === "completed" && <span className="ui-chip ui-chip-success">成片已就绪</span>}
+              {activeTask.status === "generating" && <span className="ui-chip ui-chip-brand">生成中</span>}
+              {activeTask.status === "failed" && <span className="ui-chip ui-chip-danger">失败</span>}
+              {activeTask.status === "cancelled" && <span className="ui-chip">已取消</span>}
             </div>
 
-            {/* Flat styled progress bar */}
-            <div className="w-full bg-zinc-850 h-1.5 rounded-full overflow-hidden">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-surface-4)]">
               <div
-                className="bg-gradient-to-r from-amber-600 to-amber-400 h-full rounded-full transition-all duration-300"
+                className="h-full rounded-full bg-[var(--color-brand-500)] transition-all duration-300"
                 style={{ width: `${activeTask.progress}%` }}
               />
             </div>
 
-            <div className="bg-zinc-950/50 border border-zinc-850 rounded px-2.5 py-2 text-[10px] font-mono leading-relaxed">
-              <span className="text-zinc-500 uppercase mr-1.5">当前步骤:</span>
-              <span className="text-amber-300">{formatLiveProgressLabel(activeTask)}</span>
-            </div>
+            <p className="text-caption leading-relaxed text-zinc-400">
+              当前步骤 · {formatLiveProgressLabel(activeTask)}
+            </p>
 
             {activeTask.status === "generating" && (
               <button
                 type="button"
                 onClick={() => onCancelTask(activeTask)}
-                className="w-full py-1.5 border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white rounded text-xs font-medium flex items-center justify-center gap-1.5"
+                className="ui-btn ui-btn-secondary w-full"
               >
-                <XCircle className="w-3.5 h-3.5" />
+                <XCircle className="h-3.5 w-3.5" />
                 取消任务
               </button>
             )}
 
-            {/* Multi-step list indicator */}
-            <div className="space-y-2 pt-1">
-              <span className="text-[10px] text-zinc-500 font-mono uppercase block">时序生成进度:</span>
-              <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono">
-                {GENERATION_PROGRESS_STEPS.map((step, idx) => {
-                  const status = getStepStatus(activeTask, idx);
-                  return (
-                    <div
-                      key={step.key}
-                      className={`px-2 py-1 rounded flex items-center justify-between transition-colors ${
-                        status === "completed"
-                          ? "bg-emerald-500/5 text-emerald-400 border border-emerald-500/10"
-                          : status === "current"
-                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold animate-pulse"
-                          : status === "failed"
-                          ? "bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold"
-                          : status === "cancelled"
-                          ? "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 font-bold"
-                          : "bg-zinc-900/60 text-zinc-550 border border-transparent"
-                      }`}
-                    >
-                      <span>{String(idx + 1).padStart(2, "0")} {step.label}</span>
-                      {status === "completed" && <span className="text-[8px] uppercase">OK</span>}
-                      {status === "current" && <span className="text-[8px] uppercase">RUN</span>}
-                      {status === "failed" && <span className="text-[8px] uppercase">ERR</span>}
-                      {status === "cancelled" && <span className="text-[8px] uppercase">STOP</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <ol className="space-y-1.5">
+              {GENERATION_PROGRESS_STEPS.map((step, idx) => {
+                const status = getStepStatus(activeTask, idx);
+                return (
+                  <li key={step.key} className="flex items-center justify-between gap-2">
+                    <span className="text-caption text-zinc-400">
+                      {String(idx + 1).padStart(2, "0")} {step.label}
+                    </span>
+                    {status === "completed" && <span className="ui-chip ui-chip-success">OK</span>}
+                    {status === "current" && <span className="ui-chip ui-chip-brand">进行中</span>}
+                    {status === "failed" && <span className="ui-chip ui-chip-danger">失败</span>}
+                    {status === "cancelled" && <span className="ui-chip">已取消</span>}
+                    {status === "pending" && <span className="text-caption text-zinc-600">待处理</span>}
+                  </li>
+                );
+              })}
+            </ol>
 
-            {/* Quick output preview if completed right in sidebar */}
             {activeTask.status === "completed" && activeTask.videoUrl && (
-              <div className="space-y-2 pt-2 border-t border-zinc-900 animate-fade-in">
-                <span className="text-[10px] text-zinc-500 font-mono uppercase block">成片即时预览:</span>
+              <div className="space-y-2 pt-2">
                 <VideoPreview
                   src={activeTask.videoUrl}
                   poster={activeTask.scenes?.[0]?.imageUrl}
-                  className="border-zinc-850"
                 />
                 <a
                   href={activeTask.videoUrl}
                   download
                   onClick={() => addToast("开始下载高清成品视频", "success")}
-                  className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-semibold rounded flex items-center justify-center gap-1.5 transition-colors"
+                  className="ui-btn ui-btn-primary w-full"
                 >
-                  <Download className="w-3.5 h-3.5 text-black" />
+                  <Download className="h-3.5 w-3.5 text-black" />
                   下载最终成片视频 (MP4)
                 </a>
               </div>
             )}
 
-            {/* Error Output if failed */}
             {activeTask.status === "failed" && (
-              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-2.5 rounded text-[11px] font-mono leading-relaxed animate-fade-in">
-                <strong className="font-semibold block mb-0.5 flex items-center gap-1">
-                  <XCircle className="w-3.5 h-3.5" /> 错误日志:
-                </strong>
+              <div className="ui-panel text-sm leading-relaxed text-rose-300">
+                <strong className="mb-1 block font-semibold">生成失败</strong>
                 {activeTask.errorMsg || "未知配置错误，检查底层算力秘钥是否就绪。"}
               </div>
             )}
           </div>
         ) : (
-          <div className="py-4 text-center space-y-2">
-            <Sliders className="w-6 h-6 text-zinc-600 mx-auto animate-pulse-slow" />
-            <p className="text-xs text-zinc-400 font-medium">控制台就绪，等待生产任务</p>
-            <p className="text-[10px] text-zinc-500 max-w-[180px] mx-auto leading-normal">
-              在左侧中心工作台中配置大模型及配乐，点击“生成视频”开始。
+          <div className="ui-card space-y-1 py-6 text-center">
+            <p className="text-sm font-medium text-zinc-300">还没有运行中的任务</p>
+            <p className="text-caption mx-auto max-w-[220px] text-zinc-500">
+              在开始创作里提交后，进度会出现在这里。
             </p>
           </div>
         )}
       </div>
 
       {/* 3. Recent Tasks Queue */}
-      <div className="p-4 flex-1 flex flex-col min-h-0">
-        <h3 className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-2.5 block font-bold">
-          最近生产队列 / Recent Jobs
+      <div className="flex min-h-0 flex-1 flex-col p-4">
+        <h3 className="mb-2.5 block text-caption font-semibold tracking-wider text-zinc-500">
+          最近任务
         </h3>
 
-        <div className="space-y-2.5 overflow-y-auto flex-1 pr-1">
+        <div className="flex-1 space-y-2.5 overflow-y-auto pr-1">
           {recentTasks.map((t) => (
             <div
               key={t.id}
@@ -277,36 +259,20 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
               className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] p-2.5 text-xs transition-colors hover:ring-1 hover:ring-amber-500/20"
             >
               <div className="min-w-0">
-                <span className="font-medium text-zinc-350 block truncate group-hover:text-zinc-200">
+                <span className="block truncate font-medium text-zinc-200">
                   {t.title}
                 </span>
-                <span className="text-[9px] font-mono text-zinc-550 block mt-1">
-                  {t.createdTime.split(" ")[1]} • {t.sceneCount} 帧分镜
+                <span className="mt-1 block text-caption text-zinc-500">
+                  {t.createdTime.split(" ")[1]} · {t.sceneCount} 镜
                 </span>
               </div>
 
-              <div className="flex-shrink-0 flex items-center gap-1.5">
-                {t.status === "completed" && (
-                  <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.5 rounded font-mono">
-                    已就绪
-                  </span>
-                )}
-                {t.status === "failed" && (
-                  <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1 py-0.5 rounded font-mono">
-                    失败
-                  </span>
-                )}
-                {t.status === "generating" && (
-                  <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded font-mono animate-pulse">
-                    渲染中
-                  </span>
-                )}
-                {t.status === "cancelled" && (
-                  <span className="text-[9px] bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 px-1 py-0.5 rounded font-mono">
-                    已取消
-                  </span>
-                )}
-                <ChevronRight className="w-3 h-3 text-zinc-650" />
+              <div className="flex flex-shrink-0 items-center gap-1.5">
+                {t.status === "completed" && <span className="ui-chip ui-chip-success">已就绪</span>}
+                {t.status === "failed" && <span className="ui-chip ui-chip-danger">失败</span>}
+                {t.status === "generating" && <span className="ui-chip ui-chip-brand">渲染中</span>}
+                {t.status === "cancelled" && <span className="ui-chip">已取消</span>}
+                <ChevronRight className="h-3 w-3 text-zinc-500" />
               </div>
             </div>
           ))}

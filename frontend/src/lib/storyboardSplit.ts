@@ -9,7 +9,7 @@ export type DraftSplitType = "auto" | "paragraph" | "line" | "sentence";
 export type StoryboardDensity = "sparse" | "standard" | "dense";
 
 export const STORYBOARD_SCENE_MIN = 1;
-export const STORYBOARD_SCENE_MAX = 30;
+export const STORYBOARD_SCENE_MAX = 100;
 
 /** Minimum length of each side when soft-splitting on pause punctuation. */
 const SOFT_EXPAND_MIN_PART = 4;

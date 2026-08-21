@@ -16,21 +16,11 @@ API Schemas (Pydantic models)
 
 from api.schemas.base import BaseResponse, ErrorResponse
 from api.schemas.content import (
-    ImagePromptGenerateRequest,
-    ImagePromptGenerateResponse,
-    NarrationGenerateRequest,
-    NarrationGenerateResponse,
-    TitleGenerateRequest,
-    TitleGenerateResponse,
+    KeywordExtractRequest,
+    KeywordExtractResponse,
 )
 from api.schemas.image import ImageGenerateRequest, ImageGenerateResponse
-from api.schemas.llm import LLMChatRequest, LLMChatResponse
-from api.schemas.specialist import (
-    ActionTransferGenerateRequest,
-    CustomMediaGenerateRequest,
-    DigitalHumanGenerateRequest,
-    ImageToVideoGenerateRequest,
-)
+from api.schemas.specialist import ImageToVideoGenerateRequest
 from api.schemas.tts import TTSSynthesizeRequest, TTSSynthesizeResponse
 from api.schemas.uploads import UploadedFile, UploadPurpose, UploadResponse
 from api.schemas.video import (
@@ -43,9 +33,6 @@ __all__ = [
     # Base
     "BaseResponse",
     "ErrorResponse",
-    # LLM
-    "LLMChatRequest",
-    "LLMChatResponse",
     # TTS
     "TTSSynthesizeRequest",
     "TTSSynthesizeResponse",
@@ -53,12 +40,8 @@ __all__ = [
     "ImageGenerateRequest",
     "ImageGenerateResponse",
     # Content
-    "NarrationGenerateRequest",
-    "NarrationGenerateResponse",
-    "ImagePromptGenerateRequest",
-    "ImagePromptGenerateResponse",
-    "TitleGenerateRequest",
-    "TitleGenerateResponse",
+    "KeywordExtractRequest",
+    "KeywordExtractResponse",
     # Video
     "VideoGenerateRequest",
     "VideoGenerateResponse",
@@ -68,9 +51,6 @@ __all__ = [
     "UploadedFile",
     "UploadResponse",
     # Specialist generation
-    "CustomMediaGenerateRequest",
     "ImageToVideoGenerateRequest",
-    "ActionTransferGenerateRequest",
-    "DigitalHumanGenerateRequest",
 ]
 

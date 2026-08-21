@@ -22,6 +22,7 @@ Spec documents:
 | `.ui-input` / `.ui-input-error` | Text inputs & textareas |
 | `.ui-chip` + semantic modifiers | Status pills |
 | `.ui-sticky-footer` | Create-flow sticky bar shell |
+| `.ui-segment` | Segmented control (`aria-pressed`) |
 | `.text-label` / `.text-caption` | Type helpers |
 
 ## Usage

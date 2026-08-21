@@ -133,7 +133,7 @@ export const Select: React.FC<SelectProps> = ({
         aria-expanded={open}
         onClick={() => !disabled && setOpen((isOpen) => !isOpen)}
         onKeyDown={handleKeyDown}
-        className={`flex w-full items-center justify-between gap-2 !rounded-lg !border !border-zinc-700/80 !bg-[#17181c] px-3 py-2 text-left text-zinc-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition duration-150 hover:!border-zinc-600 focus:outline-none focus-visible:!border-amber-500 focus-visible:ring-2 focus-visible:ring-amber-500/25 disabled:cursor-not-allowed disabled:opacity-45 ${className}`}
+        className={`flex h-10 w-full items-center justify-between gap-2 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] px-3 text-left text-sm text-[var(--color-text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition duration-150 hover:border-[var(--color-border-default)] focus:outline-none focus-visible:border-amber-500/60 focus-visible:ring-2 focus-visible:ring-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       >
         <span className="min-w-0 flex-1 truncate">{selectedOption?.label ?? "请选择"}</span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-150 ${open ? "rotate-180 text-amber-400" : ""}`} />
@@ -144,7 +144,7 @@ export const Select: React.FC<SelectProps> = ({
           id={listboxId}
           role="listbox"
           aria-labelledby={triggerId}
-          className="absolute left-0 top-[calc(100%+0.375rem)] z-50 max-h-64 w-full overflow-y-auto rounded-xl border border-zinc-700/80 bg-[#17181c]/98 p-1.5 shadow-[0_18px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+          className="absolute left-0 top-[calc(100%+0.375rem)] z-50 max-h-64 w-full overflow-y-auto rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] p-1.5 shadow-[var(--shadow-soft)]"
         >
           {options.map((option, index) => {
             const selected = option.value === currentValue;
@@ -165,8 +165,8 @@ export const Select: React.FC<SelectProps> = ({
                     : selected
                       ? "bg-amber-500/12 text-amber-100"
                       : active
-                        ? "bg-zinc-800 text-zinc-100"
-                        : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                        ? "bg-[var(--color-surface-4)] text-[var(--color-text-primary)]"
+                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-4)] hover:text-[var(--color-text-primary)]"
                 }`}
               >
                 <span className="min-w-0 flex-1 truncate">{option.label}</span>

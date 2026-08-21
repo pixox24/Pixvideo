@@ -15,6 +15,8 @@ def test_quick_create_and_console_are_wider_on_large_screens():
 
     assert "max-w-[1240px]" in quick_create
     assert "mx-auto" in quick_create
+    assert "xl:grid-cols-[minmax(0,48rem)_20rem]" in quick_create
+    assert "CreateStageRail" in quick_create
     assert "lg:w-96" in console
     assert "xl:w-[400px]" in console
     assert "lg:w-80" not in console

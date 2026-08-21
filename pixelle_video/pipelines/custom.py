@@ -14,7 +14,8 @@
 Custom Video Generation Pipeline
 
 Template pipeline for creating your own custom video generation workflows.
-This serves as a reference implementation showing how to extend BasePipeline.
+This file is not registered in production. Copy it and register the copy
+on PixelleVideoCore.pipelines if you need a custom one-shot pipeline.
 
 For real projects, copy this file and modify it according to your needs.
 """

@@ -25,19 +25,15 @@ from comfykit import ComfyKit
 from loguru import logger
 
 from pixelle_video.config import config_manager
-from pixelle_video.pipelines.asset_based import AssetBasedPipeline
-from pixelle_video.pipelines.custom import CustomPipeline
 from pixelle_video.pipelines.standard import StandardPipeline
 from pixelle_video.services.frame_processor import FrameProcessor
 from pixelle_video.services.history_manager import HistoryManager
-from pixelle_video.services.image_analysis import ImageAnalysisService
 from pixelle_video.services.llm_service import LLMService
 from pixelle_video.services.media import MediaService
 from pixelle_video.services.persistence import PersistenceService
 from pixelle_video.services.project_generation_service import ProjectGenerationService
 from pixelle_video.services.tts_service import TTSService
 from pixelle_video.services.video import VideoService
-from pixelle_video.services.video_analysis import VideoAnalysisService
 from pixelle_video.services.workbench_jobs import WorkbenchJobService
 from pixelle_video.services.workbench_media import WorkbenchMediaStore
 from pixelle_video.services.workbench_repository import WorkbenchRepository
@@ -72,9 +68,7 @@ class PixelleVideoCore:
           ├── tts (TTS service - ComfyKit workflows)
           ├── media (Media service - ComfyKit workflows, supports image & video)
           └── pipelines (video generation pipelines)
-              ├── standard (standard workflow)
-              ├── custom (custom workflow template)
-              └── ... (extensible)
+              └── standard (default one-shot workflow)
     """
     
     def __init__(self, config_path: str = "config.yaml"):
@@ -208,8 +202,6 @@ class PixelleVideoCore:
         self.tts = TTSService(self.config, core=self)
         self.media = MediaService(self.config, core=self)
         self.image = self.media  # Alias for backward compatibility
-        self.image_analysis = ImageAnalysisService(self.config, core=self)
-        self.video_analysis = VideoAnalysisService(self.config, core=self)
         self.video = VideoService()
         self.frame_processor = FrameProcessor(self)
         self.persistence = PersistenceService(output_dir="output")
@@ -231,8 +223,6 @@ class PixelleVideoCore:
         # 2. Register video generation pipelines
         self.pipelines = {
             "standard": StandardPipeline(self),
-            "custom": CustomPipeline(self),
-            "asset_based": AssetBasedPipeline(self),
         }
         logger.info(f"📹 Registered pipelines: {', '.join(self.pipelines.keys())}")
         
@@ -290,7 +280,7 @@ class PixelleVideoCore:
             
             Args:
                 text: Input text
-                pipeline: Pipeline name ("standard", "book_summary", etc.)
+                pipeline: Pipeline name ("standard")
                 **kwargs: Pipeline-specific parameters
             
             Returns:
@@ -303,11 +293,9 @@ class PixelleVideoCore:
                     n_scenes=5
                 )
                 
-                # Use custom pipeline
                 result = await pixelle_video.generate_video(
                     text=your_content,
-                    pipeline="custom",
-                    custom_param_example="custom_value"
+                    pipeline="standard",
                 )
             """
             if pipeline not in self.pipelines:

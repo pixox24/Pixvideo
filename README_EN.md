@@ -93,7 +93,7 @@ PIXELLE_TEST_IMAGE_PATH=/absolute/path/existing.png uv run python api/app.py
 cd frontend && npm run dev
 
 # Run the example generator
-uv run python generate_video.py
+uv run python examples/generate_video.py
 
 # Run tests
 uv run --extra dev pytest

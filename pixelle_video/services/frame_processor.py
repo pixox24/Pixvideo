@@ -288,7 +288,9 @@ class FrameProcessor:
             if config.ref_audio:
                 tts_params["ref_audio"] = config.ref_audio
 
-        audio_path = await self.core.tts(**tts_params)
+        from pixelle_video.services.generation_core import synthesize_speech
+
+        audio_path = await synthesize_speech(self.core, **tts_params)
 
         frame.audio_path = audio_path
 
@@ -349,8 +351,9 @@ class FrameProcessor:
             media_params["duration"] = frame.duration
             logger.info(f"  → Generating video with target duration: {frame.duration:.2f}s (from TTS audio)")
 
-        # Call Media generation
-        media_result = await self.core.media(**media_params)
+        from pixelle_video.services.generation_core import generate_scene_image
+
+        media_result = await generate_scene_image(self.core, **media_params)
 
         # Store media type
         frame.media_type = media_result.media_type

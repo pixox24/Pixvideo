@@ -21,12 +21,12 @@ async def test_uploads_store_safe_file_keys_and_preview_urls(tmp_path, monkeypat
     monkeypatch.setattr(uploads, "get_data_path", lambda *parts: str(tmp_path.joinpath("data", *parts)))
 
     response = await uploads.upload_files(
-        UploadPurpose.CUSTOM_MEDIA,
+        UploadPurpose.IMAGE_TO_VIDEO,
         [make_upload("camping.png", b"image-data", "image/png")],
     )
 
     stored = response.files[0]
-    assert response.purpose is UploadPurpose.CUSTOM_MEDIA
+    assert response.purpose is UploadPurpose.IMAGE_TO_VIDEO
     assert stored.filename == "camping.png"
     assert stored.size == len(b"image-data")
     assert stored.file_key == f"data/uploads/{response.upload_id}/file-01.png"
@@ -85,9 +85,9 @@ def test_uploaded_file_keys_require_a_matching_manifest(tmp_path, monkeypatch):
     file_key = "data/uploads/batch/file-01.png"
     (upload_dir / "file-01.png").write_bytes(b"image")
     (upload_dir / "manifest.json").write_text(
-        '{"purpose":"image-to-video","files":[{"file_key":"data/uploads/batch/file-01.png"}]}',
+        '{"purpose":"image-to-video","files":[{"file_key":"data/uploads/batch/other.png"}]}',
         encoding="utf-8",
     )
 
     with pytest.raises(HTTPException, match="not valid"):
-        uploads.resolve_uploaded_file_keys([file_key], UploadPurpose.CUSTOM_MEDIA)
+        uploads.resolve_uploaded_file_keys([file_key], UploadPurpose.IMAGE_TO_VIDEO)

@@ -47,7 +47,7 @@ export const SceneInspector: React.FC<Props> = ({ scene, onSave, onRegenerateIma
           {saveState === "saving" ? "保存中" : saveState === "saved" ? "已保存" : saveState === "failed" ? "保存失败" : ""}
         </span>
       </div>
-      <div className="mb-3 flex items-center justify-between gap-2 rounded border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-2 py-1.5 text-caption text-zinc-400">
+      <div className="ui-panel mb-3 flex items-center justify-between gap-2 !px-2 !py-1.5 text-caption text-zinc-400">
         <span>{scene.locked ? "重新生成会跳过此镜头" : "人工修改会自动保留"}</span>
         <button
           type="button"
@@ -70,7 +70,7 @@ export const SceneInspector: React.FC<Props> = ({ scene, onSave, onRegenerateIma
         />
       </label>
       {(scene.visualFocus || (scene.textAnchors || []).length > 0) && (
-        <div className="mb-3 rounded border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-2 py-1.5 text-caption text-zinc-400">
+        <div className="ui-panel mb-3 !px-2 !py-1.5 text-caption text-zinc-400">
           <div>视觉焦点：{scene.visualFocus || "—"}</div>
           {(scene.textAnchors || []).length > 0 && <div className="mt-0.5">文字锚点：{scene.textAnchors!.join("、")}</div>}
         </div>

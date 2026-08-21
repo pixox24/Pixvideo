@@ -13,7 +13,7 @@
 """
 Video generation endpoints
 
-Supports both synchronous and asynchronous video generation.
+Asynchronous video generation used by Quick Create.
 """
 
 import os
@@ -25,7 +25,6 @@ from api.dependencies import PixelleVideoDep
 from api.schemas.video import (
     VideoGenerateAsyncResponse,
     VideoGenerateRequest,
-    VideoGenerateResponse,
 )
 from api.tasks import TaskType, task_manager
 
@@ -183,47 +182,6 @@ def _build_video_params(request_body: VideoGenerateRequest, progress_callback=No
         video_params["progress_callback"] = progress_callback
 
     return {key: value for key, value in video_params.items() if value is not None}
-
-
-@router.post("/generate/sync", response_model=VideoGenerateResponse)
-async def generate_video_sync(
-    request_body: VideoGenerateRequest,
-    pixelle_video: PixelleVideoDep,
-    request: Request
-):
-    """
-    Generate video synchronously
-    
-    This endpoint blocks until video generation is complete.
-    Suitable for small videos (< 30 seconds).
-    
-    **Note**: May timeout for large videos. Use `/generate/async` instead.
-    
-    Request body includes all video generation parameters.
-    See VideoGenerateRequest schema for details.
-    
-    Returns path to generated video, duration, and file size.
-    """
-    try:
-        logger.info(f"Sync video generation: {request_body.text[:50]}...")
-        video_params = _build_video_params(request_body)
-        result = await pixelle_video.generate_video(**video_params)
-        
-        # Get file size
-        file_size = os.path.getsize(result.video_path) if os.path.exists(result.video_path) else 0
-        
-        # Convert path to URL
-        video_url = path_to_url(request, result.video_path)
-        
-        return VideoGenerateResponse(
-            video_url=video_url,
-            duration=result.duration,
-            file_size=file_size
-        )
-        
-    except Exception as e:
-        logger.error(f"Sync video generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/generate/async", response_model=VideoGenerateAsyncResponse)

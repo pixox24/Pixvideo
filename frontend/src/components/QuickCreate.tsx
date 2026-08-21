@@ -43,6 +43,8 @@ import { ConfirmModal } from "./ConfirmModal";
 import { type WizardStepId, WIZARD_STAGE_ID } from "./quickCreate/wizard";
 import { CreateStepper } from "./quickCreate/CreateStepper";
 import { CreateStickyFooter } from "./quickCreate/CreateStickyFooter";
+import { AdvancedFold } from "./quickCreate/AdvancedFold";
+import { CreateStageRail } from "./quickCreate/CreateStageRail";
 import { dismissCreateTip, isCreateTipDismissed } from "../lib/onboarding";
 import {
   analyzeStoryboardRecommendation,
@@ -89,6 +91,7 @@ interface QuickCreateProps {
   serviceReady?: ServiceReadyState;
   onOpenSettings?: () => void;
   onOpenConsole?: () => void;
+  onOpenImageToVideo?: () => void;
 }
 
 type FieldErrors = Partial<Record<"title" | "content" | "review" | "tts", string>>;
@@ -218,7 +221,7 @@ const DEFAULT_BOX_RADIUS = 12;
 const DEFAULT_BOX_OPACITY = 72;
 
 const DEFAULT_SUBTITLE_STYLE: SubtitleStyle = {
-  mode: "hyperframes",
+  mode: "ass",
   preset: "caption-box",
   fontFamily: "",
   fontPath: "",
@@ -331,6 +334,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   serviceReady,
   onOpenSettings,
   onOpenConsole,
+  onOpenImageToVideo,
 }) => {
   // Main states
   const [mode, setMode] = useState<"ai" | "manual" | "batch">("ai");
@@ -443,6 +447,15 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const [expertMode, setExpertMode] = useState(false);
   const [showAdvancedProduction, setShowAdvancedProduction] = useState(false);
   const [showAdvancedKeywords, setShowAdvancedKeywords] = useState(false);
+  const [contentAdvancedOpen, setContentAdvancedOpen] = useState(false);
+  const prevNonDefaultRef = React.useRef(false);
+  const prevExpertRef = React.useRef(false);
+  const skipNextNonDefaultRiseRef = React.useRef(false);
+  const prevKeywordsNonDefaultRef = React.useRef(false);
+  const skipNextKeywordsRiseRef = React.useRef(false);
+  const [voiceAdvancedOpen, setVoiceAdvancedOpen] = useState(false);
+  const prevVoiceNonDefaultRef = React.useRef(false);
+  const skipNextVoiceRiseRef = React.useRef(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [reuseSourceTaskId, setReuseSourceTaskId] = useState<string | null>(null);
   const [reuseAssetsEnabled, setReuseAssetsEnabled] = useState(false);
@@ -628,6 +641,30 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           setKeywordPreferences(normalizeKeywordPreferences(draft.keywordPreferences));
           setDraftSavedAt(typeof draft.savedAt === "string" ? draft.savedAt : null);
           setShowDraftBanner(true);
+          const hydratedCopyCount = typeof draft.copyCharCount === "number" ? draft.copyCharCount : 200;
+          const hydratedCopyMode = ["around", "within"].includes(draft.copyCharCountMode) ? draft.copyCharCountMode : "around";
+          const hydratedDirector = draft.directorMode === "custom" ? "custom" : "auto";
+          const hydratedDensity = draft.storyboardDensity || "standard";
+          const hydratedSplit = ["auto", "paragraph", "line", "sentence"].includes(draft.splitType) ? draft.splitType : "auto";
+          if (
+            hydratedCopyCount !== 200 ||
+            hydratedCopyMode !== "around" ||
+            hydratedDirector !== "auto" ||
+            hydratedDensity !== "standard" ||
+            hydratedSplit !== "auto"
+          ) {
+            setContentAdvancedOpen(true);
+            prevNonDefaultRef.current = true;
+          }
+          const hydratedKeywords = normalizeKeywordPreferences(draft.keywordPreferences);
+          if (
+            hydratedKeywords.style !== "balanced" ||
+            hydratedKeywords.density !== "standard" ||
+            hydratedKeywords.autoExtract === false
+          ) {
+            setShowAdvancedKeywords(true);
+            prevKeywordsNonDefaultRef.current = true;
+          }
         }
       }
     } catch {
@@ -721,6 +758,67 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       setCopyCharCount(suggestCopyCharCount(aiSceneCount));
     }
   }, [aiSceneCount, copyCharCountTouched]);
+
+  const contentAdvancedHasNonDefault =
+    copyCharCount !== 200 ||
+    copyCharCountMode !== "around" ||
+    directorMode !== "auto" ||
+    storyboardDensity !== "standard" ||
+    splitType !== "auto";
+  const keywordsAdvancedHasNonDefault =
+    aiKeywordSuggestions.length > 0 ||
+    keywordPreferences.style !== "balanced" ||
+    keywordPreferences.density !== "standard" ||
+    keywordPreferences.autoExtract === false;
+  const voiceAdvancedHasNonDefault =
+    ttsDelivery === "per_scene" || qwenAudioMode === "design" || qwenAudioMode === "clone";
+
+  React.useEffect(() => {
+    const expertRose = expertMode && !prevExpertRef.current;
+    prevExpertRef.current = expertMode;
+    if (expertRose) {
+      setContentAdvancedOpen(true);
+      setShowAdvancedProduction(true);
+      setShowAdvancedKeywords(true);
+      setVoiceAdvancedOpen(true);
+      skipNextNonDefaultRiseRef.current = false;
+      skipNextKeywordsRiseRef.current = false;
+      skipNextVoiceRiseRef.current = false;
+    }
+  }, [expertMode]);
+
+  React.useEffect(() => {
+    const rose = contentAdvancedHasNonDefault && !prevNonDefaultRef.current;
+    prevNonDefaultRef.current = contentAdvancedHasNonDefault;
+    if (rose && !skipNextNonDefaultRiseRef.current) {
+      setContentAdvancedOpen(true);
+    }
+    if (!contentAdvancedHasNonDefault) {
+      skipNextNonDefaultRiseRef.current = false;
+    }
+  }, [contentAdvancedHasNonDefault]);
+
+  React.useEffect(() => {
+    const rose = keywordsAdvancedHasNonDefault && !prevKeywordsNonDefaultRef.current;
+    prevKeywordsNonDefaultRef.current = keywordsAdvancedHasNonDefault;
+    if (rose && !skipNextKeywordsRiseRef.current) {
+      setShowAdvancedKeywords(true);
+    }
+    if (!keywordsAdvancedHasNonDefault) {
+      skipNextKeywordsRiseRef.current = false;
+    }
+  }, [keywordsAdvancedHasNonDefault]);
+
+  React.useEffect(() => {
+    const rose = voiceAdvancedHasNonDefault && !prevVoiceNonDefaultRef.current;
+    prevVoiceNonDefaultRef.current = voiceAdvancedHasNonDefault;
+    if (rose && !skipNextVoiceRiseRef.current) {
+      setVoiceAdvancedOpen(true);
+    }
+    if (!voiceAdvancedHasNonDefault) {
+      skipNextVoiceRiseRef.current = false;
+    }
+  }, [voiceAdvancedHasNonDefault]);
 
   React.useEffect(() => {
     if (workflowOptions.length === 0) return;
@@ -917,19 +1015,19 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
   const renderSelectedKeywordEditor = () => (
     <div className="space-y-1.5">
       <label className="block">
-        <span className="block text-[10px] text-zinc-500 mb-1">已选高亮词（逗号分隔）</span>
+        <span className="block text-caption mb-1">已选高亮词（逗号分隔）</span>
         <textarea
           value={(subtitleStyle.highlightWords || []).join("，")}
           onChange={(e) => applyHighlightKeywords(parseHighlightWords(e.target.value))}
           rows={2}
           placeholder="例如：表达力，重点"
-          className="w-full resize-y min-h-16 max-h-32 bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+          className="ui-input min-h-16 max-h-32 resize-y"
         />
       </label>
       {(subtitleStyle.highlightWords || []).length > 0 && (
         <div className="space-y-1.5">
           {(subtitleStyle.highlightWords || []).map((word) => (
-            <div key={word} className="flex items-center gap-2 rounded border border-zinc-800 bg-[#0c0d10] px-2 py-1.5">
+            <div key={word} className="flex items-center gap-2 rounded border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] px-2 py-1.5">
               <span
                 className="min-w-0 flex-1 truncate text-xs font-semibold"
                 style={{ color: subtitleStyle.keywordColors?.[word] || subtitleStyle.accentColor }}
@@ -940,7 +1038,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 type="color"
                 value={subtitleStyle.keywordColors?.[word] || subtitleStyle.accentColor || "#FFD43B"}
                 onChange={(e) => updateSubtitleStyle({ keywordColors: { ...(subtitleStyle.keywordColors || {}), [word]: e.target.value } })}
-                className="h-7 w-10 cursor-pointer rounded border border-zinc-800 bg-transparent p-0.5"
+                className="h-7 w-10 cursor-pointer rounded border border-[var(--color-border-subtle)] bg-transparent p-0.5"
                 title={`${word} 颜色`}
               />
               <button
@@ -960,6 +1058,152 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           ))}
         </div>
       )}
+    </div>
+  );
+
+  const renderKeywordExtractionPanel = () => (
+    <div id="keyword-extraction" className="mt-3 space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <div className="text-xs font-medium text-zinc-300">字幕高亮词（可选）</div>
+          <div className="text-caption mt-0.5">
+            {keywordStatus === "loading" && "正在分析当前文案..."}
+            {keywordStatus === "stale" && "文案已修改，建议重新抽词"}
+            {keywordStatus === "error" && "抽词失败，可重新尝试"}
+            {keywordStatus === "ready" && (aiKeywordSuggestions.length ? `已生成 ${aiKeywordSuggestions.length} 个候选` : "候选已处理")}
+            {keywordStatus === "idle" && "在这里选词和调色；风格页只决定字幕怎么亮"}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleExtractKeywords}
+          disabled={keywordStatus === "loading" || !keywordSourceText()}
+          className="ui-btn ui-btn-secondary ui-btn-sm"
+        >
+          {keywordStatus === "loading" ? <Loader className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+          {keywordStatus === "stale" || keywordStatus === "error" || keywordStatus === "ready" ? "重新抽取" : "AI 抽词"}
+        </button>
+      </div>
+      {(subtitleStyle.highlightWords || []).length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {(subtitleStyle.highlightWords || []).map((word) => (
+            <span
+              key={word}
+              className="ui-chip"
+              style={{ color: subtitleStyle.keywordColors?.[word] || subtitleStyle.accentColor }}
+            >
+              {word}
+              <button
+                type="button"
+                aria-label={`移除 ${word}`}
+                onClick={() => {
+                  const nextWords = (subtitleStyle.highlightWords || []).filter((item) => item !== word);
+                  const nextColors = { ...(subtitleStyle.keywordColors || {}) };
+                  delete nextColors[word];
+                  updateSubtitleStyle({ highlightWords: nextWords, keywordColors: nextColors });
+                }}
+                className="text-zinc-500 hover:text-zinc-200"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <AdvancedFold
+        title="抽词选项"
+        open={showAdvancedKeywords}
+        onToggle={(next) => {
+          setShowAdvancedKeywords(next);
+          if (!next && keywordsAdvancedHasNonDefault) skipNextKeywordsRiseRef.current = true;
+          if (next) skipNextKeywordsRiseRef.current = false;
+        }}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="block text-caption mb-1">抽取风格</span>
+            <Select
+              value={keywordPreferences.style}
+              onChange={(e) => {
+                updateKeywordPreferences({ style: e.target.value as KeywordExtractionStyle });
+              }}
+            >
+              <option value="balanced">综合</option>
+              <option value="concept">核心概念</option>
+              <option value="selling_point">产品卖点</option>
+              <option value="emotion">情绪表达</option>
+              <option value="numeric">数字信息</option>
+              <option value="action">行动号召</option>
+            </Select>
+          </label>
+          <label className="block">
+            <span className="block text-caption mb-1">抽取密度</span>
+            <Select
+              value={keywordPreferences.density}
+              onChange={(e) => {
+                updateKeywordPreferences({ density: e.target.value as KeywordExtractionDensity });
+              }}
+            >
+              <option value="low">少</option>
+              <option value="standard">标准</option>
+              <option value="high">多</option>
+            </Select>
+          </label>
+        </div>
+        {mode === "ai" && (
+          <label className="inline-flex items-center gap-2 text-caption cursor-pointer">
+            <input
+              type="checkbox"
+              checked={keywordPreferences.autoExtract}
+              onChange={(e) => updateKeywordPreferences({ autoExtract: e.target.checked })}
+              className="h-3.5 w-3.5 accent-amber-500"
+            />
+            生成文案后自动抽词
+          </label>
+        )}
+        {aiKeywordSuggestions.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-caption">AI 推荐</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => applyKeywordSuggestions(aiKeywordSuggestions)}
+                  disabled={keywordStatus === "loading"}
+                  className="text-caption text-amber-300 hover:text-amber-200 disabled:opacity-50"
+                >
+                  全部应用
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSwapKeywordSuggestions}
+                  disabled={keywordStatus === "loading" || !keywordSourceText()}
+                  className="ui-btn ui-btn-ghost ui-btn-sm"
+                >
+                  {keywordStatus === "loading" ? <Loader className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                  换一批
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {aiKeywordSuggestions.map((item) => (
+                <button
+                  key={item.word}
+                  type="button"
+                  onClick={() => applyKeywordSuggestions([item])}
+                  title={`应用“${item.word}”`}
+                  className="ui-chip"
+                  style={{ color: item.color }}
+                >
+                  {item.word}
+                  <Plus className="h-3 w-3" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {renderSelectedKeywordEditor()}
+      </AdvancedFold>
     </div>
   );
 
@@ -1274,6 +1518,21 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       }
       if (activePreset.copyCharCountMode) setCopyCharCountMode(activePreset.copyCharCountMode);
       if (activePreset.copyDraftMode) setCopyDraftMode(activePreset.copyDraftMode);
+      const presetCopyCount = activePreset.copyCharCount || 200;
+      const presetCopyMode = activePreset.copyCharCountMode || "around";
+      const presetDirector = activePreset.directorMode || (activePreset.sceneCount ? "custom" : "auto");
+      const presetDensity = activePreset.density || "standard";
+      const presetSplit = activePreset.splitType || "auto";
+      if (
+        presetCopyCount !== 200 ||
+        presetCopyMode !== "around" ||
+        presetDirector !== "auto" ||
+        presetDensity !== "standard" ||
+        presetSplit !== "auto"
+      ) {
+        setContentAdvancedOpen(true);
+        prevNonDefaultRef.current = true;
+      }
       if (activePreset.mediaWidth) setImageWidth(activePreset.mediaWidth);
       if (activePreset.mediaHeight) setImageHeight(activePreset.mediaHeight);
       if (activePreset.videoFps) setVideoFps(activePreset.videoFps);
@@ -2135,7 +2394,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         </div>
       )}
 
-      {serviceReady && (
+      {serviceReady && readinessIssues.length > 0 && (
         <div className={`rounded-xl border px-3 py-2.5 ${readinessIssues.length ? "border-amber-500/30 bg-amber-500/5" : "border-emerald-500/20 bg-emerald-500/5"}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-zinc-200">
@@ -2183,12 +2442,87 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         onGoStep={goWizard}
         onRequestNext={handleWizardNext}
         onToggleExpert={() => setExpertMode((value) => !value)}
+        presetSlot={
+          <div className="relative flex flex-wrap items-center gap-1.5">
+            <Select
+              value={activePreset?.id || ""}
+              onChange={(e) => {
+                const preset = presets.find((item) => item.id === e.target.value);
+                if (preset) onSelectPreset(preset);
+              }}
+              aria-label="预设"
+              className="min-w-[9rem]"
+            >
+              <option value="">选择预设</option>
+              {presets.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name}{preset.id === defaultPresetId ? " · 默认" : ""}
+                </option>
+              ))}
+            </Select>
+            <button
+              type="button"
+              onClick={handleUpdatePreset}
+              disabled={!activePreset}
+              className="ui-btn ui-btn-secondary ui-btn-sm"
+            >
+              <Save className="w-3.5 h-3.5 text-amber-500" />
+              覆盖当前预设
+            </button>
+            <button
+              type="button"
+              onClick={handleCreatePreset}
+              className="ui-btn ui-btn-primary ui-btn-sm"
+            >
+              <Plus className="w-3.5 h-3.5 text-black" />
+              另存为
+            </button>
+            <button
+              type="button"
+              onClick={() => setPresetMenuOpen((open) => !open)}
+              className="ui-btn ui-btn-ghost ui-btn-sm"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+              更多
+            </button>
+            {presetMenuOpen && (
+              <div className="absolute right-0 top-full mt-1.5 z-20 w-36 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] shadow-[var(--shadow-soft)]">
+                <button
+                  type="button"
+                  onClick={handleSetDefaultPreset}
+                  disabled={!activePreset || activePreset.id === defaultPresetId}
+                  className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:bg-[var(--color-surface-3)] disabled:text-zinc-600"
+                >
+                  设为默认
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeletePreset}
+                  disabled={!activePreset}
+                  className="w-full px-3 py-2 text-left text-xs text-rose-300 hover:bg-rose-950/20 disabled:text-zinc-600"
+                >
+                  删除预设
+                </button>
+              </div>
+            )}
+            <input
+              type="text"
+              value={presetNameDraft}
+              onChange={(e) => setPresetNameDraft(e.target.value)}
+              placeholder="预设名称"
+              aria-label="预设名称"
+              className="ui-input h-8 w-36 text-xs"
+            />
+          </div>
+        }
       />
+
+      <div className="xl:grid xl:grid-cols-[minmax(0,48rem)_20rem] xl:items-start xl:gap-6">
+      <div className="min-w-0 max-w-3xl space-y-5 xl:max-w-none">
 
       {/* Step 1: Content */}
       <div className={showContentStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
-      {/* Task Header Title */}
-      <div id="stage-content" className="ui-card space-y-3 scroll-mt-24">
+      <div id="stage-content" className="ui-card space-y-4 scroll-mt-24">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex-1">
           <label htmlFor="quick-create-title" className="block text-label mb-0.5">
@@ -2203,7 +2537,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               if (fieldErrors.title) setFieldErrors((prev) => ({ ...prev, title: undefined }));
             }}
             className={`bg-transparent border-b text-zinc-100 font-medium text-base w-full py-0.5 focus:outline-none font-display transition-colors ${
-              fieldErrors.title ? "border-rose-500" : "border-zinc-800 focus:border-amber-500"
+              fieldErrors.title ? "border-rose-500" : "border-[var(--color-border-subtle)] focus:border-amber-500"
             }`}
           />
           {fieldErrors.title && <p className="mt-1 text-xs text-rose-400">{fieldErrors.title}</p>}
@@ -2214,137 +2548,27 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(180px,260px)_minmax(180px,1fr)_auto] gap-2 items-end">
-          <div>
-            <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
-              工作台预设 / Workspace Preset
-            </label>
-            <Select
-              value={activePreset?.id || ""}
-              onChange={(e) => {
-                const preset = presets.find((item) => item.id === e.target.value);
-                if (preset) onSelectPreset(preset);
-              }}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-            >
-              <option value="">选择工作台预设</option>
-              {presets.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.name}{preset.id === defaultPresetId ? " · 默认" : ""}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
-              预设名称
-            </label>
-            <input
-              type="text"
-              value={presetNameDraft}
-              onChange={(e) => setPresetNameDraft(e.target.value)}
-              placeholder="例如：小红书竖屏口播"
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-1.5 justify-start xl:justify-end relative">
-            <button
-              type="button"
-              onClick={handleUpdatePreset}
-              disabled={!activePreset}
-              className="px-3 py-1.5 text-xs bg-zinc-800 text-zinc-300 hover:text-white disabled:text-zinc-600 disabled:bg-zinc-900 rounded border border-zinc-750 hover:border-amber-500/40 font-medium flex items-center gap-1.5 transition-colors"
-            >
-              <Save className="w-3.5 h-3.5 text-amber-500" />
-              覆盖当前预设
+        <div>
+          <label className="block text-xs font-semibold text-zinc-400 mb-1.5">创作方式</label>
+          <div className="ui-segment max-w-3xl">
+            <button type="button" aria-pressed={mode === "ai"} onClick={() => setMode("ai")}>
+              AI 一键文案
             </button>
-            <button
-              type="button"
-              onClick={handleCreatePreset}
-              className="px-3 py-1.5 text-xs text-black bg-amber-500 hover:bg-amber-400 rounded border border-amber-400/40 font-semibold flex items-center gap-1.5 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5 text-black" />
-              另存为
+            <button type="button" aria-pressed={mode === "manual"} onClick={() => setMode("manual")}>
+              手动分镜
             </button>
-            <button
-              type="button"
-              onClick={() => setPresetMenuOpen((open) => !open)}
-              className="px-2.5 py-1.5 text-xs text-zinc-400 bg-[#17181c] hover:text-zinc-100 rounded border border-zinc-800 hover:border-zinc-700 flex items-center gap-1 transition-colors"
-            >
-              <ChevronDown className="w-3.5 h-3.5" />
-              更多
+            <button type="button" aria-pressed={mode === "batch"} onClick={() => setMode("batch")}>
+              批量多主题
             </button>
-
-            {presetMenuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 z-20 w-36 bg-[#101114] border border-zinc-800 rounded shadow-xl overflow-hidden">
-                <button
-                  type="button"
-                  onClick={handleSetDefaultPreset}
-                  disabled={!activePreset || activePreset.id === defaultPresetId}
-                  className="w-full px-3 py-2 text-left text-xs text-zinc-300 hover:bg-zinc-900 disabled:text-zinc-600"
-                >
-                  设为默认
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeletePreset}
-                  disabled={!activePreset}
-                  className="w-full px-3 py-2 text-left text-xs text-rose-300 hover:bg-rose-950/20 disabled:text-zinc-600"
-                >
-                  删除预设
-                </button>
-              </div>
+            {onOpenImageToVideo && (
+              <button type="button" aria-pressed={false} onClick={() => onOpenImageToVideo()}>
+                图生视频
+              </button>
             )}
           </div>
         </div>
-      </div>
 
-      {/* 1. Creative Mode Tab Switches */}
-      <div className="space-y-2">
-        <label className="block text-xs font-semibold text-zinc-400">创作方式</label>
-        <div className="grid max-w-2xl grid-cols-1 gap-2 p-1 sm:grid-cols-3 rounded-xl border border-zinc-800 bg-[var(--color-surface-2)]">
-          <button
-            type="button"
-            onClick={() => setMode("ai")}
-            className={`flex flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left text-xs transition-all ${
-              mode === "ai"
-                ? "bg-amber-500/10 text-amber-300 border border-amber-500/25 font-semibold"
-                : "text-zinc-400 hover:text-zinc-200 border border-transparent"
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> AI 一键文案</span>
-            <span className="text-caption font-normal text-zinc-500">主题生成口播，推荐新手</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("manual")}
-            className={`flex flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left text-xs transition-all ${
-              mode === "manual"
-                ? "bg-amber-500/10 text-amber-300 border border-amber-500/25 font-semibold"
-                : "text-zinc-400 hover:text-zinc-200 border border-transparent"
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5"><Edit3 className="w-3.5 h-3.5" /> 手动分镜</span>
-            <span className="text-caption font-normal text-zinc-500">逐镜写旁白与画面提示词</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("batch")}
-            className={`flex flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left text-xs transition-all ${
-              mode === "batch"
-                ? "bg-amber-500/10 text-amber-300 border border-amber-500/25 font-semibold"
-                : "text-zinc-400 hover:text-zinc-200 border border-transparent"
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5"><Layers className="w-3.5 h-3.5" /> 批量多主题</span>
-            <span className="text-caption font-normal text-zinc-500">一行一主题，各生成一条视频</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Content Input panel */}
-      <div id="stage-storyboard" className="ui-card space-y-4 scroll-mt-24">
+      <div id="stage-storyboard" className="space-y-4">
         {mode === "ai" && (
           <div className="space-y-4">
             <div>
@@ -2353,29 +2577,25 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 placeholder="例如: 智能机器人在雨夜的霓虹小巷穿梭，极具颗粒感写实，带有温暖孤独色彩的科幻故事。"
                 value={aiTopic}
                 onChange={(e) => setAiTopic(e.target.value)}
-                className="w-full h-24 bg-[#17181c] border border-zinc-800 rounded p-2.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 placeholder-zinc-650"
+                className="ui-input min-h-24"
               />
             </div>
 
-            <div className="bg-[#17181c] border border-zinc-850 rounded-md p-3 space-y-3">
+            <div className="ui-panel space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <label className="block text-xs font-medium text-zinc-400">文案生成方式</label>
-                <div className="flex gap-1.5 bg-[#101114] border border-zinc-900 p-0.5 rounded">
+                <div className="ui-segment">
                   <button
                     type="button"
+                    aria-pressed={copyDraftMode === "full"}
                     onClick={() => setCopyDraftMode("full")}
-                    className={`px-2.5 py-1 text-[10px] rounded transition-all ${
-                      copyDraftMode === "full" ? "bg-amber-500/10 text-amber-400 font-medium" : "text-zinc-500 hover:text-zinc-300"
-                    }`}
                   >
                     整篇口播稿
                   </button>
                   <button
                     type="button"
+                    aria-pressed={copyDraftMode === "segmented"}
                     onClick={() => setCopyDraftMode("segmented")}
-                    className={`px-2.5 py-1 text-[10px] rounded transition-all ${
-                      copyDraftMode === "segmented" ? "bg-amber-500/10 text-amber-400 font-medium" : "text-zinc-500 hover:text-zinc-300"
-                    }`}
                   >
                     分镜旁白列表
                   </button>
@@ -2384,10 +2604,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
               <div>
                 <div className="flex items-center justify-between gap-3 mb-1.5">
-                  <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                  <label className="block text-label">
                     AI 生成文案草稿 / Editable Copy Draft
                   </label>
-                  <span className="text-[10px] text-zinc-600">
+                  <span className="text-caption">
                     {copyDraftMode === "full"
                       ? "两步：① 纯净口播稿 ② 语义/节奏推荐分镜（不绑死镜数）"
                       : "按当前分镜数直接生成多段旁白"}
@@ -2401,133 +2621,82 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       ? "点击生成后，先得到纯净口播（不按固定镜数切割）；随后自动做语义+节奏分镜建议。也可粘贴成稿后点「重新分析」。"
                       : "点击“生成分镜旁白草稿”后，AI 会在这里按段落生成旁白列表。你可以逐段修改，每段会进入一个分镜。"
                   }
-                  className="w-full min-h-36 max-h-80 bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 placeholder-zinc-650 resize-y leading-relaxed"
+                  className="ui-input min-h-36 max-h-80 resize-y leading-relaxed"
                 />
               </div>
-              <div id="keyword-extraction" className="mt-3 border-t border-zinc-800 pt-3 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-medium text-zinc-300">字幕高亮词（可选）</div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5">
-                      {keywordStatus === "loading" && "正在分析当前文案..."}
-                      {keywordStatus === "stale" && "文案已修改，建议重新抽词"}
-                      {keywordStatus === "error" && "抽词失败，可重新尝试"}
-                      {keywordStatus === "ready" && (aiKeywordSuggestions.length ? `已生成 ${aiKeywordSuggestions.length} 个候选` : "候选已处理")}
-                      {keywordStatus === "idle" && "可折叠，不影响主路径出片"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-caption">
+                约 {liveStoryboardPreview.length || suggestedSceneCount || "—"} 镜 · 约 {estimatedStoryboardSeconds ?? estimatedCopySeconds} 秒
+                {directorMode === "auto" ? " · 自动导演" : " · 自定义导演"}
+              </p>
+              <div className="flex flex-wrap justify-end gap-2">
+                {!copyDraft.trim() ? (
+                  <button
+                    type="button"
+                    onClick={handleGenerateCopyDraft}
+                    disabled={copyDraftLoading || aiLoading || serviceReady?.llm === false}
+                    className="ui-btn ui-btn-primary"
+                  >
+                    {copyDraftLoading ? (
+                      <>
+                        <Loader className="w-3.5 h-3.5 animate-spin" />
+                        AI 正在生成文案...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-black" />
+                        {copyDraftMode === "full" ? "生成口播稿" : "生成分镜旁白"}
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <>
                     <button
                       type="button"
-                      onClick={() => setShowAdvancedKeywords((open) => !open)}
-                      className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200"
+                      onClick={handleGenerateCopyDraft}
+                      disabled={copyDraftLoading || aiLoading || serviceReady?.llm === false}
+                      className="ui-btn ui-btn-secondary"
+                      title="重新生成口播稿"
                     >
-                      {showAdvancedKeywords ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                      {showAdvancedKeywords ? "收起" : "展开"}
+                      {copyDraftLoading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      重新写口播稿
                     </button>
-                    <label className="inline-flex items-center gap-2 text-[11px] text-zinc-400 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={keywordPreferences.autoExtract}
-                        onChange={(e) => updateKeywordPreferences({ autoExtract: e.target.checked })}
-                        className="h-3.5 w-3.5 accent-amber-500"
-                      />
-                      生成文案后自动抽词
-                    </label>
                     <button
                       type="button"
-                      onClick={handleExtractKeywords}
-                      disabled={keywordStatus === "loading" || !keywordSourceText()}
-                      className="inline-flex items-center justify-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                      onClick={handleAIGenerateScript}
+                      disabled={aiLoading || copyDraftLoading || serviceReady?.llm === false}
+                      className="ui-btn ui-btn-secondary"
+                      title="按当前导演模式切分旁白并进入分镜编辑"
                     >
-                      {keywordStatus === "loading" ? <Loader className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                      {keywordStatus === "stale" || keywordStatus === "error" || keywordStatus === "ready" ? "重新抽取" : "AI 抽词"}
+                      {aiLoading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Edit3 className="h-3.5 w-3.5" />}
+                      {aiLoading ? "生成分镜中..." : "按当前导演设置生成分镜"}
                     </button>
-                  </div>
-                </div>
-                <div className={showAdvancedKeywords || keywordPreferences.autoExtract && aiKeywordSuggestions.length > 0 ? "space-y-3" : "hidden"}>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block">
-                    <span className="block text-[10px] text-zinc-500 mb-1">抽取风格</span>
-                    <Select
-                      value={keywordPreferences.style}
-                      onChange={(e) => {
-                        updateKeywordPreferences({ style: e.target.value as KeywordExtractionStyle });
-                      }}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-                    >
-                      <option value="balanced">综合</option>
-                      <option value="concept">核心概念</option>
-                      <option value="selling_point">产品卖点</option>
-                      <option value="emotion">情绪表达</option>
-                      <option value="numeric">数字信息</option>
-                      <option value="action">行动号召</option>
-                    </Select>
-                  </label>
-                  <label className="block">
-                    <span className="block text-[10px] text-zinc-500 mb-1">抽取密度</span>
-                    <Select
-                      value={keywordPreferences.density}
-                      onChange={(e) => {
-                        updateKeywordPreferences({ density: e.target.value as KeywordExtractionDensity });
-                      }}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-                    >
-                      <option value="low">少</option>
-                      <option value="standard">标准</option>
-                      <option value="high">多</option>
-                    </Select>
-                  </label>
-                </div>
-
-                {aiKeywordSuggestions.length > 0 && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-zinc-500">AI 推荐</span>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => applyKeywordSuggestions(aiKeywordSuggestions)}
-                          disabled={keywordStatus === "loading"}
-                          className="text-[10px] text-amber-300 hover:text-amber-200 disabled:opacity-50"
-                        >
-                          全部应用
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSwapKeywordSuggestions}
-                          disabled={keywordStatus === "loading" || !keywordSourceText()}
-                          className="inline-flex items-center gap-1 rounded border border-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:border-amber-500/40 hover:text-zinc-200 disabled:opacity-50"
-                        >
-                          {keywordStatus === "loading" ? <Loader className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                          换一批
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {aiKeywordSuggestions.map((item) => (
-                        <button
-                          key={item.word}
-                          type="button"
-                          onClick={() => applyKeywordSuggestions([item])}
-                          title={`应用“${item.word}”`}
-                          className="inline-flex items-center gap-1 rounded border border-zinc-800 bg-[#0c0d10] px-2 py-1 text-xs hover:border-amber-500/50"
-                          style={{ color: item.color }}
-                        >
-                          {item.word}
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  </>
                 )}
-
-                {renderSelectedKeywordEditor()}
-                </div>
               </div>
             </div>
-            
+            {serviceReady?.llm === false && (
+              <p className="text-xs text-amber-300 text-right">
+                语言模型未就绪，
+                <button type="button" className="underline ml-1" onClick={onOpenSettings}>
+                  前往配置
+                </button>
+              </p>
+            )}
+
+            {renderKeywordExtractionPanel()}
+
+            <AdvancedFold
+              title="高级设定"
+              open={contentAdvancedOpen}
+              onToggle={(next) => {
+                setContentAdvancedOpen(next);
+                if (!next && contentAdvancedHasNonDefault) skipNextNonDefaultRiseRef.current = true;
+                if (next) skipNextNonDefaultRiseRef.current = false;
+              }}
+            >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1">文案总字数</label>
@@ -2542,25 +2711,25 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       setCopyCharCountTouched(true);
                       setCopyCharCount(parseInt(e.target.value || "120"));
                     }}
-                    className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    className="ui-input"
                   />
                   <Select
                     value={copyCharCountMode}
                     onChange={(e: any) => setCopyCharCountMode(e.target.value)}
-                    className="w-full bg-[#17181c] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    className="ui-input"
                   >
                     <option value="around">字左右</option>
                     <option value="within">字以内</option>
                   </Select>
                 </div>
-                <p className="mt-1 text-[10px] text-zinc-500 leading-relaxed">
+                <p className="mt-1 text-caption leading-relaxed">
                   步骤 1：按字数生成纯净口播（不绑死分镜数）· 预计 {estimatedCopySeconds} 秒
                 </p>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1">分镜导演模式</label>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="ui-segment">
                   {([
                     ["auto", "自动导演"],
                     ["custom", "自定义数量"],
@@ -2568,21 +2737,17 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     <button
                       key={value}
                       type="button"
+                      aria-pressed={directorMode === value}
                       onClick={() => {
                         setDirectorMode(value);
                         if (value === "auto") setAiSceneCountTouched(false);
                       }}
-                      className={`rounded border px-2 py-1.5 text-xs transition-colors ${
-                        directorMode === value
-                          ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
-                          : "border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-200"
-                      }`}
                     >
                       {label}
                     </button>
                   ))}
                 </div>
-                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                <div className="ui-segment mt-1.5">
                   {([
                     ["sparse", "稀疏"],
                     ["standard", "标准"],
@@ -2591,12 +2756,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     <button
                       key={value}
                       type="button"
+                      aria-pressed={storyboardDensity === value}
                       onClick={() => setStoryboardDensity(value)}
-                      className={`rounded border px-2 py-1 text-[11px] transition-colors ${
-                        storyboardDensity === value
-                          ? "border-amber-500/50 bg-amber-500/10 text-amber-300"
-                          : "border-zinc-800 bg-[#17181c] text-zinc-500 hover:text-zinc-300"
-                      }`}
                     >
                       {label}
                     </button>
@@ -2692,16 +2853,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     <>步骤 2：{directorMode === "auto" ? "由系统按语义自动决定镜头数" : "填写镜头数量作为软目标"} · {STORYBOARD_DENSITY_LABEL[storyboardDensity]}节奏</>
                   )}
                 </p>
-                <p className="mt-0.5 text-[10px] text-zinc-600 leading-relaxed">
+                <p className="mt-0.5 text-caption leading-relaxed">
                   分镜数不由总字数直接决定；语义看句/意群，节奏按字数粗估。当前目标每镜约 {averageCopyCharsPerStoryboard} 字。
                 </p>
                 {sceneCountMismatch && (
-                  <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
+                  <p className="mt-1 text-caption text-amber-400/90 leading-relaxed">
                     目标 {aiSceneCount} 镜 · 当前可安全切分 {liveStoryboardPreview.length} 镜（语义优先，未强制字切）
                   </p>
                 )}
                 {storyboardWarnings.length > 0 && (
-                  <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
+                  <p className="mt-1 text-caption text-amber-400/90 leading-relaxed">
                     {storyboardWarnings.join("；")}
                   </p>
                 )}
@@ -2712,7 +2873,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <Select
                   value={splitType}
                   onChange={(e: any) => setSplitType(e.target.value)}
-                  className="w-full bg-[#17181c] border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  className="ui-input"
                 >
                   <option value="auto">自动语义 + 节奏切分（推荐）</option>
                   <option value="paragraph">按段落切分</option>
@@ -2727,7 +2888,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             )}
 
             {liveStoryboardPreview.length > 0 && (
-              <div className="rounded-md border border-zinc-800 bg-[#0c0d10] p-3 space-y-2">
+              <div className="ui-panel space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-medium text-zinc-200">
                     将生成 {liveStoryboardPreview.length} 个分镜（根据当前文案实时预览）
@@ -2747,71 +2908,18 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 </ol>
               </div>
             )}
-
-            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2 border-t border-zinc-900">
-              {!copyDraft.trim() ? (
-                <button
-                  type="button"
-                  onClick={handleGenerateCopyDraft}
-                  disabled={copyDraftLoading || aiLoading || serviceReady?.llm === false}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-800 text-black disabled:text-zinc-500 font-semibold text-sm rounded shadow-md flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  {copyDraftLoading ? (
-                    <>
-                      <Loader className="w-3.5 h-3.5 animate-spin" />
-                      AI 正在生成文案...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5 text-black" />
-                      {copyDraftMode === "full" ? "生成口播稿" : "生成分镜旁白"}
-                    </>
-                  )}
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleGenerateCopyDraft}
-                    disabled={copyDraftLoading || aiLoading || serviceReady?.llm === false}
-                    className="ui-btn ui-btn-secondary"
-                    title="重新生成口播稿"
-                  >
-                    {copyDraftLoading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    重新写口播稿
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAIGenerateScript}
-                    disabled={aiLoading || copyDraftLoading || serviceReady?.llm === false}
-                    className="ui-btn ui-btn-primary"
-                    title="按当前导演模式切分旁白并进入分镜编辑"
-                  >
-                    {aiLoading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Edit3 className="h-3.5 w-3.5" />}
-                    {aiLoading ? "生成分镜中..." : "按当前导演设置生成分镜"}
-                  </button>
-                </>
-              )}
-            </div>
-            {serviceReady?.llm === false && (
-              <p className="text-xs text-amber-300 text-right">
-                语言模型未就绪，
-                <button type="button" className="underline ml-1" onClick={onOpenSettings}>
-                  前往配置
-                </button>
-              </p>
-            )}
+            </AdvancedFold>
           </div>
         )}
 
         {mode === "manual" && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-zinc-900">
+            <div className="flex justify-between items-center pb-2 border-b border-[var(--color-border-subtle)]">
               <div className="min-w-0">
                 <div className="text-xs font-medium text-zinc-300 flex items-center gap-1">
                   分镜列表编辑器 (精细化定制旁白与画面提示词)
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-500">
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption">
                   <span>{directorMode === "auto" ? "自动导演" : "自定义软目标"}</span>
                   <span>· {STORYBOARD_DENSITY_LABEL[storyboardDensity]}节奏</span>
                   <span>· 实际 {scenes.length} 镜</span>
@@ -2821,14 +2929,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   )}
                 </div>
                 {storyboardWarnings.length > 0 && (
-                  <div className="mt-1 text-[10px] leading-relaxed text-amber-400/90">
+                  <div className="mt-1 text-caption leading-relaxed text-amber-400/90">
                     {storyboardWarnings.join("；")}
                   </div>
                 )}
               </div>
               <button
                 onClick={addScene}
-                className="px-2 py-1 bg-[#17181c] hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded text-[11px] font-medium flex items-center gap-1 transition-colors"
+                className="px-2 py-1 bg-[var(--color-surface-3)] hover:bg-zinc-800 text-zinc-300 border border-[var(--color-border-subtle)] rounded text-caption font-medium flex items-center gap-1 transition-colors"
               >
                 <Plus className="w-3 h-3 text-amber-500" />
                 新增分镜
@@ -2839,7 +2947,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               {scenes.map((scene, idx) => (
                 <div
                   key={scene.id}
-                  className="bg-[#17181c] border border-zinc-850 p-3 rounded flex items-start gap-3 relative hover:border-zinc-800 group"
+                  className="ui-panel flex items-start gap-3 relative hover:border-[var(--color-border-subtle)] group"
                 >
                   <div className="w-6 h-6 rounded bg-zinc-800/80 text-zinc-400 text-xs font-bold flex items-center justify-center font-mono mt-1">
                     {idx + 1}
@@ -2847,7 +2955,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor={`scene-narration-${scene.id}`} className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      <label htmlFor={`scene-narration-${scene.id}`} className="block text-label mb-1">
                         分镜配音旁白 (TTS Text)
                       </label>
                       <textarea
@@ -2857,11 +2965,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                         onChange={(e) => updateScene(scene.id, "ttsText", e.target.value)}
                         disabled={Boolean(scene.locked || scene.lockedFields?.includes("narration"))}
                         rows={3}
-                        className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 leading-relaxed resize-y max-h-48 overflow-y-auto focus:outline-none focus:border-amber-500"
+                        className="ui-input min-h-20 max-h-48 resize-y leading-relaxed"
                       />
                     </div>
                     <div>
-                      <label htmlFor={`scene-visual-${scene.id}`} className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      <label htmlFor={`scene-visual-${scene.id}`} className="block text-label mb-1">
                         画面视觉绘图 Prompt (英文最佳)
                       </label>
                       <textarea
@@ -2871,10 +2979,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                         onChange={(e) => updateScene(scene.id, "visualPrompt", e.target.value)}
                         disabled={Boolean(scene.locked || scene.lockedFields?.includes("visualPrompt"))}
                         rows={3}
-                        className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 leading-relaxed resize-y max-h-48 overflow-y-auto focus:outline-none focus:border-amber-500"
+                        className="ui-input min-h-20 max-h-48 resize-y leading-relaxed"
                       />
                       {(scene.visualFocus || (scene.textAnchors || []).length > 0) && (
-                        <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+                        <p className="mt-1 text-caption leading-relaxed">
                           视觉焦点：{scene.visualFocus || "—"}
                           {(scene.textAnchors || []).length > 0 && ` · 文字锚点：${scene.textAnchors!.join("、")}`}
                         </p>
@@ -2884,12 +2992,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
                   <div className="absolute right-9 top-1.5 flex items-center gap-1">
                     {(scene.editedFields || []).length > 0 && (
-                      <span className="text-[10px] text-sky-300" title="该镜头含人工编辑字段">人工编辑</span>
+                      <span className="text-caption text-sky-300" title="该镜头含人工编辑字段">人工编辑</span>
                     )}
                     <button
                       type="button"
                       onClick={() => toggleSceneLock(scene.id)}
-                      className={`rounded px-1.5 py-0.5 text-[10px] ${scene.locked ? "bg-amber-500/15 text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}
+                      className={`rounded px-1.5 py-0.5 text-caption ${scene.locked ? "bg-amber-500/15 text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}
                       title={scene.locked ? "解锁镜头" : "锁定镜头"}
                       aria-label={scene.locked ? `解锁分镜 ${idx + 1}` : `锁定分镜 ${idx + 1}`}
                     >
@@ -2908,12 +3016,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 </div>
               ))}
             </div>
+            {renderKeywordExtractionPanel()}
           </div>
         )}
 
         {mode === "batch" && (
           <div className="space-y-4 animate-soft-scale-in">
-            <div className="rounded-xl border border-zinc-800 bg-[var(--color-surface-3)] p-3">
+            <div className="ui-panel">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <label className="text-sm font-medium text-zinc-200">批量主题列表</label>
                 <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-caption text-amber-200">
@@ -2931,7 +3040,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   setBatchCount(count);
                 }}
                 placeholder={"主题一: 智能机器人在雨夜撑伞\n主题二: 机械宠物狗在客厅嬉戏\n主题三: 未来城市空中飞车速递"}
-                className="w-full h-36 rounded-lg border border-zinc-800 bg-[var(--color-surface-1)] p-2.5 text-sm text-zinc-300 focus:outline-none focus:border-amber-500 font-mono placeholder-zinc-600"
+                className="ui-input h-36 font-mono"
               />
               {batchCount > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
@@ -2943,7 +3052,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     .map((line, index) => (
                       <span
                         key={`${index}-${line.slice(0, 12)}`}
-                        className="max-w-full truncate rounded-md border border-zinc-800 bg-[var(--color-surface-1)] px-2 py-1 text-caption text-zinc-400"
+                        className="max-w-full truncate rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-2 py-1 text-caption text-zinc-400"
                         title={line}
                       >
                         #{index + 1} {line.replace(/^主题\s*[一二三四五六七八九十\d]+\s*[:：]\s*/u, "").slice(0, 28)}
@@ -2967,7 +3076,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             </div>
 
             {lastBatchSummary && (
-              <div className="rounded-xl border border-zinc-800 bg-[var(--color-surface-2)] p-3 text-xs">
+              <div className="ui-panel text-xs">
                 <div className="mb-1 font-medium text-zinc-200">最近一次批量提交</div>
                 <p className="text-zinc-400">
                   {new Date(lastBatchSummary.at).toLocaleString()} · 共 {lastBatchSummary.total} 条 ·
@@ -2983,16 +3092,17 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 </button>
               </div>
             )}
+            {renderKeywordExtractionPanel()}
           </div>
         )}
       </div>
-
+      </div>
       </div>
       {/* End step 1 content */}
 
-      {/* Step 2: Style (画幅 / 字幕 / 工作流) — filled after voice block restructure */}
-      {/* Step 3: Voice */}
-      <div className={showVoiceStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
+      <div className="flex flex-col">
+      {/* Step 3: Voice — CSS order-2 so expert mode paints 内容→风格→声音 */}
+      <div className={`${showVoiceStep ? "space-y-5 animate-soft-scale-in" : "hidden"} order-2`}>
       {/* TTS Voice Synthesis & BGM Mixing */}
       <div id="stage-voice" className="grid grid-cols-1 gap-4 scroll-mt-24 md:grid-cols-2">
         {/* TTS Panel */}
@@ -3001,19 +3111,18 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             <Mic2 className="h-4 w-4 text-amber-500" />
             配音合成 TTS 引擎
           </h3>
-          <p className="text-[10px] text-amber-400/80">试听与“合成当前文案”仅供预览，不会复用到最终成片。</p>
+          <p className="text-caption text-amber-400/80">试听与“合成当前文案”仅供预览，不会复用到最终成片。</p>
 
-          <div className="grid grid-cols-5 gap-1 p-0.5 bg-[#17181c] border border-zinc-850 rounded">
+          <div className="ui-segment">
             {(["edge", "comfyui", "minimax", "mimo", "qwen_audio"] as const).map((opt) => (
               <button
                 key={opt}
+                type="button"
+                aria-pressed={ttsMode === opt}
                 onClick={() => {
                   setTtsMode(opt);
                   setVoice(VOICE_OPTIONS[opt][0].id);
                 }}
-                className={`py-1 text-[10px] rounded uppercase font-semibold text-center transition-all ${
-                  ttsMode === opt ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "text-zinc-500 hover:text-zinc-300"
-                }`}
               >
                 {opt === "edge" && "Edge 极速"}
                 {opt === "comfyui" && "Comfy 克隆"}
@@ -3024,11 +3133,20 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             ))}
           </div>
 
+          <AdvancedFold
+            title="高级配音"
+            open={voiceAdvancedOpen}
+            onToggle={(next) => {
+              setVoiceAdvancedOpen(next);
+              if (!next && voiceAdvancedHasNonDefault) skipNextVoiceRiseRef.current = true;
+              if (next) skipNextVoiceRiseRef.current = false;
+            }}
+          >
           <div className="space-y-1.5">
-            <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+            <label className="block text-label">
               多镜配音交付 / Delivery
             </label>
-            <div className="grid grid-cols-2 gap-1 p-0.5 bg-[#17181c] border border-zinc-850 rounded">
+            <div className="ui-segment">
               {(
                 [
                   { id: "continuous" as const, label: "整篇连续（推荐）" },
@@ -3038,28 +3156,25 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <button
                   key={opt.id}
                   type="button"
+                  aria-pressed={ttsDelivery === opt.id}
                   onClick={() => setTtsDelivery(opt.id)}
-                  className={`py-1.5 text-[10px] rounded font-medium text-center transition-all ${
-                    ttsDelivery === opt.id
-                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  }`}
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-zinc-500 leading-relaxed">
+            <p className="text-caption leading-relaxed">
               {ttsDelivery === "continuous"
                 ? "多镜默认整篇一次合成，再按对齐时间切成各镜，音色更连贯；改某一镜旁白会整轨重合成。"
                 : "每镜单独合成，速度快、局部重做省成本，但多镜可能出现音色/语势漂移。"}
             </p>
           </div>
+          </AdvancedFold>
 
           <div className="space-y-3 pt-1">
             {/* Voices list */}
             <div>
-              <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+              <label className="block text-label mb-1">
                 选择合成音色及风格 / Voice Model
               </label>
               {(() => {
@@ -3078,7 +3193,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       }
                       setVoice(next);
                     }}
-                    className="w-full bg-[#17181c] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    className="ui-input"
                   >
                     {VOICE_OPTIONS[ttsMode].map((v) => (
                       <option key={v.id} value={v.id}>
@@ -3098,7 +3213,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             {/* MiniMax custom voice_id (clone / design / unlisted system IDs) */}
             {(ttsMode === "minimax" && !isKnownVoiceOption("minimax", voice)) || (ttsMode === "qwen_audio" && (qwenAudioMode === "design" || qwenAudioMode === "clone")) ? (
               <div className="space-y-1.5 rounded border border-amber-500/20 bg-amber-500/5 p-2">
-                <label className="block text-[9px] text-amber-400/90 font-mono uppercase tracking-wider">
+                <label className="block text-caption text-amber-400/90 font-mono uppercase tracking-wider">
                   {ttsMode === "qwen_audio" ? "已创建的 Qwen Voice ID" : "自定义 Voice ID"}
                 </label>
                 <input
@@ -3109,9 +3224,9 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   placeholder={ttsMode === "qwen_audio" ? "创建声音设计/克隆后粘贴 voice ID" : "例如复刻后的 my_brand_voice_01"}
                   spellCheck={false}
                   autoComplete="off"
-                  className="w-full bg-[#101114] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 font-mono placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
+                  className="ui-input font-mono"
                 />
-                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                <p className="text-caption leading-relaxed">
                   {ttsMode === "qwen_audio" ? "必须是百炼已创建且与当前模型匹配的 voice ID。" : "填入 MiniMax 账号下已存在的音色 ID（系统 / 复刻 / 文生）。未注册的 ID 合成会失败。"}
                 </p>
               </div>
@@ -3119,13 +3234,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
             {/* Sub options if MiniMax */}
             {ttsMode === "minimax" && (
-              <div className="grid grid-cols-2 gap-2 bg-[#17181c] p-2 rounded border border-zinc-850">
+              <div className="ui-panel grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[9px] text-zinc-500 mb-0.5">声音情感 / Emotion</label>
+                  <label className="block text-caption text-zinc-500 mb-0.5">声音情感 / Emotion</label>
                   <Select
                     value={emotion}
                     onChange={(e) => setEmotion(e.target.value)}
-                    className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-amber-500"
+                    className="ui-input"
                   >
                     <option value="">自动匹配 (Auto)</option>
                     <option value="happy">欢快愉悦 (Happy)</option>
@@ -3140,11 +3255,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-[9px] text-zinc-500 mb-0.5">MiniMax 基座模型</label>
+                  <label className="block text-caption text-zinc-500 mb-0.5">MiniMax 基座模型</label>
                   <Select
                     value={minimaxModel}
                     onChange={(e) => setMinimaxModel(e.target.value)}
-                    className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-amber-500"
+                    className="ui-input"
                   >
                     <option value="speech-2.8-turbo">speech-2.8-turbo</option>
                     <option value="speech-2.8-hd">speech-2.8-hd</option>
@@ -3159,13 +3274,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
             {/* Sub options if MiMo */}
             {ttsMode === "mimo" && (
-              <div className="grid grid-cols-2 gap-2 bg-[#17181c] p-2 rounded border border-zinc-850">
+              <div className="ui-panel grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[9px] text-zinc-500 mb-0.5">MiMo 基座模型</label>
+                  <label className="block text-caption text-zinc-500 mb-0.5">MiMo 基座模型</label>
                   <Select
                     value={mimoModel}
                     onChange={(e) => setMimoModel(e.target.value)}
-                    className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-amber-500"
+                    className="ui-input"
                   >
                     <option value="mimo-v2.5-tts">mimo-v2.5-tts（预设音色 · 多镜更稳）</option>
                     <option value="mimo-v2.5-tts-voicedesign">mimo-v2.5-tts-voicedesign（文案设计音色 · 多镜易漂移）</option>
@@ -3173,7 +3288,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   </Select>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-[9px] text-zinc-500 mb-0.5">
+                  <label className="block text-caption text-zinc-500 mb-0.5">
                     {mimoModel.includes("voicedesign")
                       ? "音色设计描述（必填，全片共用同一描述）"
                       : "自然语言风格指令（可选，多镜建议填写并固定）"}
@@ -3187,16 +3302,16 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                         ? "例：25 岁年轻女声，清亮温柔，略带笑意，语速适中，适合短视频口播。同一讲述者全程口播。"
                         : "例：平稳专业的讲解语气，语速适中，情绪克制，适合知识口播。"
                     }
-                    className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 resize-none focus:outline-none focus:border-amber-500"
+                    className="ui-input resize-none"
                   />
                   {mimoModel.includes("voicedesign") ? (
-                    <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
+                    <p className="mt-1 text-caption text-amber-400/90 leading-relaxed">
                       {ttsDelivery === "continuous"
                         ? "已启用「整篇连续合成」：Voice Design 多镜将一次合成再切分，音色更稳。请保持全片同一设计描述。"
                         : "当前为逐分镜合成：Voice Design 每镜都会重采样，多镜口播容易不像同一人。建议改用「整篇连续」或「预设音色」。"}
                     </p>
                   ) : (
-                    <p className="mt-1 text-[10px] text-zinc-500 leading-relaxed">
+                    <p className="mt-1 text-caption leading-relaxed">
                       多镜口播请固定音色与风格指令；连续合成 + 响度归一可进一步减轻镜间突兀感。
                     </p>
                   )}
@@ -3207,7 +3322,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                         setMimoModel("mimo-v2.5-tts");
                         addToast("已切换为预设音色模型，多镜口播更稳定。请再选一个固定音色。", "info");
                       }}
-                      className="mt-1.5 text-[10px] text-amber-300 underline-offset-2 hover:underline"
+                      className="mt-1.5 text-caption text-amber-300 underline-offset-2 hover:underline"
                     >
                       一键改用预设音色（推荐）
                     </button>
@@ -3220,8 +3335,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               <div className="space-y-2 rounded border border-amber-500/20 bg-amber-500/5 p-2">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[9px] text-zinc-500 mb-0.5">Qwen 模型</label>
-                    <Select value={qwenAudioModel} onChange={(e) => setQwenAudioModel(e.target.value)} className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300">
+                    <label className="block text-caption text-zinc-500 mb-0.5">Qwen 模型</label>
+                    <Select value={qwenAudioModel} onChange={(e) => setQwenAudioModel(e.target.value)} className="w-full bg-[var(--color-surface-3)] border border-[var(--color-border-subtle)] rounded px-1.5 py-1 text-caption text-zinc-300">
                       <option value="qwen3-tts-flash">qwen3-tts-flash · 预置</option>
                       <option value="qwen3-tts-instruct-flash">qwen3-tts-instruct-flash · 指令控制</option>
                       <option value="qwen3-tts-vd-2026-01-26">qwen3-tts-vd · 声音设计</option>
@@ -3231,14 +3346,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     </Select>
                   </div>
                   <div>
-                    <label className="block text-[9px] text-zinc-500 mb-0.5">能力模式</label>
+                    <label className="block text-caption text-zinc-500 mb-0.5">能力模式</label>
                     <Select value={qwenAudioMode} onChange={(e) => {
                       const next = e.target.value as typeof qwenAudioMode;
                       setQwenAudioMode(next);
                       if (next === "instruct") setQwenAudioModel("qwen3-tts-instruct-flash");
                       if (next === "design") setQwenAudioModel("qwen3-tts-vd-2026-01-26");
                       if (next === "clone") setQwenAudioModel("qwen3-tts-vc-2026-01-22");
-                    }} className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300">
+                    }} className="w-full bg-[var(--color-surface-3)] border border-[var(--color-border-subtle)] rounded px-1.5 py-1 text-caption text-zinc-300">
                       <option value="preset">预置音色</option>
                       <option value="instruct">预置音色 + 表达指令</option>
                       <option value="design">已创建的声音设计音色</option>
@@ -3248,8 +3363,8 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 </div>
                 {(qwenAudioMode === "instruct" || qwenAudioMode === "design") && (
                   <div>
-                    <label className="block text-[9px] text-zinc-500 mb-0.5">{qwenAudioMode === "design" ? "声音设计记录（用于留档）" : "自然语言表达指令"}</label>
-                    <textarea value={qwenAudioInstruction} onChange={(e) => setQwenAudioInstruction(e.target.value)} rows={2} maxLength={qwenAudioMode === "design" ? 2048 : 1600} placeholder={qwenAudioMode === "design" ? "例如：沉稳的中年男性，音色低沉有磁性，语速平稳，适合纪录片解说。创建后将 voice ID 填入音色栏。" : "例如：用温柔的语气，语速稍慢，带有克制的叙事感。"} className="w-full bg-[#101114] border border-zinc-900 rounded px-1.5 py-1 text-[11px] text-zinc-300 resize-none" />
+                    <label className="block text-caption text-zinc-500 mb-0.5">{qwenAudioMode === "design" ? "声音设计记录（用于留档）" : "自然语言表达指令"}</label>
+                    <textarea value={qwenAudioInstruction} onChange={(e) => setQwenAudioInstruction(e.target.value)} rows={2} maxLength={qwenAudioMode === "design" ? 2048 : 1600} placeholder={qwenAudioMode === "design" ? "例如：沉稳的中年男性，音色低沉有磁性，语速平稳，适合纪录片解说。创建后将 voice ID 填入音色栏。" : "例如：用温柔的语气，语速稍慢，带有克制的叙事感。"} className="w-full bg-[var(--color-surface-3)] border border-[var(--color-border-subtle)] rounded px-1.5 py-1 text-caption text-zinc-300 resize-none" />
                   </div>
                 )}
                 {qwenAudioMode === "design" && (
@@ -3265,15 +3380,15 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       addToast(`声音设计已创建：${data.voice_id}`, "success");
                     } catch (err: any) { addToast(err.message || "Qwen 声音设计创建失败", "error"); }
                     finally { setQwenVoiceBusy(false); }
-                  }} className="ui-btn ui-btn-secondary text-[10px]">{qwenVoiceBusy ? "创建中..." : "创建 Qwen 声音并绑定 Voice ID"}</button>
+                  }} className="ui-btn ui-btn-secondary ui-btn-sm">{qwenVoiceBusy ? "创建中..." : "创建 Qwen 声音并绑定 Voice ID"}</button>
                 )}
                 {qwenAudioMode === "clone" && (
                   <div className="space-y-2">
-                    <label className="flex items-start gap-2 text-[10px] text-zinc-400">
+                    <label className="flex items-start gap-2 text-caption">
                       <input type="checkbox" checked={qwenCloneConsent} onChange={(e) => setQwenCloneConsent(e.target.checked)} className="mt-0.5" />
                       <span>我确认拥有该参考音频及声音的合法使用授权，并同意创建可用于本项目的克隆音色。</span>
                     </label>
-                    <label className={`ui-btn ui-btn-secondary text-[10px] inline-flex ${qwenCloneConsent ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
+                    <label className={`ui-btn ui-btn-secondary ui-btn-sm inline-flex ${qwenCloneConsent ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
                     {qwenVoiceBusy ? "上传并创建中..." : "上传 10-20 秒音频并创建克隆音色"}
                     <input type="file" accept="audio/mpeg,audio/wav,audio/mp4,.mp3,.wav,.m4a" className="hidden" disabled={qwenVoiceBusy || !qwenCloneConsent} onChange={async (e) => {
                       const file = e.target.files?.[0];
@@ -3294,25 +3409,25 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   </div>
                 )}
                 {qwenVoicePreviewUrl && <audio controls src={qwenVoicePreviewUrl} className="w-full h-8" />}
-                <p className="text-[10px] text-zinc-500 leading-relaxed">声音设计按百炼官方流程先创建音色，再将 voice ID 固定到全片；创建音色可能产生费用。音色克隆请先在百炼完成合规授权与创建。</p>
+                <p className="text-caption leading-relaxed">声音设计按百炼官方流程先创建音色，再将 voice ID 固定到全片；创建音色可能产生费用。音色克隆请先在百炼完成合规授权与创建。</p>
               </div>
             )}
 
             {/* Audio Upload if ComfyUI clone */}
             {ttsMode === "comfyui" && (
-              <div className="bg-[#17181c] p-2.5 rounded border border-zinc-850 space-y-2">
-                <span className="text-[10px] text-zinc-400 font-medium block">
+              <div className="ui-panel space-y-2">
+                <span className="text-caption font-medium block">
                   上传您要克隆的目标参考音频 (10MB以内的 MP3/WAV, 最好 5s-30s):
                 </span>
-                <div className="border border-dashed border-zinc-800 rounded flex flex-col items-center justify-center p-3 hover:border-amber-500/40 cursor-pointer">
+                <div className="border border-dashed border-[var(--color-border-subtle)] rounded flex flex-col items-center justify-center p-3 hover:border-amber-500/40 cursor-pointer">
                   <Upload className="w-5 h-5 text-zinc-600 mb-1.5" />
-                  <span className="text-[10px] text-zinc-500">点击上传或将文件拖拽于此</span>
+                  <span className="text-caption">点击上传或将文件拖拽于此</span>
                 </div>
               </div>
             )}
 
-            <div className="bg-[#17181c] p-2.5 rounded border border-zinc-850 space-y-2">
-              <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+            <div className="ui-panel space-y-2">
+              <label className="block text-label">
                 试听文案 / Preview Script
               </label>
               <textarea
@@ -3322,7 +3437,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   setPreviewTtsText(e.target.value);
                 }}
                 rows={3}
-                className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 leading-relaxed resize-none focus:outline-none focus:border-amber-500"
+                className="ui-input min-h-20 resize-none leading-relaxed"
                 placeholder="输入一段用于试听配音效果的文案"
               />
               {previewTtsAudioUrl && (
@@ -3336,7 +3451,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center pt-2">
               <div>
-                <div className="flex justify-between text-[10px] text-zinc-500 mb-1">
+                <div className="flex justify-between text-caption mb-1">
                   <span>语速调节: {speed}x</span>
                   <span>建议 0.9 - 1.2</span>
                 </div>
@@ -3355,7 +3470,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <button
                   onClick={handlePreviewTts}
                   disabled={previewingTts}
-                  className="px-2.5 py-1 bg-zinc-800 text-zinc-300 hover:text-white rounded border border-zinc-750 hover:border-zinc-650 text-xs font-medium flex items-center gap-1 transition-colors"
+                  className="px-2.5 py-1 bg-zinc-800 text-zinc-300 hover:text-white rounded border border-[var(--color-border-subtle)] hover:border-zinc-650 text-xs font-medium flex items-center gap-1 transition-colors"
                 >
                   {previewingTts ? <Loader className="w-3 h-3 animate-spin text-amber-500" /> : <Play className="w-3 h-3 text-amber-500" />}
                   试听 TTS 语音
@@ -3363,13 +3478,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               </div>
             </div>
 
-            <div className="bg-[#17181c] p-2.5 rounded border border-zinc-850 space-y-2">
+            <div className="ui-panel space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <span className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                  <span className="block text-label">
                     当前文案音频 / Current Copy
                   </span>
-                  <span className="text-[10px] text-zinc-500">
+                  <span className="text-caption">
                     {currentCopyForTts.label}
                     {currentCopyForTts.text && ` · ${currentCopyForTts.text.length} 字`}
                   </span>
@@ -3377,7 +3492,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <button
                   onClick={handleSynthesizeCurrentCopy}
                   disabled={synthesizingCopy || !currentCopyForTts.text}
-                  className="px-2.5 py-1 bg-amber-500 text-black hover:bg-amber-400 disabled:bg-zinc-800 disabled:text-zinc-500 rounded border border-amber-400/40 disabled:border-zinc-750 text-xs font-semibold flex items-center gap-1 transition-colors"
+                  className="px-2.5 py-1 bg-amber-500 text-black hover:bg-amber-400 disabled:bg-zinc-800 disabled:text-zinc-500 rounded border border-amber-400/40 disabled:border-[var(--color-border-subtle)] text-xs font-semibold flex items-center gap-1 transition-colors"
                 >
                   {synthesizingCopy ? <Loader className="w-3 h-3 animate-spin text-black" /> : <Volume2 className="w-3 h-3 text-black" />}
                   合成当前文案
@@ -3385,21 +3500,21 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               </div>
 
               {copyTtsAudioUrl && (
-                <div className="space-y-2 pt-2 border-t border-zinc-850">
+                <div className="space-y-2 pt-2 border-t border-[var(--color-border-subtle)]">
                   <audio
                     src={copyTtsAudioUrl}
                     controls
                     className="w-full h-8"
                   />
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[10px] text-zinc-500 font-mono">
+                    <span className="text-caption font-mono">
                       时长 {formatCopyTtsDuration(copyTtsDuration)} · {copyTtsSourceLabel}
                     </span>
                     <div className="flex items-center gap-1.5">
                       <a
                         href={copyTtsAudioUrl}
                         download={copyTtsDownloadName}
-                        className="px-2 py-1 text-[10px] bg-zinc-800 text-zinc-300 hover:text-white rounded border border-zinc-750 hover:border-zinc-650 flex items-center gap-1 transition-colors"
+                        className="px-2 py-1 text-caption bg-zinc-800 text-zinc-300 hover:text-white rounded border border-[var(--color-border-subtle)] hover:border-zinc-650 flex items-center gap-1 transition-colors"
                       >
                         <Download className="w-3 h-3 text-amber-500" />
                         下载音频
@@ -3410,7 +3525,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                           setCopyTtsDuration(null);
                           setCopyTtsSourceLabel("");
                         }}
-                        className="px-2 py-1 text-[10px] bg-zinc-900 text-zinc-400 hover:text-rose-300 rounded border border-zinc-800 hover:border-rose-900/70 flex items-center gap-1 transition-colors"
+                        className="px-2 py-1 text-caption bg-zinc-900 text-zinc-400 hover:text-rose-300 rounded border border-[var(--color-border-subtle)] hover:border-rose-900/70 flex items-center gap-1 transition-colors"
                       >
                         <XCircle className="w-3 h-3 text-rose-400" />
                         清除音频
@@ -3432,14 +3547,14 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
           <div className="space-y-3">
             <div>
-              <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+              <label className="block text-label mb-1">
                 选择背景配乐 / Background Audio
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
                 <Select
                   value={bgm}
                   onChange={(e) => handleBgmChange(e.target.value)}
-                  className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  className="ui-input"
                 >
                   {bgmOptions.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -3454,7 +3569,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   className={`px-2.5 py-1.5 rounded border text-xs font-medium flex items-center justify-center gap-1 transition-colors disabled:opacity-50 ${
                     playingBgm === selectedBgm?.id
                       ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                      : "bg-[#17181c] border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                      : "bg-[var(--color-surface-3)] border-[var(--color-border-subtle)] text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
                   <Volume2 className="w-3.5 h-3.5" />
@@ -3463,7 +3578,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 <button
                   type="button"
                   onClick={openCustomBgmFolder}
-                  className="px-2.5 py-1.5 rounded border border-zinc-800 bg-[#17181c] text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:border-amber-500/40 flex items-center justify-center gap-1 transition-colors"
+                  className="px-2.5 py-1.5 rounded border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] text-xs font-medium text-zinc-400 hover:text-zinc-100 hover:border-amber-500/40 flex items-center justify-center gap-1 transition-colors"
                   title="打开自定义音乐文件夹"
                 >
                   <FolderOpen className="w-3.5 h-3.5 text-amber-500" />
@@ -3484,7 +3599,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             </div>
 
             <div className="pt-2">
-              <div className="flex justify-between text-[10px] text-zinc-500 mb-1">
+              <div className="flex justify-between text-caption mb-1">
                 <span>配乐音量: {volume}%</span>
                 <span>主旁白自动避让降噪</span>
               </div>
@@ -3505,7 +3620,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       {/* End step voice */}
 
       {/* Step style: aspect / subtitles / workflows */}
-      <div className={showStyleStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
+      <div className={`${showStyleStep ? "space-y-5 animate-soft-scale-in" : "hidden"} order-1`}>
       <div id="stage-style" className="space-y-4 scroll-mt-24">
       {/* Image style and motion composition */}
       <div className="ui-card space-y-4 !p-4">
@@ -3514,14 +3629,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             <FileVideo className="h-4 w-4 text-amber-500" />
             画幅 · 字幕 · 画风
           </h3>
-          <button
-            type="button"
-            onClick={() => setShowAdvancedProduction((open) => !open)}
-            className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200"
-          >
-            {showAdvancedProduction ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            {showAdvancedProduction ? "收起高级" : "更多设定"}
-          </button>
+          <AdvancedFold
+            title={showAdvancedProduction ? "收起高级" : "更多设定"}
+            open={showAdvancedProduction}
+            onToggle={setShowAdvancedProduction}
+          />
         </div>
 
         {/* Primary control: API image gen vs local material library — always visible at top of style card */}
@@ -3529,7 +3641,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           className={`rounded-md border p-3 transition-colors ${
             useApiImage
               ? "border-amber-500/40 bg-amber-500/10 ring-1 ring-amber-500/20"
-              : "border-zinc-700 bg-[#101114]"
+              : "border-[var(--color-border-subtle)] bg-[var(--color-surface-3)]"
           }`}
         >
           <label className="flex items-start gap-3 cursor-pointer">
@@ -3545,7 +3657,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   使用 API 图片生成
                 </span>
                 <span
-                  className={`text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                  className={`text-label px-1.5 py-0.5 rounded border ${
                     useApiImage
                       ? "border-amber-500/50 text-amber-300 bg-amber-500/10"
                       : "border-zinc-600 text-zinc-400"
@@ -3554,7 +3666,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   {useApiImage ? "当前：API 生图" : "当前：素材库"}
                 </span>
               </div>
-              <p className="mt-1.5 text-[11px] text-zinc-400 leading-relaxed">
+              <p className="mt-1.5 text-caption text-zinc-400 leading-relaxed">
                 {useApiImage
                   ? "已开启：按分镜提示词调用图像 API / 工作流出图（需在「设置」中配置图像服务密钥）。"
                   : "默认关闭：从本地「素材库」按成片画幅（横 16:9 / 竖 9:16）选静帧，不调用生图 API。勾选上方开关后才会走 API。"}
@@ -3564,23 +3676,23 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         </div>
 
         {/* Always-visible essentials: aspect + motion/subtitle toggles appear below; advanced block holds prefix/test/subtitle detail */}
-        <div className={showAdvancedProduction ? "space-y-3" : "hidden"}>
+        <div hidden={!showAdvancedProduction} className={showAdvancedProduction ? "space-y-3" : undefined}>
           {!useApiImage && (
-            <div className="rounded border border-zinc-800 bg-[#101114] px-3 py-2 text-[10px] text-zinc-500 leading-relaxed">
+            <div className="ui-panel !px-3 !py-2 text-caption leading-relaxed">
               当前为<strong className="text-zinc-400"> 素材库 </strong>模式：分镜画面从本地素材库选取。
               画风前缀与测试出图主要用于开启「API 图片生成」后的调试；测试出图在关闭时也会采样素材库。
             </div>
           )}
           <div>
             <div className="flex items-center justify-between gap-3 mb-1">
-              <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+              <label className="block text-label">
                 画风提示词前缀
               </label>
               <button
                 type="button"
                 onClick={handleSavePromptPrefix}
                 disabled={savingPromptPrefix}
-                className="px-2.5 py-1 bg-[#17181c] text-zinc-300 hover:text-white rounded border border-zinc-800 hover:border-amber-500/40 text-[10px] font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                className="px-2.5 py-1 bg-[var(--color-surface-3)] text-zinc-300 hover:text-white rounded border border-[var(--color-border-subtle)] hover:border-amber-500/40 text-caption font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
                 title="保存当前提示词前缀"
               >
                 {savingPromptPrefix ? <Loader className="w-3 h-3 animate-spin text-amber-500" /> : <Save className="w-3 h-3 text-amber-500" />}
@@ -3591,12 +3703,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               value={promptPrefix}
               onChange={(e) => { setPromptPrefix(e.target.value); setSelectedStyleSlotId(null); }}
               rows={3}
-              className="w-full bg-[#17181c] border border-zinc-800 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 font-mono resize-none leading-relaxed"
+              className="ui-input font-mono resize-none leading-relaxed min-h-20 !h-auto"
               placeholder="例：紫色夜景叙事插画，细密黑色线稿，颗粒纸张质感，单一暖黄色灯光，高对比硬边阴影"
             />
-            <div className="mt-3 border-t border-zinc-800 pt-3">
+            <div className="mt-3 border-t border-[var(--color-border-subtle)] pt-3">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">参考图画风卡槽</span>
+                <span className="text-label">参考图画风卡槽</span>
                 <label className="ui-btn ui-btn-secondary ui-btn-sm cursor-pointer">
                   {styleBusy ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                   上传参考图并分析
@@ -3623,21 +3735,21 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       setSelectedStyleSlotId(slot.id);
                       addToast(`已应用画风：${slot.name}`, "success");
                     }}
-                    className={`w-36 shrink-0 overflow-hidden rounded border bg-[#17181c] text-left transition-colors hover:border-amber-500/60 ${selectedStyleSlotId === slot.id ? "border-amber-500" : "border-zinc-800"}`}
+                    className={`w-36 shrink-0 overflow-hidden rounded border bg-[var(--color-surface-3)] text-left transition-colors hover:border-amber-500/60 ${selectedStyleSlotId === slot.id ? "border-amber-500" : "border-[var(--color-border-subtle)]"}`}
                     title={`应用：${slot.name}`}
                   >
                     <img src={slot.thumbnailUrl} alt="" className="h-14 w-full object-cover" />
-                    <span className="block truncate px-2 pt-1.5 text-[11px] text-zinc-200">{slot.name}</span>
-                    <span className="block truncate px-2 pb-1.5 text-[9px] text-zinc-500">{slot.styleTags.slice(0, 2).join(" · ") || "自定义画风"}</span>
+                    <span className="block truncate px-2 pt-1.5 text-caption text-zinc-200">{slot.name}</span>
+                    <span className="block truncate px-2 pb-1.5 text-caption text-zinc-500">{slot.styleTags.slice(0, 2).join(" · ") || "自定义画风"}</span>
                   </button>
                 ))}
-                {styleSlots.length === 0 && !styleAnalysis && <span className="py-3 text-[11px] text-zinc-500">上传参考图后，可保存 1-12 个可复用画风。</span>}
+                {styleSlots.length === 0 && !styleAnalysis && <span className="py-3 text-caption text-zinc-500">上传参考图后，可保存 1-12 个可复用画风。</span>}
               </div>
               {styleAnalysis && (
                 <div className="mt-2 space-y-2 rounded border border-amber-500/25 bg-amber-500/5 p-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-medium text-amber-200">分析结果，尚未覆盖当前画风</span>
-                    <span className="text-[10px] text-zinc-500">置信度 {Math.round(Number(styleAnalysis.confidence || 0) * 100)}%</span>
+                    <span className="text-caption">置信度 {Math.round(Number(styleAnalysis.confidence || 0) * 100)}%</span>
                   </div>
                   <input className="ui-input text-xs" value={styleSlotName} onChange={(e) => setStyleSlotName(e.target.value)} placeholder="画风名称" />
                   <textarea className="ui-input min-h-20 text-xs" value={styleAnalysis.style_prefix || ""} onChange={(e) => setStyleAnalysis((current: any) => ({ ...current, style_prefix: e.target.value }))} />
@@ -3651,28 +3763,28 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-3">
-            <div className="bg-[#17181c] border border-zinc-850 rounded-md p-3 space-y-2">
+            <div className="ui-panel space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <label className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                <label className="text-label">
                   测试出图提示词 / Test Prompt
                 </label>
-                <span className="text-[9px] text-zinc-600 font-mono truncate">
+                <span className="text-caption text-zinc-600 font-mono truncate">
                   成片 {imageWidth}×{imageHeight} · 生图 {imageGenSize[0]}×{imageGenSize[1]} · {currentWorkflow?.name || "Default workflow"}
                 </span>
               </div>
-              <p className="text-[10px] text-amber-400/80">测试图仅供预览，不会复用到最终成片。</p>
+              <p className="text-caption text-amber-400/80">测试图仅供预览，不会复用到最终成片。</p>
               <textarea
                 value={testImagePrompt}
                 onChange={(e) => setTestImagePrompt(e.target.value)}
                 rows={3}
-                className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500 resize-none leading-relaxed"
+                className="ui-input min-h-20 resize-none leading-relaxed"
                 placeholder="输入一条用于测试当前前缀画风的画面提示词"
               />
               <div className="flex justify-end">
                 <button
                   onClick={handleTestImageGenerate}
                   disabled={testingImage}
-                  className="px-3 py-1.5 bg-zinc-800 text-zinc-300 hover:text-white rounded border border-zinc-750 hover:border-amber-500/40 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                  className="px-3 py-1.5 bg-zinc-800 text-zinc-300 hover:text-white rounded border border-[var(--color-border-subtle)] hover:border-amber-500/40 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
                 >
                   {testingImage ? <Loader className="w-3.5 h-3.5 animate-spin text-amber-500" /> : <Sparkles className="w-3.5 h-3.5 text-amber-500" />}
                   生成测试图
@@ -3680,7 +3792,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               </div>
             </div>
 
-            <div className="bg-[#17181c] border border-dashed border-zinc-800 rounded-md min-h-44 overflow-hidden flex items-center justify-center">
+            <div className="ui-panel min-h-44 overflow-hidden flex items-center justify-center border-dashed">
               {testingImage ? (
                 <div className="text-center text-xs text-zinc-500 space-y-2 px-4">
                   <Loader className="w-5 h-5 animate-spin text-amber-500 mx-auto" />
@@ -3693,30 +3805,30 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   className="w-full h-full min-h-44 object-cover"
                 />
               ) : testImageError ? (
-                <div className="text-center text-[11px] text-rose-400 leading-relaxed px-4">
+                <div className="text-center text-caption text-rose-400 leading-relaxed px-4">
                   {testImageError}
                 </div>
               ) : (
                 <div className="text-center text-xs text-zinc-500 space-y-2 px-4">
                   <Eye className="w-5 h-5 text-zinc-650 mx-auto" />
                   <p>测试出图区域</p>
-                  <p className="text-[10px] text-zinc-600">生成后将在这里预览当前前缀画风效果</p>
+                  <p className="text-caption">生成后将在这里预览当前前缀画风效果</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="p-3 bg-[#17181c] border border-zinc-850 rounded-md space-y-4">
+        <div className="ui-panel space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                <label className="block text-label mb-1">
                   成片规格 / Video Canvas
                 </label>
                 <Select
                   value={imageAspectRatio}
                   onChange={(e) => applyImageSizePreset(e.target.value)}
-                  className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  className="ui-input"
                 >
                   {IMAGE_SIZE_PRESETS.map((preset) => (
                     <option key={preset.id} value={preset.id}>
@@ -3726,19 +3838,19 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     </option>
                   ))}
                 </Select>
-                <p className="mt-1 text-[10px] text-zinc-600 leading-relaxed">
+                <p className="mt-1 text-caption leading-relaxed">
                   {useApiImage
                     ? `成片画布默认 1080×1920@30。生图会映射到 API 白名单（当前约 ${imageGenSize[0]}×${imageGenSize[1]}），导出再 cover 到成片尺寸。`
                     : "成片画布默认 1080×1920@30。当前为素材库模式，将按横/竖画幅从本地素材库选图，无需 API 白名单映射。"}
                 </p>
                 {isAdvancedCanvas && (
-                  <p className="mt-1 text-[10px] text-amber-400/90 leading-relaxed">
+                  <p className="mt-1 text-caption text-amber-400/90 leading-relaxed">
                     高级高分辨率：导出更慢、更容易卡在某一镜编码，建议日常用 1080p。
                   </p>
                 )}
               </div>
               <div>
-                <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                <label className="block text-label mb-1">
                   成片宽度
                 </label>
                 <input
@@ -3751,11 +3863,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     setImageAspectRatio("custom");
                     setImageWidth(parseInt(e.target.value || String(DEFAULT_VIDEO_WIDTH)));
                   }}
-                  className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  className="ui-input"
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                <label className="block text-label mb-1">
                   成片高度
                 </label>
                 <input
@@ -3768,19 +3880,19 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     setImageAspectRatio("custom");
                     setImageHeight(parseInt(e.target.value || String(DEFAULT_VIDEO_HEIGHT)));
                   }}
-                  className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  className="ui-input"
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                <label className="block text-label mb-1">
                   帧率 / FPS
                 </label>
                 <Select
                   value={String(videoFps)}
                   onChange={(e) => setVideoFps(parseInt(e.target.value || "30", 10))}
-                  className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                  className="ui-input"
                 >
                   <option value="24">24</option>
                   <option value="25">25</option>
@@ -3788,7 +3900,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                 </Select>
               </div>
               <div className="sm:col-span-2 flex items-end">
-                <p className="text-[10px] text-zinc-600 leading-relaxed pb-1">
+                <p className="text-caption leading-relaxed pb-1">
                   {useApiImage ? (
                     <>
                       生图请求尺寸（映射）：
@@ -3814,7 +3926,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               />
               <div>
                 <span className="text-xs font-semibold text-zinc-300 block">开启镜头 3D 微动效果</span>
-                <span className="text-[10px] text-zinc-500 block">通过深度估算添加摄像机推拉摇移</span>
+                <span className="text-caption block">通过深度估算添加摄像机推拉摇移</span>
               </div>
             </label>
 
@@ -3827,12 +3939,12 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
               />
               <div>
                 <span className="text-xs font-semibold text-zinc-300 block">添加高清晰中文字幕</span>
-                <span className="text-[10px] text-zinc-500 block">自动对其 TTS 脚本音频进行叠字渲染</span>
+                <span className="text-caption block">自动对其 TTS 脚本音频进行叠字渲染</span>
               </div>
             </label>
 
             {enableSubtitles && (
-              <div className="sm:col-span-2 bg-[#17181c] border border-zinc-900 rounded p-3 space-y-3">
+              <div className="ui-panel sm:col-span-2 space-y-3">
                 <SubtitleStylePreview style={subtitleStyle} />
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -3840,10 +3952,10 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   <Select
                     value={subtitleStyle.mode === "hyperframes" ? "hyperframes" : "ass"}
                     onChange={(e) => updateSubtitleStyle({ mode: e.target.value as SubtitleStyle["mode"] })}
-                    className="bg-[#101114] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    className="ui-input"
                   >
                     <option value="ass">标准字幕</option>
-                    <option value="hyperframes">动态字幕</option>
+                    <option value="hyperframes">动态字幕（实验）</option>
                   </Select>
                 </div>
 
@@ -3852,7 +3964,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                   <Select
                     value={subtitleStyle.preset}
                     onChange={(e) => handleSubtitlePresetChange(e.target.value as SubtitleStyle["preset"])}
-                    className="bg-[#101114] border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                    className="ui-input"
                   >
                     <option value="short-video-bold">短视频粗体</option>
                     <option value="clean-white">清爽白字</option>
@@ -3863,21 +3975,21 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-start">
                   <div>
-                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                    <label className="block text-label mb-1">
                       字体 / Font
                     </label>
                     <FontSelect
                       value={subtitleStyle.fontPath || ""}
                       fonts={fontOptions}
                       onChange={handleSubtitleFontChange}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      className="ui-input"
                       previewText="让每一帧，都更有表达力 Aa 123"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={openCustomFontFolder}
-                    className="self-end inline-flex items-center justify-center gap-1.5 bg-[#101114] border border-zinc-800 hover:border-amber-500/60 text-zinc-300 rounded px-3 py-1.5 text-xs transition-colors"
+                    className="self-end inline-flex items-center justify-center gap-1.5 bg-[var(--color-surface-3)] border border-[var(--color-border-subtle)] hover:border-amber-500/60 text-zinc-300 rounded px-3 py-1.5 text-xs transition-colors"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                     自定义字体文件夹
@@ -3887,7 +3999,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     onClick={refreshFonts}
                     title="刷新字体列表"
                     aria-label="刷新字体列表"
-                    className="self-end inline-flex items-center justify-center gap-1.5 bg-[#101114] border border-zinc-800 hover:border-amber-500/60 text-zinc-300 rounded px-3 py-1.5 text-xs transition-colors"
+                    className="self-end inline-flex items-center justify-center gap-1.5 bg-[var(--color-surface-3)] border border-[var(--color-border-subtle)] hover:border-amber-500/60 text-zinc-300 rounded px-3 py-1.5 text-xs transition-colors"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     刷新字体
@@ -3896,7 +4008,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
                   <div>
-                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                    <label className="block text-label mb-1">
                       字号
                     </label>
                     <input
@@ -3905,11 +4017,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       max="120"
                       value={subtitleStyle.fontSize}
                       onChange={(e) => updateSubtitleStyle({ fontSize: parseInt(e.target.value || "52", 10) })}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      className="ui-input"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                    <label className="block text-label mb-1">
                       {isCaptionBox ? "底框边距" : "描边"}
                     </label>
                     <input
@@ -3925,11 +4037,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                           updateSubtitleStyle({ outlineWidth: n, strokeWidth: n });
                         }
                       }}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      className="ui-input"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                    <label className="block text-label mb-1">
                       底部距离
                     </label>
                     <input
@@ -3938,11 +4050,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       max="600"
                       value={subtitleStyle.marginV}
                       onChange={(e) => updateSubtitleStyle({ marginV: parseInt(e.target.value || "120", 10) })}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      className="ui-input"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                    <label className="block text-label mb-1">
                       每行字数
                     </label>
                     <input
@@ -3951,11 +4063,11 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       max="40"
                       value={subtitleStyle.maxCharsPerLine}
                       onChange={(e) => updateSubtitleStyle({ maxCharsPerLine: parseInt(e.target.value || "14", 10) })}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      className="ui-input"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                    <label className="block text-label mb-1">
                       阴影
                     </label>
                     <input
@@ -3964,7 +4076,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       max="12"
                       value={subtitleStyle.shadow}
                       onChange={(e) => updateSubtitleStyle({ shadow: parseInt(e.target.value || "0", 10) })}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      className="ui-input"
                     />
                   </div>
                 </div>
@@ -3984,7 +4096,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                         ]
                   ).map(([label, key]) => (
                     <label key={key} className="block">
-                      <span className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                      <span className="block text-label mb-1">
                         {label}
                       </span>
                       <input
@@ -4003,99 +4115,107 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                             updateSubtitleStyle({ [key]: e.target.value } as Partial<SubtitleStyle>);
                           }
                         }}
-                        className="w-full h-8 bg-[#101114] border border-zinc-900 rounded px-1 py-1"
+                        className="w-full h-8 bg-[var(--color-surface-3)] border border-[var(--color-border-subtle)] rounded px-1 py-1"
                       />
                     </label>
                   ))}
                 </div>
                 {isCaptionBox && (
-                  <p className="text-[10px] text-zinc-500">
-                    黑底框：边距控制底框厚度；底色控制框填充。标准字幕（ASS）为直角框；圆角需动态字幕路径成功时生效。
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-caption">
+                      黑底框：边距控制底框厚度；底色控制框填充。标准字幕（ASS）为直角框；圆角需动态字幕路径成功时生效。
+                    </p>
+                    <div>
+                      <label className="block text-label mb-1">底色透明度</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={subtitleStyle.backgroundOpacity ?? 72}
+                        onChange={(e) => updateSubtitleStyle({ backgroundOpacity: parseInt(e.target.value || "72", 10) })}
+                        className="ui-input max-w-[140px]"
+                      />
+                    </div>
+                  </div>
                 )}
 
-                <div className="border-t border-zinc-800 pt-3 space-y-3">
+                <div className="border-t border-[var(--color-border-subtle)] pt-3 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                    <span className="text-label">
                       高亮显示
                     </span>
-                    {mode === "ai" ? (
-                      <button
-                        type="button"
-                        onClick={() => document.getElementById("keyword-extraction")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-                        className="inline-flex items-center justify-center gap-1.5 rounded border border-zinc-800 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-amber-500/40 hover:text-zinc-200"
-                      >
-                        <Sparkles className="w-3 h-3" />
-                        已选 {(subtitleStyle.highlightWords || []).length} 个词 · 编辑
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-zinc-500">已选 {(subtitleStyle.highlightWords || []).length} 个词</span>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById("keyword-extraction")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                      className="inline-flex items-center justify-center gap-1.5 rounded border border-[var(--color-border-subtle)] px-2.5 py-1 text-caption text-zinc-400 hover:border-amber-500/40 hover:text-zinc-200"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      {(subtitleStyle.highlightWords || []).length ? "去内容里改词" : "去内容里添加"}
+                    </button>
                   </div>
-                  {mode !== "ai" && renderSelectedKeywordEditor()}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {dynamicSubtitleEnabled && (
-                      <>
-                        <div>
-                          <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">高亮样式</label>
-                          <Select
-                            value={subtitleStyle.highlightStyle || "accent"}
-                            onChange={(e) => updateSubtitleStyle({ highlightStyle: e.target.value as NonNullable<SubtitleStyle["highlightStyle"]> })}
-                            className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-                          >
-                            <option value="accent">强调色</option>
-                            <option value="pop">加粗强调</option>
-                            <option value="badge">色块徽标</option>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">高亮缩放</label>
-                          <input
-                            type="number"
-                            min="100"
-                            max="180"
-                            value={subtitleStyle.highlightScale || 125}
-                            onChange={(e) => updateSubtitleStyle({ highlightScale: parseInt(e.target.value || "125", 10) })}
-                            className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
-                          />
-                        </div>
-                      </>
-                    )}
-                    {(dynamicSubtitleEnabled || subtitleStyle.preset === "caption-box") && (
+                  {(subtitleStyle.highlightWords || []).length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(subtitleStyle.highlightWords || []).map((word) => (
+                        <span
+                          key={word}
+                          className="inline-flex items-center rounded border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] px-2 py-0.5 text-caption font-medium"
+                          style={{ color: subtitleStyle.keywordColors?.[word] || subtitleStyle.accentColor }}
+                        >
+                          {word}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-caption text-zinc-500">未选高亮词。在内容区抽词或手填后，这里只调字幕高亮样子。</p>
+                  )}
+                  {dynamicSubtitleEnabled && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">底色透明度</label>
+                        <label className="block text-label mb-1">高亮样式</label>
+                        <Select
+                          value={subtitleStyle.highlightStyle || "accent"}
+                          onChange={(e) => updateSubtitleStyle({ highlightStyle: e.target.value as NonNullable<SubtitleStyle["highlightStyle"]> })}
+                          className="ui-input"
+                        >
+                          <option value="accent">强调色</option>
+                          <option value="pop">加粗强调</option>
+                          <option value="badge">色块徽标</option>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-label mb-1">高亮缩放</label>
                         <input
                           type="number"
-                          min="0"
-                          max="100"
-                          value={subtitleStyle.backgroundOpacity ?? 72}
-                          onChange={(e) => updateSubtitleStyle({ backgroundOpacity: parseInt(e.target.value || "72", 10) })}
-                          className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                          min="100"
+                          max="180"
+                          value={subtitleStyle.highlightScale || 125}
+                          onChange={(e) => updateSubtitleStyle({ highlightScale: parseInt(e.target.value || "125", 10) })}
+                          className="ui-input"
                         />
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">缓入 ms</label>
+                      <label className="block text-label mb-1">缓入 ms</label>
                       <input
                         type="number"
                         min="0"
                         max="1000"
                         value={subtitleStyle.fadeInMs ?? 120}
                         onChange={(e) => updateSubtitleStyle({ fadeInMs: parseInt(e.target.value || "120", 10) })}
-                        className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                        className="ui-input"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">缓出 ms</label>
+                      <label className="block text-label mb-1">缓出 ms</label>
                       <input
                         type="number"
                         min="0"
                         max="1000"
                         value={subtitleStyle.fadeOutMs ?? 120}
                         onChange={(e) => updateSubtitleStyle({ fadeOutMs: parseInt(e.target.value || "120", 10) })}
-                        className="w-full bg-[#0c0d10] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                        className="ui-input"
                       />
                     </div>
                   </div>
@@ -4103,13 +4223,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                   <div>
-                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                    <label className="block text-label mb-1">
                       分段方式
                     </label>
                     <Select
                       value={subtitleStyle.segmentMode}
                       onChange={(e) => updateSubtitleStyle({ segmentMode: e.target.value as SubtitleStyle["segmentMode"] })}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      className="ui-input"
                     >
                       <option value="sentence">按标点切分（一行一句、去标点）</option>
                       <option value="phrase">按字数切分</option>
@@ -4117,7 +4237,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     </Select>
                   </div>
                   <div>
-                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                    <label className="block text-label mb-1">
                       行数
                     </label>
                     <input
@@ -4126,17 +4246,17 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                       max="4"
                       value={subtitleStyle.maxLines}
                       onChange={(e) => updateSubtitleStyle({ maxLines: parseInt(e.target.value || "2", 10) })}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      className="ui-input"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                    <label className="block text-label mb-1">
                       动画
                     </label>
                     <Select
                       value={dynamicSubtitleEnabled || subtitleStyle.animation !== "word-pop" ? subtitleStyle.animation : "fade"}
                       onChange={(e) => updateSubtitleStyle({ animation: e.target.value as SubtitleStyle["animation"] })}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      className="ui-input"
                     >
                       <option value="fade">淡入淡出</option>
                       <option value="pop">整段弹跳</option>
@@ -4145,13 +4265,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
                     </Select>
                   </div>
                   <div>
-                    <label className="block text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-1">
+                    <label className="block text-label mb-1">
                       对齐
                     </label>
                     <Select
                       value={String(subtitleStyle.alignment)}
                       onChange={(e) => updateSubtitleStyle({ alignment: parseInt(e.target.value, 10) })}
-                      className="w-full bg-[#101114] border border-zinc-900 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+                      className="ui-input"
                     >
                       <option value="1">左下</option>
                       <option value="2">居中</option>
@@ -4173,13 +4293,13 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             <Workflow className="h-4 w-4 text-amber-500" />
             画面工作流
             {!useApiImage && (
-              <span className="ml-1 text-[9px] font-normal text-zinc-600">（素材库模式下不调用）</span>
+              <span className="ml-1 text-caption font-normal text-zinc-600">（素材库模式下不调用）</span>
             )}
           </h3>
           <button
             type="button"
             onClick={() => setWorkflowsCollapsed((current) => !current)}
-            className="w-7 h-7 inline-flex items-center justify-center rounded border border-zinc-800 bg-[#17181c] text-zinc-400 hover:text-zinc-100 hover:border-amber-500/40 transition-colors"
+            className="w-7 h-7 inline-flex items-center justify-center rounded border border-[var(--color-border-subtle)] bg-[var(--color-surface-3)] text-zinc-400 hover:text-zinc-100 hover:border-amber-500/40 transition-colors"
             title={workflowsCollapsed ? "展开 Workflows" : "折叠 Workflows"}
             aria-label={workflowsCollapsed ? "展开 Workflows" : "折叠 Workflows"}
           >
@@ -4190,31 +4310,33 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         {!workflowsCollapsed && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-h-[360px] overflow-y-auto pr-1">
             {workflowOptions.length === 0 && (
-              <div className="sm:col-span-3 border border-dashed border-zinc-800 rounded p-6 text-center text-xs text-zinc-500">
+              <div className="ui-panel sm:col-span-3 border-dashed p-6 text-center text-xs text-zinc-500">
                 正在等待后端工作流资源...
               </div>
             )}
             {workflowOptions.map((wf) => (
-              <div
+              <button
+                type="button"
                 key={wf.id}
+                aria-pressed={workflowId === wf.id}
                 onClick={() => setWorkflowId(wf.id)}
-                className={`p-3 rounded border text-left cursor-pointer transition-colors ${
+                className={`ui-panel text-left transition-colors ${
                   workflowId === wf.id
-                    ? "bg-[#17181c] border-amber-500/30 text-amber-400"
-                    : "bg-[#121316] border-zinc-900 text-zinc-400 hover:text-zinc-200"
+                    ? "text-amber-400 ring-1 ring-amber-500/30"
+                    : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <span className="text-[11px] font-semibold text-zinc-200 block truncate">{wf.name}</span>
-                  <span className="text-[8px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded font-mono">
+                  <span className="text-caption font-semibold text-zinc-200 block truncate">{wf.name}</span>
+                  <span className="text-caption bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded font-mono">
                     {wf.source}
                   </span>
                 </div>
-                <span className="text-[9px] font-mono text-zinc-500 block">类型: {wf.type} | {wf.resolution}</span>
-                <p className="text-[10px] text-zinc-400 leading-relaxed mt-2 line-clamp-2">
+                <span className="text-caption font-mono text-zinc-500 block">类型: {wf.type} | {wf.resolution}</span>
+                <p className="text-caption leading-relaxed mt-2 line-clamp-2">
                   {wf.desc}
                 </p>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -4222,6 +4344,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       </div>
       </div>
       {/* End step style */}
+      </div>
 
       {/* Step 4: Review */}
       <div className={showReviewStep ? "space-y-5 animate-soft-scale-in" : "hidden"}>
@@ -4248,7 +4371,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             ["生成策略", effectiveReuseSourceTaskId ? `复用素材${reuseLabel ? ` · ${reuseLabel}` : ""}` : "完整生成"],
             ["预计旁白", `约 ${Math.ceil(reviewNarrationSeconds / 60)} 分钟`],
           ].map(([label, value]) => (
-            <div key={label} className="bg-[#17181c] border border-zinc-900 rounded p-2 min-w-0">
+            <div key={label} className="ui-panel min-w-0">
               <dt className="text-zinc-500 mb-1">{label}</dt>
               <dd className="text-zinc-200 truncate" title={value}>{value}</dd>
             </div>
@@ -4256,7 +4379,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
         </dl>
 
         {mode !== "batch" && (latestCompletedTaskId || reuseSourceTaskId) && (
-          <label className="flex items-start gap-2 rounded-md border border-zinc-800 bg-[#0c0d10] p-3 text-sm text-zinc-300 cursor-pointer">
+          <label className="flex items-start gap-2 ui-panel text-sm text-zinc-300 cursor-pointer">
             <input
               type="checkbox"
               checked={reuseAssetsEnabled}
@@ -4270,7 +4393,7 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
             />
             <span>
               沿用历史素材（配音/图片优先复用）
-              <span className="block text-[10px] text-zinc-500 mt-0.5 leading-relaxed">
+              <span className="block text-caption mt-0.5 leading-relaxed">
                 新建项目时从所选历史任务拷贝配音/画面（可多次新建）。若已在作品库「复制为项目」，请直接打开该工作台改风格后点「开始生成」，无需再勾此项重复创建。
               </span>
               {reuseLabel && (
@@ -4303,6 +4426,17 @@ export const QuickCreate: React.FC<QuickCreateProps> = ({
       </section>
       </div>
       {/* End step review */}
+      </div>
+
+      <CreateStageRail
+        aspectWidth={imageWidth}
+        aspectHeight={imageHeight}
+        canvasLabel={selectedCanvasPreset?.label || `${imageWidth}×${imageHeight}`}
+        testImageUrl={testImageUrl}
+        subtitleStyle={subtitleStyle}
+        scenes={mode === "ai" ? liveStoryboardPreview : mode === "manual" ? scenes : []}
+      />
+      </div>
 
       <CreateStickyFooter
         expertMode={expertMode}

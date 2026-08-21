@@ -325,6 +325,36 @@ textarea.ui-input {
   color: #fcd34d;
 }
 
+/* ---------- Segmented control (PR-H / 03 §3.5) ---------- */
+.ui-segment {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-3);
+  overflow-x: auto;
+}
+
+.ui-segment > button {
+  flex: 1 1 auto;
+  min-width: 4.5rem;
+  min-height: 2.25rem;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.35rem 0.5rem;
+}
+
+.ui-segment > button[aria-pressed="true"] {
+  background: var(--color-surface-2);
+  color: var(--color-brand-400);
+  box-shadow: var(--shadow-soft);
+}
+
 /* ---------- Sticky create footer shell (for PR-C) ---------- */
 .ui-sticky-footer {
   position: sticky;

@@ -264,6 +264,38 @@ export async function analyzeStyleReference(file: File): Promise<{ style: any }>
   return fetchJson<{ style: any }>("/api/style-slots/analyze", { method: "POST", body: form });
 }
 
+export async function uploadImageToVideoFile(file: File): Promise<{ file_key: string; url: string; filename: string }> {
+  const form = new FormData();
+  form.append("files", file);
+  const data = await fetchJson<{ files?: Array<{ file_key: string; url: string; filename: string }> }>(
+    "/api/uploads?purpose=image-to-video",
+    { method: "POST", body: form },
+  );
+  const uploaded = data.files?.[0];
+  if (!uploaded?.file_key) {
+    throw new Error("图片上传失败");
+  }
+  return uploaded;
+}
+
+export async function submitImageToVideoTask(input: {
+  imageFileKey: string;
+  prompt: string;
+  workflowKey: string;
+  title: string;
+}): Promise<{ task_id: string }> {
+  return fetchJson<{ task_id: string }>("/api/specialist/image-to-video/generate/async", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      image_file_key: input.imageFileKey,
+      prompt: input.prompt,
+      workflow_key: input.workflowKey,
+      title: input.title,
+    }),
+  });
+}
+
 export async function saveStyleSlot(file: File, style: any, name: string, strength = 70): Promise<StyleSlot> {
   const form = new FormData();
   form.append("file", file);

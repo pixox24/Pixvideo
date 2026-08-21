@@ -46,40 +46,6 @@ await pixelle.initialize()
 uv run uvicorn api.app:app --host 127.0.0.1 --port 8000
 ```
 
-### 视频生成 - 同步
-
-`POST /api/video/generate/sync`
-
-同步生成视频，等待完成后返回结果。适合小视频（< 30 秒）。
-
-**请求体**:
-
-```json
-{
-  "text": "为什么要养成阅读习惯",
-  "mode": "generate",
-  "n_scenes": 5,
-  "frame_template": "1080x1920/image_default.html",
-  "template_params": {
-    "accent_color": "#3498db",
-    "background": "https://example.com/custom-bg.jpg"
-  },
-  "title": "阅读的力量"
-}
-```
-
-**响应**:
-
-```json
-{
-  "success": true,
-  "message": "Success",
-  "video_url": "http://localhost:8000/api/files/xxx/final.mp4",
-  "duration": 45.5,
-  "file_size": 12345678
-}
-```
-
 ### 视频生成 - 异步
 
 `POST /api/video/generate/async`

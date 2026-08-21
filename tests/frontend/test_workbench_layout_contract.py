@@ -11,5 +11,7 @@ def test_workbench_layout_has_scene_preview_inspector_and_queue_regions():
     for marker in ["画面预览", "提示词", "重新生成"]:
         assert marker in (workbench + inspector)
     assert "audioRef" in workbench
+    assert "togglePlay" in workbench
     assert "上一个分镜" in workbench
     assert "下一个分镜" in workbench
+    assert "ui-panel" in inspector

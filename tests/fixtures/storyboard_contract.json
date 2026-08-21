@@ -1,0 +1,24 @@
+{
+  "sceneMax": 100,
+  "cases": [
+    {
+      "name": "soft_expand_keeps_pause_on_left",
+      "fn": "soft_expand_by_pause",
+      "input": ["荣格说中年是第二次成年，前半生为别人活，后半生该找回真正的自己。"],
+      "expected": [
+        "荣格说中年是第二次成年，",
+        "前半生为别人活，",
+        "后半生该找回真正的自己。"
+      ]
+    },
+    {
+      "name": "heal_mid_cuts_joins_hard_word_break",
+      "fn": "heal_mid_cuts",
+      "input": [
+        "抬头看天空，那会不会是渲染出来的背景？科学家发",
+        "现，光速就像系统设定的上限"
+      ],
+      "expectedContains": "科学家发现"
+    }
+  ]
+}

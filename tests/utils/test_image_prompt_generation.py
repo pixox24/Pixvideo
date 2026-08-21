@@ -85,6 +85,68 @@ def test_image_prompt_parser_repairs_unescaped_quotes_inside_prompt_text():
     assert parsed["image_prompts"] == ['Calendar marked "MONDAY" in red, hard light']
 
 
+def test_image_prompt_parser_inserts_missing_commas_between_pretty_printed_prompts():
+    payload = """{"image_prompts": [
+  "In a dark bedroom, a lone figure lies awake"
+  "A calendar marked Monday hangs over a desk"
+  "Wide city lights smear across wet asphalt"
+]}"""
+    parsed = _parse_image_prompt_response(payload)
+    assert parsed["image_prompts"] == [
+        "In a dark bedroom, a lone figure lies awake",
+        "A calendar marked Monday hangs over a desk",
+        "Wide city lights smear across wet asphalt",
+    ]
+
+
+def test_image_prompt_parser_inserts_missing_commas_in_compact_arrays():
+    payload = '{"image_prompts":["first prompt" "second prompt" "third prompt"]}'
+    parsed = _parse_image_prompt_response(payload)
+    assert parsed["image_prompts"] == ["first prompt", "second prompt", "third prompt"]
+
+
+def test_image_prompt_parser_escapes_raw_newlines_inside_prompt_strings():
+    payload = '{"image_prompts":["A figure stares into the dark\nwith one hand on the chest"]}'
+    parsed = _parse_image_prompt_response(payload)
+    assert parsed["image_prompts"] == [
+        "A figure stares into the dark\nwith one hand on the chest"
+    ]
+
+
+def test_image_prompt_parser_accepts_bare_json_array():
+    parsed = _parse_image_prompt_response(
+        '["In a dark empty room, a lone figure sits on the floor hugging knees", "A calendar marked Monday hangs over a desk"]'
+    )
+    assert parsed["image_prompts"] == [
+        "In a dark empty room, a lone figure sits on the floor hugging knees",
+        "A calendar marked Monday hangs over a desk",
+    ]
+
+
+def test_image_prompt_parser_accepts_pretty_printed_bare_array_without_commas():
+    payload = """[
+  "In a dark empty room, a lone figure sits on the floor hugging knees"
+  "A calendar marked Monday hangs over a wooden desk in hard light"
+]"""
+    parsed = _parse_image_prompt_response(payload)
+    assert parsed["image_prompts"] == [
+        "In a dark empty room, a lone figure sits on the floor hugging knees",
+        "A calendar marked Monday hangs over a wooden desk in hard light",
+    ]
+
+
+def test_image_prompt_parser_uses_inner_array_when_object_parse_yields_list():
+    # Broken object that still contains a valid prompt array. The fallback JSON
+    # extractor may return that array instead of the wrapper object.
+    payload = (
+        'Note:\n{"image_prompts": ["In a dark empty room, a lone figure sits on the floor hugging knees", '
+        '"A calendar marked Monday hangs over a desk"]}\n'
+    )
+    parsed = _parse_image_prompt_response(payload)
+    assert len(parsed["image_prompts"]) == 2
+    assert parsed["image_prompts"][0].startswith("In a dark empty room")
+
+
 def test_generic_model_json_parser_repairs_unescaped_quotes_in_segmentation_payload():
     payload = '{"segments":[{"text":"星期一的早晨","visual_focus":"calendar marked "MONDAY""}]}'
     parsed = _parse_json(payload)

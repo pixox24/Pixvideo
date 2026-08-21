@@ -9,7 +9,7 @@ export const WIZARD_STEPS = [
 export type WizardStepId = (typeof WIZARD_STEPS)[number]["id"];
 
 export const WIZARD_STEP_HINT: Record<WizardStepId, string> = {
-  content: "写好文案与分镜，再进入风格",
+  content: "写好主题与口播，再进入风格",
   style: "确认画幅、工作流与字幕",
   voice: "确认配音与背景音乐",
   review: "核对后提交生成",

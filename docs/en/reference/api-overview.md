@@ -46,40 +46,6 @@ Start the API server:
 uv run uvicorn api.app:app --host 127.0.0.1 --port 8000
 ```
 
-### Video Generation - Synchronous
-
-`POST /api/video/generate/sync`
-
-Generate video synchronously, waits until completion. Suitable for small videos (< 30 seconds).
-
-**Request Body**:
-
-```json
-{
-  "text": "Why you should develop a reading habit",
-  "mode": "generate",
-  "n_scenes": 5,
-  "frame_template": "1080x1920/image_default.html",
-  "template_params": {
-    "accent_color": "#3498db",
-    "background": "https://example.com/custom-bg.jpg"
-  },
-  "title": "The Power of Reading"
-}
-```
-
-**Response**:
-
-```json
-{
-  "success": true,
-  "message": "Success",
-  "video_url": "http://localhost:8000/api/files/xxx/final.mp4",
-  "duration": 45.5,
-  "file_size": 12345678
-}
-```
-
 ### Video Generation - Asynchronous
 
 `POST /api/video/generate/async`

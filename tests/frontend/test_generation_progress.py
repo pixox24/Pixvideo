@@ -27,6 +27,8 @@ def test_console_panel_uses_real_pipeline_order_and_current_stage():
     assert "getProgressStageKey" in component
     assert "formatLiveProgressLabel" in component
     assert "当前步骤" in component
+    assert "ui-chip" in component
+    assert "text-[8px]" not in component
     assert "progressEventType" in component
     assert "progressAction" in component
 

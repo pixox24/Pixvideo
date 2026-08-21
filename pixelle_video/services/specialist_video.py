@@ -1,4 +1,4 @@
-"""UI-independent helpers for specialist workflows that return a video URL."""
+"""UI-independent helpers for image-to-video workflows."""
 
 from __future__ import annotations
 
@@ -51,67 +51,6 @@ async def execute_video_workflow(
     timeout = httpx.Timeout(300.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         async with client.stream("GET", video_url) as response:
-            response.raise_for_status()
-            with final_video_path.open("wb") as target:
-                async for chunk in response.aiter_bytes():
-                    target.write(chunk)
-    return str(final_video_path)
-
-
-async def execute_digital_human_video(
-    core: Any,
-    task_id: str,
-    mode: str,
-    character_path: str,
-    script: str,
-    product_path: str | None,
-    product_title: str | None,
-    tts_inference_mode: str,
-    voice: str | None,
-    speed: float,
-) -> str:
-    """Run the digital-human workflow without any UI dependency."""
-    task_dir, _ = create_task_output_dir(task_id)
-    kit = await core._get_or_create_comfykit()
-    narration = script.strip()
-
-    if mode == "digital":
-        if narration:
-            image_workflow = "runninghub/digital_customize.json"
-            image_params = {"firstimage": character_path, "secondimage": product_path}
-        else:
-            image_workflow = "runninghub/digital_image.json"
-            image_params = {"firstimage": character_path, "secondimage": product_path, "goodstype": product_title}
-        image_result = await kit.execute(
-            json.loads(_resolve_workflow_path(image_workflow).read_text(encoding="utf-8"))["workflow_id"],
-            image_params,
-        )
-        generated_image = (getattr(image_result, "images", None) or [None])[0]
-        if not generated_image:
-            raise RuntimeError("Digital-human image workflow did not return an image")
-        if not narration:
-            narration = (getattr(image_result, "texts", None) or [""])[0]
-        if not narration:
-            raise RuntimeError("Digital-human image workflow did not return narration text")
-    else:
-        generated_image = character_path
-
-    audio_path = str(Path(task_dir) / "narration.mp3")
-    await core.tts(
-        text=narration,
-        output_path=audio_path,
-        inference_mode=tts_inference_mode,
-        voice=voice,
-        speed=speed,
-    )
-    result = await kit.execute(
-        json.loads(_resolve_workflow_path("runninghub/digital_combination.json").read_text(encoding="utf-8"))["workflow_id"],
-        {"videoimage": generated_image, "audio": audio_path},
-    )
-    final_video_path = Path(task_dir) / "final.mp4"
-    timeout = httpx.Timeout(300.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream("GET", _extract_video_url(result)) as response:
             response.raise_for_status()
             with final_video_path.open("wb") as target:
                 async for chunk in response.aiter_bytes():

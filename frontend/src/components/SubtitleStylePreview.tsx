@@ -113,30 +113,30 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
   const activeFontFamily = previewFontFamily || style.fontFamily || "system-ui, sans-serif";
 
   return (
-    <section className="rounded-md border border-zinc-800 bg-[#101114] p-3 space-y-2.5" aria-label="字幕样式预览">
+    <section className="ui-panel space-y-2.5" aria-label="字幕样式预览">
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-xs font-semibold text-zinc-200">样式预览</p>
-          <p className="text-[10px] text-zinc-500">
+          <p className="text-caption">
             {boxEnabled
               ? "底框预览与成片对齐（ASS 为直角；圆角仅动态字幕）"
               : "样式预览；描边/颜色与成片一致"}
           </p>
         </div>
-        <button type="button" onClick={replay} className="rounded border border-amber-500/50 px-2 py-1 text-[10px] font-medium text-amber-300 hover:bg-amber-500/10">
+        <button type="button" onClick={replay} className="ui-btn ui-btn-secondary ui-btn-sm">
           {isPlaying ? "播放中" : "播放效果"}
         </button>
       </div>
 
       <div className="flex flex-wrap gap-1.5" aria-label="预览场景">
         {SCENES.map((item) => (
-          <button key={item.id} type="button" onClick={() => setScene(item.id)} className={`rounded px-2 py-1 text-[10px] transition-colors ${scene === item.id ? "bg-zinc-100 text-zinc-900" : "bg-[#17181c] text-zinc-400 hover:text-zinc-200"}`}>
+          <button key={item.id} type="button" aria-pressed={scene === item.id} onClick={() => setScene(item.id)} className={`rounded-[var(--radius-md)] px-2 py-1 text-caption transition-colors ${scene === item.id ? "bg-zinc-100 text-zinc-900" : "bg-[var(--color-surface-3)] text-zinc-400 hover:text-zinc-200"}`}>
             {item.label}
           </button>
         ))}
-        <span className="mx-0.5 h-5 w-px bg-zinc-800" />
+        <span className="mx-0.5 h-5 w-px bg-[var(--color-border-subtle)]" />
         {(["landscape", "portrait"] as PreviewAspect[]).map((item) => (
-          <button key={item} type="button" onClick={() => setAspect(item)} className={`rounded px-2 py-1 text-[10px] transition-colors ${aspect === item ? "bg-amber-500/20 text-amber-200" : "bg-[#17181c] text-zinc-400 hover:text-zinc-200"}`}>
+          <button key={item} type="button" aria-pressed={aspect === item} onClick={() => setAspect(item)} className={`rounded-[var(--radius-md)] px-2 py-1 text-caption transition-colors ${aspect === item ? "bg-amber-500/20 text-amber-200" : "bg-[var(--color-surface-3)] text-zinc-400 hover:text-zinc-200"}`}>
             {item === "landscape" ? "16:9" : "9:16"}
           </button>
         ))}
@@ -167,7 +167,7 @@ export const SubtitleStylePreview: React.FC<SubtitleStylePreviewProps> = ({ styl
         </div>
       </div>
 
-      {!fontAvailable && <p className="text-[10px] text-amber-300">无法加载所选字体，预览使用回退字体。</p>}
+      {!fontAvailable && <p className="text-caption text-amber-300">无法加载所选字体，预览使用回退字体。</p>}
     </section>
   );
 };

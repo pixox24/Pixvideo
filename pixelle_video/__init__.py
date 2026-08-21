@@ -32,15 +32,8 @@ Usage:
         n_scenes=5
     )
     
-    # Custom pipeline (template for your own logic)
-    result = await pixelle_video.generate_video(
-        text=your_content,
-        pipeline="custom",
-        custom_param_example="custom_value"
-    )
-    
     # Check available pipelines
-    print(pixelle_video.pipelines.keys())  # dict_keys(['standard', 'custom'])
+    print(pixelle_video.pipelines.keys())  # dict_keys(['standard'])
 """
 
 from pixelle_video.config import config_manager

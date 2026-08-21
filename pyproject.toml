@@ -9,7 +9,6 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
 dependencies = [
-    "fastmcp>=2.0.0",
     "pydantic>=2.0.0",
     "loguru>=0.7.0",
     "pyyaml>=6.0.0",
@@ -24,7 +23,6 @@ dependencies = [
     "python-multipart>=0.0.12",
     "comfykit>=0.1.12",
     "beautifulsoup4>=4.14.2",
-    "moviepy==1.0.3",
     "playwright>=1.58.0",
 ]
 
@@ -49,7 +47,7 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "api/app.py" = ["E402"]
-"generate_video.py" = ["E402"]
+"examples/generate_video.py" = ["E402"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

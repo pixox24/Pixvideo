@@ -12,35 +12,31 @@
         <meta name="author" content="Pixelle.AI">
       
       
-        <link rel="canonical" href="https://AIDC-AI.github.io/Pixelle-Video/reference/api-overview/">
+        <link rel="canonical" href="https://AIDC-AI.github.io/Pixelle-Video/archive/superpowers/specs/2026-06-20-bizyair-image-generation-design/">
       
       
-        <link rel="prev" href="../../tutorials/voice-cloning/">
-      
-      
-        <link rel="next" href="../config-schema/">
       
       
         
           <link rel="alternate" href="./" hreflang="en">
         
-          <link rel="alternate" href="../../zh/reference/api-overview/" hreflang="zh">
+          <link rel="alternate" href="../../../../zh/archive/superpowers/specs/2026-06-20-bizyair-image-generation-design/" hreflang="zh">
         
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../../../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>API Overview - Pixelle-Video</title>
+        <title>BizyAir Image Generation Workflow Design - Pixelle-Video</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -59,9 +55,9 @@
       
     
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -86,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#api-overview" class="md-skip">
+        <a href="#bizyair-image-generation-workflow-design" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +98,7 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Pixelle-Video" class="md-header__button md-logo" aria-label="Pixelle-Video" data-md-component="logo">
+    <a href="../../../.." title="Pixelle-Video" class="md-header__button md-logo" aria-label="Pixelle-Video" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -122,7 +118,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              API Overview
+              BizyAir Image Generation Workflow Design
             
           </span>
         </div>
@@ -175,7 +171,7 @@
           </li>
         
           <li class="md-select__item">
-            <a href="../../zh/reference/api-overview/" hreflang="zh" class="md-select__link">
+            <a href="../../../../zh/archive/superpowers/specs/2026-06-20-bizyair-image-generation-design/" hreflang="zh" class="md-select__link">
               中文
             </a>
           </li>
@@ -260,7 +256,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../.." class="md-tabs__link">
+      <a href="../../../.." class="md-tabs__link">
         
   
   
@@ -281,7 +277,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../getting-started/installation/" class="md-tabs__link">
+        <a href="../../../../getting-started/installation/" class="md-tabs__link">
           
   
   
@@ -301,7 +297,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../user-guide/web-ui/" class="md-tabs__link">
+        <a href="../../../../user-guide/web-ui/" class="md-tabs__link">
           
   
   
@@ -319,7 +315,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../gallery/" class="md-tabs__link">
+      <a href="../../../../gallery/" class="md-tabs__link">
         
   
   
@@ -340,7 +336,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../tutorials/your-first-video/" class="md-tabs__link">
+        <a href="../../../../tutorials/your-first-video/" class="md-tabs__link">
           
   
   
@@ -356,13 +352,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="./" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../../../reference/api-overview/" class="md-tabs__link">
           
   
   
@@ -382,7 +376,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../development/architecture/" class="md-tabs__link">
+        <a href="../../../../development/architecture/" class="md-tabs__link">
           
   
   
@@ -400,7 +394,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../faq/" class="md-tabs__link">
+      <a href="../../../../faq/" class="md-tabs__link">
         
   
   
@@ -419,7 +413,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../troubleshooting/" class="md-tabs__link">
+      <a href="../../../../troubleshooting/" class="md-tabs__link">
         
   
   
@@ -460,7 +454,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Pixelle-Video" class="md-nav__button md-logo" aria-label="Pixelle-Video" data-md-component="logo">
+    <a href="../../../.." title="Pixelle-Video" class="md-nav__button md-logo" aria-label="Pixelle-Video" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -490,7 +484,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../../.." class="md-nav__link">
         
   
   
@@ -571,7 +565,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/installation/" class="md-nav__link">
+      <a href="../../../../getting-started/installation/" class="md-nav__link">
         
   
   
@@ -599,7 +593,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/quick-start/" class="md-nav__link">
+      <a href="../../../../getting-started/quick-start/" class="md-nav__link">
         
   
   
@@ -627,7 +621,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/configuration/" class="md-nav__link">
+      <a href="../../../../getting-started/configuration/" class="md-nav__link">
         
   
   
@@ -716,7 +710,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/web-ui/" class="md-nav__link">
+      <a href="../../../../user-guide/web-ui/" class="md-nav__link">
         
   
   
@@ -744,7 +738,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/api/" class="md-nav__link">
+      <a href="../../../../user-guide/api/" class="md-nav__link">
         
   
   
@@ -772,7 +766,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/workflows/" class="md-nav__link">
+      <a href="../../../../user-guide/workflows/" class="md-nav__link">
         
   
   
@@ -800,7 +794,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/templates/" class="md-nav__link">
+      <a href="../../../../user-guide/templates/" class="md-nav__link">
         
   
   
@@ -835,7 +829,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../gallery/" class="md-nav__link">
+      <a href="../../../../gallery/" class="md-nav__link">
         
   
   
@@ -916,7 +910,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tutorials/your-first-video/" class="md-nav__link">
+      <a href="../../../../tutorials/your-first-video/" class="md-nav__link">
         
   
   
@@ -944,7 +938,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tutorials/custom-style/" class="md-nav__link">
+      <a href="../../../../tutorials/custom-style/" class="md-nav__link">
         
   
   
@@ -972,7 +966,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tutorials/voice-cloning/" class="md-nav__link">
+      <a href="../../../../tutorials/voice-cloning/" class="md-nav__link">
         
   
   
@@ -1004,31 +998,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1046,7 +1037,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1061,37 +1052,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    API Overview
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../../../reference/api-overview/" class="md-nav__link">
         
   
   
@@ -1107,126 +1071,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#python-sdk" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Python SDK
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Python SDK">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#pixellevideocore" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PixelleVideoCore
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#generate_video" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        generate_video()
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#http-rest-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        HTTP REST API
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="HTTP REST API">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#video-generation-asynchronous" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Video Generation - Asynchronous
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#query-task-status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Query Task Status
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#request-parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Request Parameters
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#more-information" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        More Information
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1239,7 +1083,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../config-schema/" class="md-nav__link">
+      <a href="../../../../reference/config-schema/" class="md-nav__link">
         
   
   
@@ -1328,7 +1172,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/architecture/" class="md-nav__link">
+      <a href="../../../../development/architecture/" class="md-nav__link">
         
   
   
@@ -1356,7 +1200,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/contributing/" class="md-nav__link">
+      <a href="../../../../development/contributing/" class="md-nav__link">
         
   
   
@@ -1391,7 +1235,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../faq/" class="md-nav__link">
+      <a href="../../../../faq/" class="md-nav__link">
         
   
   
@@ -1418,7 +1262,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../troubleshooting/" class="md-nav__link">
+      <a href="../../../../troubleshooting/" class="md-nav__link">
         
   
   
@@ -1465,88 +1309,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#python-sdk" class="md-nav__link">
+  <a href="#context" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Python SDK
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Python SDK">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#pixellevideocore" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PixelleVideoCore
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#generate_video" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        generate_video()
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#http-rest-api" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        HTTP REST API
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="HTTP REST API">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#video-generation-asynchronous" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Video Generation - Asynchronous
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#query-task-status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Query Task Status
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#request-parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Request Parameters
+        Context
       
     </span>
   </a>
@@ -1554,10 +1320,142 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#more-information" class="md-nav__link">
+  <a href="#goal" class="md-nav__link">
     <span class="md-ellipsis">
       
-        More Information
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-Goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#user-experience" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User Experience
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflow-definition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow Definition
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bizyair-api-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BizyAir API Contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dimension-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dimension Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#service-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Service Design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concurrency
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions-resolved" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions Resolved
       
     </span>
   </a>
@@ -1584,150 +1482,251 @@
   
 
 
-<h1 id="api-overview">API Overview<a class="headerlink" href="#api-overview" title="Permanent link">&para;</a></h1>
-<p>Pixelle-Video provides both Python SDK and HTTP REST API.</p>
-<hr />
-<h2 id="python-sdk">Python SDK<a class="headerlink" href="#python-sdk" title="Permanent link">&para;</a></h2>
-<h3 id="pixellevideocore">PixelleVideoCore<a class="headerlink" href="#pixellevideocore" title="Permanent link">&para;</a></h3>
-<p>Main service class providing video generation functionality.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pixelle_video.service</span><span class="w"> </span><span class="kn">import</span> <span class="n">PixelleVideoCore</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">pixelle</span> <span class="o">=</span> <span class="n">PixelleVideoCore</span><span class="p">()</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">await</span> <span class="n">pixelle</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
-</span></code></pre></div>
-<h3 id="generate_video">generate_video()<a class="headerlink" href="#generate_video" title="Permanent link">&para;</a></h3>
-<p>Primary method for generating videos.</p>
-<p><strong>Parameters</strong>:</p>
+<h1 id="bizyair-image-generation-workflow-design">BizyAir Image Generation Workflow Design<a class="headerlink" href="#bizyair-image-generation-workflow-design" title="Permanent link">&para;</a></h1>
+<p>Date: 2026-06-20</p>
+<h2 id="context">Context<a class="headerlink" href="#context" title="Permanent link">&para;</a></h2>
+<p>Pixelle-Video currently routes generated illustrations through <code>pixelle_video.media(...)</code>.
+The Web UI discovers image generation options by scanning <code>workflows/&lt;source&gt;/image_*.json</code>
+and showing them in the existing workflow selector. Existing sources include local
+ComfyUI workflows under <code>selfhost/</code> and RunningHub workflows under <code>runninghub/</code>.</p>
+<p>The target BizyAir model is the standard model API documented at:</p>
 <ul>
-<li><code>text</code> (str): Topic or complete script</li>
-<li><code>mode</code> (str): Generation mode ("generate" or "fixed")</li>
-<li><code>n_scenes</code> (int): Number of scenes</li>
-<li><code>title</code> (str, optional): Video title</li>
-<li><code>tts_workflow</code> (str): TTS workflow</li>
-<li><code>media_workflow</code> (str): Media generation workflow (image or video)</li>
-<li><code>frame_template</code> (str): Video template</li>
-<li><code>template_params</code> (dict, optional): Custom template parameters</li>
-<li><code>bgm_path</code> (str, optional): BGM file path</li>
-<li><code>bgm_volume</code> (float): BGM volume (0.0-1.0)</li>
+<li><code>https://bizyair.cn/modelzoo/bza-image-o2-official/text-to-image?tab=docs</code></li>
+<li><code>https://bizyair.cn/llms/modelzoo/bza-image-o2-official/text-to-image?lang=python</code></li>
 </ul>
-<p><strong>Returns</strong>: <code>VideoResult</code> object</p>
-<hr />
-<h2 id="http-rest-api">HTTP REST API<a class="headerlink" href="#http-rest-api" title="Permanent link">&para;</a></h2>
-<p>Start the API server:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>run<span class="w"> </span>uvicorn<span class="w"> </span>api.app:app<span class="w"> </span>--host<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
+<p>This API is a standard Model Zoo task API, not a BizyAir WebApp API. It uses:</p>
+<ul>
+<li>Submit task: <code>POST https://api.bizyair.cn/x/v1/modelzoo/tasks/openapi/bza-image-o2-official/text-to-image</code></li>
+<li>Query task: <code>GET https://api.bizyair.cn/x/v1/modelzoo/tasks/openapi/{request_id}</code></li>
+</ul>
+<p>The local working tree already contains partial BizyAir-related code, but that code is shaped around
+the WebApp API (<code>/w/v1/webapp/...</code>, <code>web_app_id</code>, and <code>field_mapping</code>). This design intentionally
+targets the standard Model Zoo API from the supplied documentation.</p>
+<h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
+<p>Add BizyAir as a selectable image generation workflow source.</p>
+<p>Users should be able to select a BizyAir image workflow from the existing "Image Generation"
+workflow dropdown. When selected, Pixelle-Video should generate storyboard illustrations with
+BizyAir while preserving the rest of the video pipeline:</p>
+<ol>
+<li>Generate or split narration.</li>
+<li>Generate image prompts.</li>
+<li>Apply the prompt prefix.</li>
+<li>Generate each illustration with BizyAir.</li>
+<li>Download the returned image URL.</li>
+<li>Compose HTML frames.</li>
+<li>Build video segments and concatenate the final video.</li>
+</ol>
+<h2 id="non-goals">Non-Goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
+<p>The first implementation will not include:</p>
+<ul>
+<li>BizyAir WebApp API support.</li>
+<li>Webhook mode.</li>
+<li>File upload APIs.</li>
+<li>Image-to-image support.</li>
+<li>Video generation through BizyAir.</li>
+<li>Multi-image selection when an endpoint returns more than one image.</li>
+<li>A UI control for <code>quality</code>.</li>
+<li>BizyAir-specific parallel execution.</li>
+<li>A broad provider abstraction for all media backends.</li>
+</ul>
+<h2 id="user-experience">User Experience<a class="headerlink" href="#user-experience" title="Permanent link">&para;</a></h2>
+<p>BizyAir appears in the existing workflow selector as a normal workflow option, for example:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>image_o2.json - Bizyair
 </span></code></pre></div>
-<h3 id="video-generation-asynchronous">Video Generation - Asynchronous<a class="headerlink" href="#video-generation-asynchronous" title="Permanent link">&para;</a></h3>
-<p><code>POST /api/video/generate/async</code></p>
-<p>Generate video asynchronously, returns task ID immediately. Suitable for large videos.</p>
-<p><strong>Response</strong>:</p>
+<p>The user flow is:</p>
+<ol>
+<li>Open the Web UI.</li>
+<li>Configure LLM settings as usual.</li>
+<li>Enter a BizyAir API key in system configuration.</li>
+<li>Select an image template.</li>
+<li>Select the BizyAir image workflow from the existing image workflow dropdown.</li>
+<li>Generate a style preview or a full video.</li>
+</ol>
+<p>No separate BizyAir-specific panel is required in the first version.</p>
+<h2 id="workflow-definition">Workflow Definition<a class="headerlink" href="#workflow-definition" title="Permanent link">&para;</a></h2>
+<p>Add a standard Model Zoo wrapper workflow under:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>workflows/bizyair/image_o2.json
+</span></code></pre></div>
+<p>Recommended shape:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">"success"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Task created successfully"</span><span class="p">,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">"task_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"abc123"</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">}</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"bizyair"</span><span class="p">,</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">"api_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"modelzoo"</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">"endpoint"</span><span class="p">:</span><span class="w"> </span><span class="s2">"bza-image-o2-official/text-to-image"</span><span class="p">,</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">"display_name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"BizyAir 通用图片O.2 文生图"</span><span class="p">,</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">"defaults"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nt">"quality"</span><span class="p">:</span><span class="w"> </span><span class="s2">"medium"</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">}</span>
 </span></code></pre></div>
-<h3 id="query-task-status">Query Task Status<a class="headerlink" href="#query-task-status" title="Permanent link">&para;</a></h3>
-<p><code>GET /api/tasks/{task_id}</code></p>
-<p><strong>Response</strong>:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">"task_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"abc123"</span><span class="p">,</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"completed"</span><span class="p">,</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">"result"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">"video_url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"http://localhost:8000/api/files/xxx/final.mp4"</span><span class="p">,</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">"duration"</span><span class="p">:</span><span class="w"> </span><span class="mf">45.5</span><span class="p">,</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nt">"file_size"</span><span class="p">:</span><span class="w"> </span><span class="mi">12345678</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">}</span>
+<p>The filename must start with <code>image_</code> so the current media workflow scanner includes it for
+image templates. The <code>source</code> value tells <code>MediaService</code> to bypass ComfyKit and call BizyAir.</p>
+<p><code>api_type</code> is included to keep the format explicit. The first implementation only needs to support
+<code>modelzoo</code>; unsupported values should produce a clear error.</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>Store the BizyAir API key in the existing media-backend configuration object:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">comfyui</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">bizyair_api_key</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
 </span></code></pre></div>
-<hr />
-<h2 id="request-parameters">Request Parameters<a class="headerlink" href="#request-parameters" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Type</th>
-<th>Required</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>text</code></td>
-<td>string</td>
-<td>Yes</td>
-<td>Topic or complete script</td>
-</tr>
-<tr>
-<td><code>mode</code></td>
-<td>string</td>
-<td>No</td>
-<td><code>"generate"</code> (AI generates) or <code>"fixed"</code> (use text as-is)</td>
-</tr>
-<tr>
-<td><code>n_scenes</code></td>
-<td>int</td>
-<td>No</td>
-<td>Number of scenes (1-20), only used in generate mode</td>
-</tr>
-<tr>
-<td><code>title</code></td>
-<td>string</td>
-<td>No</td>
-<td>Video title (auto-generated if not provided)</td>
-</tr>
-<tr>
-<td><code>frame_template</code></td>
-<td>string</td>
-<td>No</td>
-<td>Template path, e.g., <code>1080x1920/image_default.html</code></td>
-</tr>
-<tr>
-<td><code>template_params</code></td>
-<td>object</td>
-<td>No</td>
-<td>Custom template parameters (colors, backgrounds, etc.)</td>
-</tr>
-<tr>
-<td><code>media_workflow</code></td>
-<td>string</td>
-<td>No</td>
-<td>Media workflow (image or video generation)</td>
-</tr>
-<tr>
-<td><code>tts_workflow</code></td>
-<td>string</td>
-<td>No</td>
-<td>TTS workflow</td>
-</tr>
-<tr>
-<td><code>ref_audio</code></td>
-<td>string</td>
-<td>No</td>
-<td>Reference audio path for voice cloning</td>
-</tr>
-<tr>
-<td><code>prompt_prefix</code></td>
-<td>string</td>
-<td>No</td>
-<td>Image style prefix</td>
-</tr>
-<tr>
-<td><code>bgm_path</code></td>
-<td>string</td>
-<td>No</td>
-<td>BGM file path</td>
-</tr>
-<tr>
-<td><code>bgm_volume</code></td>
-<td>float</td>
-<td>No</td>
-<td>BGM volume (0.0-1.0, default 0.3)</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="more-information">More Information<a class="headerlink" href="#more-information" title="Permanent link">&para;</a></h2>
-<p>API documentation is also available via Swagger UI: <code>http://localhost:8000/docs</code></p>
+<p>Although the parent key is named <code>comfyui</code>, it already owns cloud media backend settings such as
+RunningHub. Keeping BizyAir here minimizes churn and matches current configuration access patterns.</p>
+<p>Runtime lookup order:</p>
+<ol>
+<li><code>config.yaml</code> value: <code>comfyui.bizyair_api_key</code></li>
+<li>Environment fallback: <code>BIZYAIR_API_KEY</code></li>
+</ol>
+<p>The Web UI system settings should expose a password input for "BizyAir API Key" below the existing
+RunningHub cloud settings and persist it through <code>ConfigManager</code>.</p>
+<h2 id="bizyair-api-contract">BizyAir API Contract<a class="headerlink" href="#bizyair-api-contract" title="Permanent link">&para;</a></h2>
+<p>Submit request:</p>
+<div class="language-http highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="err">POST https://api.bizyair.cn/x/v1/modelzoo/tasks/openapi/bza-image-o2-official/text-to-image</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="err">Authorization: Bearer &lt;BIZYAIR_API_KEY&gt;</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="err">Content-Type: application/json</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="err">X-BizyAir-Log-Mask-Fields: prompt</span>
+</span></code></pre></div>
+<p>Request body:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"final prompt"</span><span class="p">,</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">"width"</span><span class="p">:</span><span class="w"> </span><span class="mi">1080</span><span class="p">,</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">"height"</span><span class="p">:</span><span class="w"> </span><span class="mi">1920</span><span class="p">,</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">"quality"</span><span class="p">:</span><span class="w"> </span><span class="s2">"medium"</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>Submit response:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">"request_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"4569bb94-1d30-417a-a987-9715de1e2633"</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>Poll request:</p>
+<div class="language-http highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="err">GET https://api.bizyair.cn/x/v1/modelzoo/tasks/openapi/{request_id}</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="err">Authorization: Bearer &lt;BIZYAIR_API_KEY&gt;</span>
+</span></code></pre></div>
+<p>Successful poll response:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">"request_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"4569bb94-1d30-417a-a987-9715de1e2633"</span><span class="p">,</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Success"</span><span class="p">,</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="nt">"outputs"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="nt">"images"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">      </span><span class="s2">"https://storage.bizyair.cn/outputs_examples/WpD9CsEByO82auMg.png"</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span><span class="p">]</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>Supported task statuses:</p>
+<ul>
+<li><code>Pending</code>: keep polling.</li>
+<li><code>Running</code>: keep polling.</li>
+<li><code>Saving</code>: keep polling.</li>
+<li><code>Success</code>: return the first URL in <code>outputs.images</code>.</li>
+<li><code>Failed</code>: raise an error using <code>message</code>.</li>
+</ul>
+<p>Unknown non-terminal statuses should be logged and polled until timeout. Missing <code>request_id</code> or
+missing <code>outputs.images</code> after <code>Success</code> should be treated as errors.</p>
+<h2 id="dimension-validation">Dimension Validation<a class="headerlink" href="#dimension-validation" title="Permanent link">&para;</a></h2>
+<p>Validate dimensions before submitting to BizyAir:</p>
+<ul>
+<li><code>480 &lt;= width &lt;= 3840</code></li>
+<li><code>480 &lt;= height &lt;= 3840</code></li>
+<li><code>width % 16 == 0</code></li>
+<li><code>height % 16 == 0</code></li>
+<li><code>max(width, height) / min(width, height) &lt;= 3</code></li>
+<li><code>655360 &lt;= width * height &lt;= 8294400</code></li>
+</ul>
+<p>If validation fails, raise a clear error. Do not silently resize, because the downstream HTML frame
+composition expects media dimensions to match template metadata.</p>
+<p>Existing standard templates such as <code>1080x1920</code>, <code>1920x1080</code>, and <code>1080x1080</code> satisfy these rules.</p>
+<h2 id="service-design">Service Design<a class="headerlink" href="#service-design" title="Permanent link">&para;</a></h2>
+<p>Extend workflow parsing so BizyAir wrapper metadata is included in workflow info:</p>
+<ul>
+<li><code>source</code></li>
+<li><code>api_type</code></li>
+<li><code>endpoint</code></li>
+<li><code>display_name</code>, if present</li>
+<li><code>defaults</code>, if present</li>
+</ul>
+<p>Update <code>MediaService.__call__</code>:</p>
+<ol>
+<li>Resolve the workflow as it does today.</li>
+<li>Build <code>workflow_params</code> from <code>prompt</code>, <code>width</code>, <code>height</code>, and extra params.</li>
+<li>If <code>workflow_info["source"] == "bizyair"</code>, call a BizyAir-specific method.</li>
+<li>Otherwise, keep the current ComfyKit path for selfhost and RunningHub.</li>
+</ol>
+<p>BizyAir-specific method:</p>
+<ol>
+<li>Read API key from config or <code>BIZYAIR_API_KEY</code>.</li>
+<li>Validate <code>api_type == "modelzoo"</code>.</li>
+<li>Merge workflow defaults with runtime params.</li>
+<li>Validate dimensions.</li>
+<li>Submit the task with <code>httpx.AsyncClient</code>.</li>
+<li>Poll every 5 seconds until success, failure, or timeout.</li>
+<li>Return <code>MediaResult(media_type="image", url=image_url)</code>.</li>
+</ol>
+<p>Suggested first-version polling limits:</p>
+<ul>
+<li>Poll interval: 5 seconds.</li>
+<li>Timeout: 10 minutes.</li>
+</ul>
+<p><code>quality</code> defaults to <code>medium</code>. It can be overridden by workflow JSON defaults or advanced params
+later, but the first UI does not need a dedicated quality control.</p>
+<h2 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h2>
+<p>Errors should be actionable and visible in the Web UI through existing exception handling.</p>
+<p>Required error cases:</p>
+<ul>
+<li>BizyAir API key is not configured.</li>
+<li>Workflow has <code>source=bizyair</code> but no <code>endpoint</code>.</li>
+<li>Unsupported BizyAir <code>api_type</code>.</li>
+<li>Width or height violates BizyAir constraints.</li>
+<li>Submit API returns an HTTP error.</li>
+<li>Submit response has no <code>request_id</code>.</li>
+<li>Poll API returns an HTTP error.</li>
+<li>Task status is <code>Failed</code>.</li>
+<li>Task times out.</li>
+<li>Task succeeds but does not include <code>outputs.images</code>.</li>
+<li>Downloading the returned image URL fails.</li>
+</ul>
+<p>Logs should include <code>request_id</code> once available so the user can correlate a failed run with BizyAir
+calling records.</p>
+<h2 id="concurrency">Concurrency<a class="headerlink" href="#concurrency" title="Permanent link">&para;</a></h2>
+<p>The first version should not add BizyAir parallel execution. Current parallel frame processing is
+RunningHub-specific and controlled by <code>runninghub_concurrent_limit</code>.</p>
+<p>BizyAir is also a cloud task API, but its practical rate limits and billing behavior need validation.
+Start with serial execution. A later version can add <code>bizyair_concurrent_limit</code> and extend the
+pipeline's parallel path to include <code>bizyair/</code> workflows.</p>
+<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
+<p>Automated tests should not call the real BizyAir API because it requires a live API key and consumes
+coins.</p>
+<p>Add mocked tests for:</p>
+<ul>
+<li>Workflow parsing of a <code>source=bizyair</code> Model Zoo wrapper.</li>
+<li>API key lookup from config and environment fallback.</li>
+<li>Dimension validation pass/fail cases.</li>
+<li>Successful task lifecycle: submit returns <code>request_id</code>, poll returns <code>Running</code>, then <code>Success</code>.</li>
+<li>Failed task lifecycle: poll returns <code>Failed</code> with <code>message</code>.</li>
+<li>Malformed success response with missing <code>outputs.images</code>.</li>
+<li>Timeout behavior.</li>
+</ul>
+<p>Manual verification:</p>
+<ol>
+<li>Put a valid BizyAir API key in system settings.</li>
+<li>Select <code>bizyair/image_o2.json</code>.</li>
+<li>Generate a style preview.</li>
+<li>Confirm the preview image appears and the returned URL is downloaded during full video generation.</li>
+</ol>
+<h2 id="implementation-notes">Implementation Notes<a class="headerlink" href="#implementation-notes" title="Permanent link">&para;</a></h2>
+<p>Preserve user changes already present in the working tree. The current BizyAir-related code appears
+to be a partial WebApp API implementation; the implementation should either replace that branch with
+Model Zoo support or separate it behind <code>api_type == "webapp"</code> without making WebApp support part of
+the first version.</p>
+<p>Keep the integration scoped to image workflows. A selected BizyAir workflow should be treated as
+<code>media_type="image"</code> even if future BizyAir endpoints support other outputs.</p>
+<h2 id="open-questions-resolved">Open Questions Resolved<a class="headerlink" href="#open-questions-resolved" title="Permanent link">&para;</a></h2>
+<ul>
+<li>BizyAir should appear as a normal image workflow option in the current dropdown.</li>
+<li>The target API is the standard Model Zoo text-to-image API.</li>
+<li>First version quality should default to <code>medium</code>.</li>
+<li>First version should use polling, not webhook callbacks.</li>
+<li>First version should run serially.</li>
+</ul>
 
 
 
@@ -1750,7 +1749,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="August 21, 2026 03:31:22 UTC">August 21, 2026 03:31:22</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime" title="June 23, 2026 01:39:56 UTC">June 23, 2026 01:39:56</span>
   </span>
 
     
@@ -1792,44 +1791,6 @@
       
         <footer class="md-footer">
   
-    
-      
-      <nav class="md-footer__inner md-grid" aria-label="Footer" >
-        
-          
-          <a href="../../tutorials/voice-cloning/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Voice Cloning">
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
-            </div>
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Previous
-              </span>
-              <div class="md-ellipsis">
-                Voice Cloning
-              </div>
-            </div>
-          </a>
-        
-        
-          
-          <a href="../config-schema/" class="md-footer__link md-footer__link--next" aria-label="Next: Config Schema">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Next
-              </span>
-              <div class="md-ellipsis">
-                Config Schema
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
-            </div>
-          </a>
-        
-      </nav>
     
   
   <div class="md-footer-meta md-typeset">
@@ -1874,10 +1835,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
